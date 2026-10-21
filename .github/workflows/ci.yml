@@ -1,0 +1,70 @@
+# CI — report §9.5.1, §9.5.3, Table 9.5 (dependency-drift row).
+# pinned:    blocking; the committed toolchain and lake-manifest.json.
+# candidate: non-blocking, monthly + manual; newest Mathlib release tag in a temporary copy
+#            (scripts/candidate_build.sh); never modifies the committed pins (CLAUDE.md rule 4).
+name: CI
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 6 1 * *"   # 06:00 UTC on the 1st of each month
+  workflow_dispatch:
+
+jobs:
+  pinned:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install elan (toolchain from lean-toolchain)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Fetch Mathlib cache
+        run: lake exe cache get
+
+      - name: lake build
+        run: |
+          set -o pipefail
+          lake build 2>&1 | tee build.log
+
+      - name: Warning check
+        run: scripts/check_warnings.sh build.log
+
+      - name: Sorry check
+        run: |
+          scripts/check_sorries.sh
+          scripts/check_sorries.sh --self-test
+
+      - name: Axiom printout (CQRV.Certify)
+        run: scripts/print_axioms.sh
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python harness requirements
+        run: pip install -r tests/diff/requirements.txt
+
+      - name: Simulator self-test
+        run: python -I tests/diff/statevector.py --selftest
+
+  candidate:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install elan
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Build against newest Mathlib release (temporary copy)
+        run: scripts/candidate_build.sh "$RUNNER_TEMP/cqrv-candidate"
