@@ -39,3 +39,15 @@ Decision: `scripts/check_warnings.sh` fails only on warnings whose source path i
 Why: CLAUDE.md rule 3 governs our code; dependency warnings (Mathlib, Physlib) are not actionable here and must not block CI or the choice of dependency.
 Rejected: grep over the whole build log (rejects dependencies for their own lint warnings).
 Report §: 9.5.1.
+
+## 2026-10-21 — Physlib smoke test in CQRVTests (reviewer decision)
+Decision: `tests/PhyslibSmoke.lean` (a root of `lean_lib CQRVTests`, imported by `tests/CQRVTests.lean`) imports `QuantumInfo.Channels.CPTP` and `QuantumInfo.States.Mixed.MState` and elaborates `MState (Fin 2)`, `CPTPMap (Fin 2) (Fin 4)` and `CPTPMap.compose`, so every CI build (ubuntu) compiles the pinned Physlib against the pinned Mathlib. Verified after adding it: `lake-manifest.json` pins mathlib `rev 56a005855ea17e0b0958f73ec801ae140b0a1679` (`inputRev v4.35.0`, `inherited: false`, i.e. our own require, not Physlib's) and Physlib `rev 96a6bc5e3c50a2856c64a6c9951c0a1c23790b58`; Physlib's own manifest requires the same Mathlib commit.
+Why: the Windows-only verification of the Physlib entry above becomes a CI fact; Table 9.5 dependency-drift detection.
+Rejected: a separate `workflow_dispatch` Physlib job (would not run on every commit). Cost: CI compiles the imported Physlib modules from source (~3300 jobs incl. replayed Mathlib) on each run until a Physlib artifact cache is used.
+Report §: 9.1.1, Table 9.5.
+
+## 2026-10-21 — Per-commit candidate-toolchain certificate checks deferred to Stage 8 (open item)
+Decision: the `candidate` CI job stays monthly (`schedule`) + `workflow_dispatch`. Report §9.5.3(ii) requires every certificate to be kernel-checked on each commit on the pinned and on a candidate-upgrade toolchain; certificates do not exist before Stage 8, so the per-commit candidate check of certificates is deferred to Stage 8. Open item for Stage 8: add it alongside the blocking `sorryAx`/axiom audit.
+Why: before Stage 8 there is nothing for §9.5.3(ii) to check per commit; Table 9.5's monthly gate is met by the current job.
+Rejected: running the candidate build on every push now (cost without a certificate to check).
+Report §: 9.5.3(ii), Table 9.5.
