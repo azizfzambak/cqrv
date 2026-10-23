@@ -1,0 +1,3 @@
+-- Report §4.1.4, Stage 4 decision 3: an `or` predicate. ℰ does not compute M symbolically
+-- (not a conjunction of literals on distinct bits); `cqr match` needs `--solutions M`.
+fn search_or(x: Vec Bool 4) -> Bool { idx(x, 0) or idx(x, 1) }

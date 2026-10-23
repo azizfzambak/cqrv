@@ -19,14 +19,16 @@ open Lean
 
 /-- Report §4.2.2 — the front-end stage that issued a diagnostic. `hypothesis`: a user-supplied
 hypothesis (the ground solution count `--solutions`, §4.1.4) contradicts the extracted value;
-ℰ itself never fails (§7.2.1; DECISIONS.md 2026-10-23). -/
+ℰ itself never fails (§7.2.1; DECISIONS.md 2026-10-23). `matching`: the matcher found no library
+pattern (§4.2.4, Algorithm 2; JSON name `match`). -/
 inductive Stage where
   | parse
   | surface
   | hypothesis
+  | matching
   deriving Repr, DecidableEq, Inhabited
 
-/-- Report §4.2.2–4.2.3 — diagnostic codes of the front end. -/
+/-- Report §4.2.2–4.2.3, §4.2.4 — diagnostic codes of the front end and of the matcher. -/
 inductive Code where
   | syntaxError
   | typeError
@@ -35,6 +37,7 @@ inductive Code where
   | indexOutOfBounds
   | foldDiscipline
   | solutionCountMismatch
+  | noMatchingPattern
   deriving Repr, DecidableEq, Inhabited
 
 /-- Report §4.2.3 — JSON name of a stage. -/
@@ -42,6 +45,7 @@ def Stage.name : Stage → String
   | .parse => "parse"
   | .surface => "surface"
   | .hypothesis => "hypothesis"
+  | .matching => "match"
 
 /-- Report §4.2.3 — JSON name of a diagnostic code. -/
 def Code.name : Code → String
@@ -52,6 +56,7 @@ def Code.name : Code → String
   | .indexOutOfBounds => "index_out_of_bounds"
   | .foldDiscipline => "fold_discipline"
   | .solutionCountMismatch => "solution_count_mismatch"
+  | .noMatchingPattern => "no_matching_pattern"
 
 /-- Report §4.2.2–4.2.3 — a front-end diagnostic; `line`/`col` are 1-based. -/
 structure Diagnostic where

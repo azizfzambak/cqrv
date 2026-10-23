@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# CLI smoke test for `cqr check` / `cqr extract` — report §4.2.2, §4.2.3 Table 2, §7.2.3.
+# CLI smoke test for `cqr check` / `cqr extract` / `cqr match` — report §4.2.2, §4.2.3 Table 2,
+# §7.2.3, §4.2.4, §4.3.2–4.3.3.
 #
 # Runs the three corpus files of examples/ through the built `cqr` executable:
 #   grover_pred_037  extracts with "and_complexity": 2 and no field named *minimum*
@@ -8,6 +9,8 @@
 #                    code solution_count_mismatch, exit 1;
 #   search_while     passes `check`, extracts with iter = unbounded;
 #   allocate_tree    fails `check`: stage surface, code non_structural_recursion, exit 1.
+# and `cqr match`: grover_pred_037 matches Grover (F₁=8, F₂=32, F₃=1, 32 ≥ 1); search_while
+# --solutions 64 gives the iter hint; search_or needs --solutions (5 matches, 0 fails F₂ ≥ 1).
 #
 # Usage (after `lake build`): scripts/cli_smoke.sh
 # Portable: bash + grep; ubuntu and Git Bash on Windows.
@@ -56,6 +59,43 @@ expect_has "allocate_tree stage" '"stage":"surface"' "$out"
 expect_has "allocate_tree code" '"code":"non_structural_recursion"' "$out"
 out="$("${cqr[@]}" extract examples/allocate_tree.cqr | tr -d '\r')"; rc=$?
 expect_exit "extract allocate_tree" 1 "$out" "$rc"
+
+# Stage 4 — `cqr match` (report §4.1.4, §4.2.4, §4.3.2–4.3.3): one match or one hint, never a list.
+out="$("${cqr[@]}" match examples/grover_pred_037.cqr | tr -d '\r')"; rc=$?
+expect_exit "match grover_pred_037" 0 "$out" "$rc"
+expect_has "grover_pred_037 pattern" '"pattern": "Grover"' "$out"
+expect_has "grover_pred_037 F₁" '"F₁": 8' "$out"
+expect_has "grover_pred_037 F₂" '"F₂": 32' "$out"
+expect_has "grover_pred_037 F₃" '"F₃": 1' "$out"
+expect_has "grover_pred_037 side condition" '"instance": "32 ≥ 1"' "$out"
+
+out="$("${cqr[@]}" match examples/search_while.cqr --solutions 64 | tr -d '\r')"; rc=$?
+expect_exit "match search_while --solutions 64" 1 "$out" "$rc"
+expect_has "search_while stage" '"stage":"match"' "$out"
+expect_has "search_while code" '"code":"no_matching_pattern"' "$out"
+expect_has "search_while location" '"location":"iter"' "$out"
+expect_has "search_while expected" '"expected":"bounded(F₃)' "$out"
+expect_has "search_while found" '"found":"unbounded"' "$out"
+expect_has "search_while dist" '"dist":1' "$out"
+expect_has "search_while suggestion" 'max_iter' "$out"
+out="$("${cqr[@]}" match examples/search_while.cqr --solutions 64 --text | tr -d '\r')"; rc=$?
+expect_exit "match search_while --solutions 64 --text" 1 "$out" "$rc"
+expect_has "search_while text Location" 'Location:    field `iter`' "$out"
+
+out="$("${cqr[@]}" match examples/search_or.cqr | tr -d '\r')"; rc=$?
+expect_exit "match search_or (M unknown)" 1 "$out" "$rc"
+expect_has "search_or found unknown" '"found":"unknown"' "$out"
+expect_has "search_or suggestion" '--solutions M' "$out"
+out="$("${cqr[@]}" match examples/search_or.cqr --solutions 5 | tr -d '\r')"; rc=$?
+expect_exit "match search_or --solutions 5" 0 "$out" "$rc"
+expect_has "search_or F₂" '"F₂": 5' "$out"
+out="$("${cqr[@]}" match examples/search_or.cqr --solutions 0 | tr -d '\r')"; rc=$?
+expect_exit "match search_or --solutions 0 (F₂ ≥ 1 false)" 1 "$out" "$rc"
+expect_has "search_or --solutions 0 expected" '"expected":"F₂ ≥ 1"' "$out"
+
+out="$("${cqr[@]}" match examples/allocate_tree.cqr | tr -d '\r')"; rc=$?
+expect_exit "match allocate_tree (stops at the surface checker)" 1 "$out" "$rc"
+expect_has "allocate_tree match stage" '"stage":"surface"' "$out"
 
 [ "$fail" -eq 0 ] && echo "cli_smoke: all checks passed" || echo "cli_smoke: FAILED"
 exit "$fail"

@@ -185,3 +185,38 @@ Decision: when ℰ computed M symbolically and `cqr extract --solutions M'` give
 Why: reviewer answer to the Stage 3 open question (6); every front-end failure is machine-readable in one format.
 Rejected: a plain stderr message (the Stage 3 implementation); stage `extract` (reads as an extraction failure; first version of this entry, renamed by the reviewer in the Stage 3 review); stage `surface` (the program passed the surface check).
 Report §: 4.1.4, 4.2.3, 7.2.1.
+
+## 2026-10-23 — Metavariable names in φ_Grover; `G` namespace for lgg (Stage 4, reviewer decision 1)
+Decision: φ_Grover = `⟨Search, n: F₁, M: F₂, P: Bool^F₁ → Bool, iter: bounded(F₃), oracle: PhaseKickback(Multiplicative, F₄)⟩`, side condition `F₂ ≥ 1` (`CQRV/Matching/Library.lean`). F₁ occurs twice (step 4, consistency, is exercised); F₃ is the iteration bound (Table 4 "Expected: bounded(F₃)"). Fresh lgg metavariables live in a separate namespace `G₁, G₂, …` (`MNs.G`); pattern metavariables are rigid for the lgg (§4.3.1). The while hint reads `iter = G₁` with gap `G₁ ↦ unbounded` / `G₁ ↦ bounded(F₃)`. Interpretation (implementation): the "(…)" of `PhaseKickback(…)` is the support set, bound by a fourth metavariable F₄ of sort `natSet` that ranges over the whole AC list (allowed by §4.1.1: never a proper sub-multiset); `grover_pred_037` gives F₄ ↦ {0, 3, 7}.
+Rejected: reusing F₃ for the lgg variable (same name, two meanings); dropping the support from σ_in (the task puts `support` in an `acSet`).
+Report §: 4.1.4, 4.3.1, 4.3.3, Table 4.
+
+## 2026-10-23 — `U_P ∈ Poly(F₁)` discharged by construction (Stage 4, reviewer decision 2)
+Decision: polynomiality of the oracle is not a side condition; it is the rigid `PhaseKickback(Multiplicative, …)` field of φ_Grover, justified by ℰ being linear in the derivation (§7.2.2).
+Rejected: a side condition `ĉ∧ ≤ p(F₁)` (polynomiality cannot be decided on one instance).
+Report §: 4.1.4, 7.2.2.
+
+## 2026-10-23 — Unknown M is the rigid constant `unknown` (Stage 4, reviewer decision 3)
+Decision: `SigmaIn.toTerm` encodes `solutionCount = none` as `unknown`. Metavariables carry a sort (`MSort.nat | natSet | any`, §4.1.1 Table 1 "metavariables over sorts", §4.1.4 "F₁ and F₂ … ranging over natural numbers"); step 2 of Algorithm 1 checks it (`MSort.admits`), and a value outside the sort is a `clash`. So `unknown` fails against F₂; the lgg gap `(unknown, F₂)` is keyed in the hint table to the suggestion "supply `--solutions M`".
+Rejected: binding F₂ to a placeholder; letting F₂ bind `unknown` and failing in the side condition (F₂ would not range over naturals).
+Report §: 4.1.1, 4.1.4.
+
+## 2026-10-23 — The Stage 4 library holds preconditions only (Stage 4, reviewer decision 4)
+Decision: `CQRV/Matching/Library.lean` has `structure LibEntry (name, priority, precondition, sides)` and `library = [groverEntry]`. Lower `priority` is scanned first (Algorithm 2 "most specific first"). The `QPLP` record (§3.2) is built later in `CQRV/Patterns`.
+Rejected: building `QPLP` now (Stage 5+ scope).
+Report §: 3.2, 4.2.4.
+
+## 2026-10-23 — Stage 4 interpretations of §4.1–4.3 not fixed by the task (Stage 4)
+Decision:
+(1) σ_in as a term: `sig(class, n, M, P, iter, oracle)` with P = `→(dom, cod)`, `Vec Bool n` ↦ `Bool^(n)`, several parameters ↦ `×(τ₁, …)`, iter ↦ `bounded(k)` / `unbounded`, support ↦ `acSet`. ĉ∧, AND-depth, ancilla budget and algebra are not in the term (they feed the grade, Chapter 3; no precondition constrains them yet).
+(2) No metavariable inside an `acSet` in a pattern (`isMillerPattern`): an element metavariable in a sorted list is already AC matching (finitary). A metavariable may stand for a whole AC list. With this, positional matching of normalized `acSet`s is exact.
+(3) The lgg used for `dist` and the hint is `lgg σ_in (φθ̂)`, where θ̂ are the bindings Algorithm 1 can make despite the failure (`looseAt`: same traversal, failing positions skipped). Taken literally against φ with rigid metavariables, every metavariable position would disagree: `dist(search_while, φ_Grover)` would be 4 (n/P, M, iter, support), contradicting §4.3.1's example and the task's `dist = 1`. With θ̂, metavariables left unbound (F₃ in `bounded(F₃)`) stay rigid, as §4.3.1 requires.
+(4) A failure with an empty gap (a false side condition after a structural match) is rendered from the failure itself: Location = field of the condition's first metavariable in φ, Expected = the condition (`F₂ ≥ 1`), Found = its substituted value.
+(5) Several gaps: the text output lists one Table-4 block per `Gᵢ`; the JSON stays flat (like `Diagnostic`) and gives the first gap in field order plus `gap_count` (search_while without `--solutions` has 2: M, iter).
+(6) The lgg under binders applies a fresh G to the bound variables free in either side (pattern lgg); AC lists of equal length are generalized positionally (normal forms), unequal ones as a whole.
+(7) `Term` is nested (`List Term`); the `DecidableEq` deriving handler does not apply in the pinned toolchain, so equality is a structural `Term.beq` with `eq_of_beq`/`beq_refl` proofs.
+(8) The matcher's diagnostic stage is the new `Stage.matching` (JSON name `match`) with code `no_matching_pattern` in `CQRV/DSL/Diagnostic.lean`.
+(9) `millerMatch_sound` is proved without a normal-form hypothesis (`φσ = t` syntactically); normalization is what makes this matching modulo AC.
+Why: needed to implement the task; the report leaves these open.
+Rejected: (3) the literal lgg against φ (gives dist 4 and a gap at every metavariable); (5) a JSON list of hints (the output must be one hint, never a list).
+Report §: 4.1.1, 4.1.2, 4.1.3, 4.1.4, 4.2.4, 4.3.1, 4.3.2.
