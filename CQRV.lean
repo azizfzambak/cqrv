@@ -1,4 +1,6 @@
 import CQRV.Grades.Basic
+import CQRV.Grades.Order
+import CQRV.Grades.Hardware
 import CQRV.Realizability.Basic
 import CQRV.Patterns.Basic
 import CQRV.DSL.Basic

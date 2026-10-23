@@ -51,3 +51,21 @@ Decision: the `candidate` CI job stays monthly (`schedule`) + `workflow_dispatch
 Why: before Stage 8 there is nothing for §9.5.3(ii) to check per commit; Table 9.5's monthly gate is met by the current job.
 Rejected: running the candidate build on every push now (cost without a certificate to check).
 Report §: 9.5.3(ii), Table 9.5.
+
+## 2026-10-23 — ⊕ is `AddCommMonoid Grade`; ⊗ is a named function (Stage 1)
+Decision: sequential composition ⊕ is `Grade.seqComp`, installed as `instance : Add Grade := ⟨seqComp⟩` and bundled into `AddCommMonoid Grade` (`+` = ⊕, `0` = (0,0,0,0), `n • r` = n-fold ⊕ for `for` loops and the r⋆-fold Grover iteration). The parallel product ⊗ is `Grade.parComp`, not an instance, with named laws `parComp_comm`, `parComp_assoc`, `parComp_zero`. No notation is added. `nsmul := nsmulRec`: in the pinned Mathlib `AddMonoid.nsmul` has no default value (build error "Fields missing: `nsmul`"), so the field is set to Mathlib's repeated-addition `nsmulRec`, and `nsmul_zero`/`nsmul_succ` are closed by the structure's default `rfl` proofs; no hand-written `nsmul` and no `nsmul_*` lemmas.
+Why: the additive class gives `n • r` for k-fold sequential composition; keeping `seqComp` keeps the report's name in the code; one `+` only avoids confusing ⊕ with ⊗.
+Rejected: multiplicative `CommMonoid` (`r ^ k` for k-fold sequential composition reads wrong); a custom `⊕` notation (clashes with Lean's `Sum` notation `α ⊕ β`); making ⊗ a second instance (two monoid structures on one type).
+Report §: 3.1.1, Table 3.1, 3.1.4.
+
+## 2026-10-23 — `HardwareProfile` target is a type parameter (Stage 1)
+Decision: `structure HardwareProfile (P : Type) [Preorder P] where map : Grade → P; mono : Monotone map`. `ρNISQ tgate tT : HardwareProfile Grade` with `map r = ⟨r.w, r.d * tgate, r.t * tT, r.a⟩` (durations in ns; no value of `tT` is fixed because the report gives none).
+Why: §3.1.3 defines ρ : R → R_phys, a monotone map into a physical cost space that need not be `Grade` (e.g. surface-code overhead, factory count).
+Rejected: `Grade → Grade` (PLAN.md wording) — it would hard-wire R_phys = R.
+Report §: 3.1.3, 3.3.3, Table 3.5.
+
+## 2026-10-23 — `CQRV/Grades` files use the Lean module system (Stage 1)
+Decision: `CQRV/Grades/{Basic,Order,Hardware}.lean` start with `module`, use `public import`, and wrap their content in `@[expose] public section` (bodies exposed so that `rfl`/`decide` work in importers, e.g. the Table 3.3 tests).
+Why: the pinned Mathlib is flagged `requiresModuleSystem`; a non-`module` file importing it makes Lake emit "imports `Mathlib…` from package `mathlib`, which is designed for use with the module system; consider adding `module`", a warning in our sources that `scripts/check_warnings.sh` would reject (CLAUDE.md rule 3). Files that import only our own modules (`CQRV.lean`, `tests/*.lean`) need no change.
+Rejected: `allowNonModules := true` in `lakefile.lean` (silences the warning package-wide, but it is a build-configuration change outside the Stage 1 scope; it is open for the reviewer whether later stages should use that switch or stay on the module system).
+Report §: 9.5.1.
