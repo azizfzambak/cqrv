@@ -40,6 +40,9 @@ jobs:
           scripts/check_sorries.sh
           scripts/check_sorries.sh --self-test
 
+      - name: CLI smoke (cqr check / extract on examples/)
+        run: scripts/cli_smoke.sh
+
       - name: Axiom printout (CQRV.Certify)
         run: scripts/print_axioms.sh
 

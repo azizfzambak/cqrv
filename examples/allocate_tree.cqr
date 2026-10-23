@@ -1,0 +1,3 @@
+-- Report §4.2.2 / §4.2.3 Table 2, row 3: non-structural recursion.
+-- Rejected by the surface checker (non_structural_recursion); ℰ is never invoked.
+fn allocate_tree(depth: Nat 8) -> Bool { allocate_tree(depth) and allocate_tree(depth) }

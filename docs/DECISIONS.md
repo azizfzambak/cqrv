@@ -127,3 +127,49 @@ Decision: `RealizesExact S dec Φ δ r := Φ.grade ≤ r ∧ ∀ x ∈ S.dom, 1 
 Why: the pinned Mathlib has no `MetricSpace (Fin n)` or `MetricSpace Bool`, and the Grover output type is `Fin (2^n)` (Stage 7); the ε = 0 case never uses the metric.
 Rejected: adding a `MetricSpace` instance on `Fin n` (an orphan instance on a Mathlib type, and a choice of metric the discrete case does not need).
 Report §: 2.1.2, 2.3.2.
+
+## 2026-10-23 — DSL surface syntax beyond the §7.1.4 BNF (Stage 3, reviewer decision 1)
+Decision: exactly two surface forms are added to the grammar of §7.1.4: (a) `loop <var> = <expr> while <expr> do <expr>`, a functional while (accumulator, condition, body; same fold discipline as `for`), which passes the surface checker and is extracted with `iter = unbounded`; (b) calls `<name>(<expr>, …)` to top-level `fn`s. The checker builds the call graph and rejects any cycle, direct or mutual, with code `non_structural_recursion` (the grammar has no inductive types, so no recursion is structural yet); non-recursive calls are inlined (as `let`s of fresh names around the callee body) before extraction.
+Why: §4.2.2 needs a `while` that elaborates and an `allocate_tree` that is rejected at the surface layer; the BNF has neither `while` nor calls.
+Rejected: an imperative `while` with assignment (the DSL has no assignment, §7.1.1).
+Report §: 7.1.1, 7.1.2, 7.1.4, 4.2.2, 4.2.3.
+
+## 2026-10-23 — Loop index in `idx` (Stage 3, reviewer decision 2)
+Decision: `idx(<expr>, <nat>)` accepts a literal or a `for`-bound loop variable; the support of `idx(x, i)` inside `for i in [0 ..< n]` is `{0, …, n−1}`. Any other variable as index is a `type_error`; a loop range beyond the vector length is `index_out_of_bounds`.
+Why: a `for` over the bits of the input (§4.2.3 Table 2, row 1) must be able to read bit i.
+Rejected: arbitrary `Nat`-typed index expressions (no static support set).
+Report §: 7.1.4, 7.3.2.
+
+## 2026-10-23 — ĉ∧ and AND-depth rules of ℰ (Stage 3, reviewer decision 3)
+Decision: ĉ∧ is the syntactic upper bound c∧^D ≥ c∧P of §7.2.2 (never called "minimum" in names, doc-comments or JSON). `and`: ĉ∧ = ĉ₁+ĉ₂+1, depth = max+1. `or`: the same (De Morgan, one AND, never DNF). `not`, `xor`, literals, `idx`: no AND (linear over GF(2)); depth = max of subterms. `if c then a else b` (Bool): mux `b ⊕ (c ∧ (a ⊕ b))`, ĉ∧ = ĉc+ĉa+ĉb+1, depth = max+1. `let x = e₁ in e₂`: ĉ∧ = ĉ(e₁)+ĉ(e₂), uses of `x` free (shared), depth of `x` = depth of `e₁`. `for` with bound n: ĉ∧ = ĉ(init) + n·ĉ(body), depth = depth(init) + n·depth(body). `loop … while`: body counted once, `iter = unbounded`.
+Why: Table 3 (§7.3.2) gives no AND count for `if`; the mux rule is needed for the Stage 9 predicate.
+Rejected: computing the minimum multiplicative complexity (NP-hard, §7.2.2); DNF lowering of `or` (exponential).
+Report §: 7.2.1, 7.2.2, 7.3.2, 9.5.2.
+
+## 2026-10-23 — Ancilla budget = ĉ∧ (Stage 3, reviewer decision 4)
+Decision: `ancillaBudget = andComplexity`: one ancilla per AND, all held until the phase flip (the oracle schedule of §6.1.4; §7.2.3 "one per AND gate"). A sound upper bound (loose-but-proved, §9.5.2). The live-range release of §7.3.2's `let` row and the `for` "max(body)" case are scheduling refinements for the Bennett scheduler (Stage 5).
+Rejected: live-range accounting in ℰ now (it would make the signature depend on a schedule).
+Report §: 6.1.4, 7.2.3, 7.3.2, 9.5.2.
+
+## 2026-10-23 — Solution count M (Stage 3, reviewer decision 5)
+Decision: ℰ computes M symbolically when the predicate is a conjunction of literals on distinct bits (M = 2^(n − |literals|)); otherwise `solutionCount = none` and the user supplies it with `cqr extract <file> --solutions M`. M is a hypothesis of the certificate (§5.1.3, Chapter 8), never decided by enumeration. Implementation detail: a `--solutions` value that contradicts a symbolically computed M is an error (exit 1).
+Why: §7.2.3 shows `solution_count >= 1`, but §4.1.4 and §8.4 need the ground value (M = 32 binds F₂).
+Rejected: brute-force enumeration in ℰ.
+Report §: 4.1.4, 5.1.3, 7.2.3, 8.4.
+
+## 2026-10-23 — Problem class (Stage 3, reviewer decision 6)
+Decision: an entry `fn` of type `Vec Bool n → Bool` is extracted as `Search`; other types as `Decision`. `Numeric` is declared but unused.
+Rejected: inferring `Numeric` now (the DSL has no arithmetic yet).
+Report §: 7.2.2.
+
+## 2026-10-23 — `iter` field (Stage 3, reviewer decision 7)
+Decision: `iter : IterBound := .bounded k | .unbounded`. Straight-line code is `.bounded 1`; `for` multiplies static bounds (`for` over n with body bound k gives n·k); any `loop … while` makes it `.unbounded`. Interpretation (implementation): sibling sub-terms (operands, `let` parts, `for` init vs. body) combine by maximum, so that two straight-line operands stay `.bounded 1`.
+Why: §4.3.3 matches on this field; how φ_Grover constrains it is a Stage 4 question.
+Rejected: sum over siblings (straight-line `a and b` would become `.bounded 2`).
+Report §: 4.3.3, 7.1.2.
+
+## 2026-10-23 — Stage 3 front-end interpretations not fixed by the task (Stage 3)
+Decision: (1) Parser: hand-written lexer and recursive descent (294 lines), total by fuel bounded by the input size; `Std.Internal.Parsec` exists in the pinned toolchain but is an internal API and its recursive grammars need `partial`. Precedence `or` < `xor` < `and` < `not` < atoms, binary operators left-associative (`b0 and b3 and b7` = `(b0 and b3) and b7`, the §7.2.3 comment); `let`/`if`/`for`/`loop` are atoms extending to the right. (2) `fn` takes a comma-separated parameter list (the BNF shows one parameter; calls `f(e₁, …)` need several). (3) A file is a list of `fn`s; the entry point is the last one. (4) Fold discipline (`fold_discipline`): the loop variable and accumulator must differ, and the body must return the accumulator type; references to anything else are scoping errors (`unbound_variable`) since the language is pure and lexically scoped. (5) Signature fields beyond the task: input arity = total input bits (`Nat n` takes ⌈log₂ n⌉ bits); `oracle = phaseKickback multiplicative support` when the codomain is `Bool`, else `blackBox`; `algebra = boolAlg` always (the DSL has only Boolean operations); a non-Bool `if` costs one AND per result bit. (6) `extract` is checked by `decide` on a hand-built typed term (it reduces in the kernel). (7) Diagnostics: 1-based `line`/`col`.
+Why: needed to implement the task; none is stated by the report.
+Rejected: `partial def` parser (not provable later); entry point by name `main` (no such convention in the report).
+Report §: 7.1.4, 7.2.2, 7.3.2.

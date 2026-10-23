@@ -1,0 +1,5 @@
+-- Report §4.2.2 / §4.2.3 Table 2, row 2: data-dependent termination.
+-- Passes the surface checker; ℰ extracts iter = unbounded; the matcher rejects it (Stage 4).
+fn search_while(x: Vec Bool 8) -> Bool {
+  loop found = false while not found do (idx(x, 0) and idx(x, 3)) or found
+}

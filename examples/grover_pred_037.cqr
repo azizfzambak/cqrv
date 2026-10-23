@@ -1,0 +1,6 @@
+fn grover_pred_037(x: Vec Bool 8) -> Bool {
+  let b0 = idx(x, 0) in
+  let b3 = idx(x, 3) in
+  let b7 = idx(x, 7) in
+  b0 and b3 and b7
+}
