@@ -12,8 +12,9 @@ meta import CQRV.Synthesis.Basic
 
 `Circuit.WF` on the Stage 5 Grover oracle and on ill-formed circuits; the hand-written
 `groverNet` / `groverOracle` of the Grover instance against the DSL front end and the
-synthesizer; `#print axioms` for every proved theorem of Stage 6a and Stage 6b-1; the Grover
-oracle as the shifted `Circuit.append` of its two pieces at the MBU cut.
+synthesizer; `#print axioms` for every proved theorem of Stage 6a, 6b-1 and 6b-2; the Grover
+oracle as the shifted `Circuit.append` of its two pieces at the MBU cut; `mbu_branch_basis` on
+`|1,1,1⟩` in both branches.
 -/
 
 namespace CQRV.Tests.Semantics
@@ -87,6 +88,29 @@ def groverPiece₂ : Circuit :=
 #guard groverPiece₁.append groverPiece₂ == groverOracle
 #guard (groverPiece₁.append groverPiece₂).nBits == groverPiece₁.nBits + groverPiece₂.nBits
 
+/-! ## Stage 6b-2: `mbu_branch_basis` on the 3-qubit register
+
+At `s = |1,1,1⟩` (a = b = 1, target t = anc[0] holding `1 ∧ 1`), both branches of the uncompute
+block give `(1/√2) |1,1,0⟩`, by the lemma (no recomputation). -/
+
+open Matrix in
+example : krausOps 2 1 1 (UncomputeTempLogicalAND (.data 0) (.data 1) (.anc 0) 0) ![false] *ᵥ
+      basisVec ((![true, true], ![true]) : Reg 2 × Reg 1) =
+    ((Real.sqrt 2)⁻¹ : ℂ) •
+      basisVec ((Qubit.anc 0).set false ((![true, true], ![true]) : Reg 2 × Reg 1)) :=
+  mbu_branch_basis _ _ _ 0 (by decide) (by decide) (by decide) _ _ (by decide)
+
+open Matrix in
+example : krausOps 2 1 1 (UncomputeTempLogicalAND (.data 0) (.data 1) (.anc 0) 0) ![true] *ᵥ
+      basisVec ((![true, true], ![true]) : Reg 2 × Reg 1) =
+    ((Real.sqrt 2)⁻¹ : ℂ) •
+      basisVec ((Qubit.anc 0).set false ((![true, true], ![true]) : Reg 2 × Reg 1)) :=
+  mbu_branch_basis _ _ _ 0 (by decide) (by decide) (by decide) _ _ (by decide)
+
+-- `Circuit.WF_append` on the Grover pieces (the `#guard` above checks the same by evaluation).
+example : (groverPiece₁.append groverPiece₂).WF :=
+  Circuit.WF_append rfl (by decide) (by decide)
+
 /-! ## Axiom audit (CLAUDE.md rule 10) -/
 
 -- Proved, expected axioms only `propext`, `Classical.choice`, `Quot.sound`:
@@ -103,6 +127,19 @@ def groverPiece₂ : Circuit :=
 #print axioms mbu_channel_correct
 #print axioms channelDenote_append
 #print axioms AncRestore.comp
+-- Stage 6b-2 (`CQRV.Circuit.OracleBlocks`):
+#print axioms Circuit.WF_append
+#print axioms krausOps_append_mulVec
+#print axioms krausOps_append_shift_mulVec
+#print axioms tempLogicalAND_correct_lift
+#print axioms tempLogicalAND_kraus_basis
+#print axioms mbu_branch_basis
+#print axioms z_basis
+#print axioms x_basis
+#print axioms h_basis
+#print axioms cnot_basis
+#print axioms cz_basis
+#print axioms Qubit.set_comm
 -- Proved from `lemma_6_3_2`, which is a tracked `sorry`: these show `sorryAx` until 6b.
 #print axioms lemma_6_3_2_traced
 #print axioms grover_pred_037_ancRestore

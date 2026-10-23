@@ -11,7 +11,8 @@ Report §6.2.1, §6.2.2, §6.2.4, §6.3.2 — ancilla restoration of the synthes
 density operators, following the three layers of §6.2.4:
 
 * Layer 1 — `tempLogicalAND_correct`: the §6.2.2 compute listing maps |a, b, 0⟩ ↦ |a, b, a∧b⟩
-  exactly (phase 1). Proved on 3 qubits; the lift to an arbitrary register is stated.
+  exactly (phase 1), on 3 qubits. The lift to an arbitrary register and the other oracle blocks
+  on basis vectors are in `CQRV.Circuit.OracleBlocks` (Stage 6b-2).
 * Layer 2 — `mbu_channel_correct` (MBU is a channel-level statement, §6.2.2; proved in Stage
   6b-1) and `lemma_6_3_2` (Lemma 6.3.2): the synthesized oracle restores its ancillae and
   applies the phase oracle `(−1)^P(x)`. `lemma_6_3_2` is a statement only; its proof is split in
@@ -103,17 +104,6 @@ theorem tempLogicalAND_correct (a b : Bool) :
     ring_nf <;>
     simp only [invSqrtTwo_sq, ω_pow_four, ω_pow_six, ω_pow_eight, ω_pow_ten] <;>
     ring_nf
-
-/-- Report §6.2.2, §6.2.4 Layer 1 — the lift of `tempLogicalAND_correct` to any register:
-for distinct in-range qubits `a b t` and a basis state with `t = 0`, the compute listing sets
-`t` to `a ∧ b` and changes nothing else. The 3-qubit proof (finite case split) does not
-transfer; tracked in docs/SORRIES.md. -/
-theorem tempLogicalAND_correct_lift {n m : ℕ} (a b t : Qubit) (hab : a ≠ b) (hat : a ≠ t)
-    (hbt : b ≠ t) (ha : a.inRange n m = true) (hb : b.inRange n m = true)
-    (ht : t.inRange n m = true) (s : Reg n × Reg m) (hs : t.get s = false) :
-    unitaryDenote n m (TempLogicalAND a b t) *ᵥ basisVec s =
-      basisVec (t.set (a.get s && b.get s) s) := by
-  sorry
 
 /-! ## Layer 3 — `AncRestore` and the phase oracle -/
 
