@@ -70,3 +70,51 @@ Why: the pinned Mathlib is flagged `requiresModuleSystem`; a non-`module` file i
 Rejected: `allowNonModules := true` in `lakefile.lean` (silences the warning package-wide; rejected by the reviewer 2026-10-23).
 Report §: 9.5.1.
 Reviewer confirmed 2026-10-23: all later stages use the module system.
+
+## 2026-10-23 — Classical inputs are encoded in the computational basis (Stage 2)
+Decision: `encode (x : X) : MState X := MState.ofClassical (ProbDistribution.constant x)` — the Hilbert space of a classical input is indexed by the input type itself, and the encoding is fixed, not a parameter of `Realizes`.
+Why: with this encoding the measure-and-re-encode step of Theorem 3.3a is exactly Physlib's `POVM.measureDiscard` (`measureDiscard_apply`: output `ofClassical (measure ρ)`, a mixture of `encode y`), so the measured interface needs no extra re-encoding channel.
+Rejected: an encoding parameter `enc : X → MState dX` (the interface would need a separate re-encoding channel and a compatibility hypothesis between `enc` and the decoding POVM).
+Report §: 2.1.2, 2.3.2.
+
+## 2026-10-23 — "Within grade r" is fibre membership `grade ≤ r` (Stage 2)
+Decision: `Realizes S dec Φ ε δ r` requires `Φ.grade ≤ r` (component-wise order of Stage 1).
+Why: §3.1.2 reads a grade as a budget; the fibre over `r` contains every channel with grade `≤ r`, and budget relaxation (`Fibre.relax`) must preserve realization.
+Rejected: `Φ.grade = r` (not closed under budget relaxation; Theorem 3.3a would only hold for the exact sum grade).
+Report §: 2.3.1, 3.1.2.
+
+## 2026-10-23 — Measured interface counted at grade 0 (Stage 2, open for the reviewer)
+Decision: `measuredComp Φ dec_f Ψ` has grade `Φ.grade + Ψ.grade`; the intermediate measurement (`dec_f.measureDiscard`) and the basis re-encoding contribute nothing.
+Why: Theorem 3.3a and Table 3 (§2.3.3) state the composite grade as `r ⊕ s`.
+Rejected: charging the measurement a grade of its own now (no number for it in the report). Open question to the reviewer: the measurement has a physical cost (depth ≥ 1 layer, classical feed-forward); whether a later stage should add a measurement grade.
+Report §: 2.3.2, 2.3.3, 3.1.1.
+
+## 2026-10-23 — Explicit δ-range hypotheses in Theorem 3.3a (Stage 2)
+Decision: `measured_composition_exact` and `measured_composition` assume `0 ≤ δ_f`, `0 ≤ δ_g`, `δ_g ≤ 1`.
+Why: the union-bound step `(1 − δ_f)(1 − δ_g) ≥ 1 − δ_f − δ_g` needs `δ_f δ_g ≥ 0`, and multiplying `Pr_f ≥ 1 − δ_f` by `1 − δ_g` needs `1 − δ_g ≥ 0`. The report leaves these ranges implicit (δ is a failure probability).
+Rejected: putting the ranges into `Realizes` (Definition 2.2 does not restrict δ).
+Report §: 2.3.2.
+
+## 2026-10-23 — Non-expansiveness of S_g stated on dom S_g (Stage 2, reviewer decision)
+Decision: hypothesis (ii) of Theorem 3.3a (general ε) is `∀ y ∈ S_g.dom, ∀ y' z', S_g y' z' → ∃ z, S_g y z ∧ dist z z' ≤ dist y y'`.
+Why: the task's unrestricted form (`∀ y y' z'`) forces `dom S_g = Y` whenever `S_g` is non-empty, which is strictly stronger than §2.3.2's `L_g ≤ 1` (example: identity on `dom = [0,1]` has `L_g = 1` but fails it at `y = 2`). For a function on its domain the restricted form is exactly 1-Lipschitz. The proof only uses it at the exact intermediate `y₀` (`S_f x y₀`), which lies in `dom S_g` by domain compatibility; `0 ≤ ε_f` is then implied by `dist y y₀ ≤ ε_f`, so no extra hypothesis is needed.
+Rejected: the task text's unrestricted form (changes the meaning of the report's hypothesis).
+Report §: 2.3.2.
+
+## 2026-10-23 — Diamond norm is a parameter of Theorem 3.3b until Phase III (Stage 2)
+Decision: `coherent_composition` takes a channel distance `distD` (a family over channel types, since `Φ` and `Ψ` have different spaces) with the single hypothesis `2 · TrDistance (Λ₁ ρ) (Λ₂ ρ) ≤ distD Λ₁ Λ₂` for all inputs `ρ`. The ½ in `δ₀ + ½(η_f + η_g)` matches Physlib's `TrDistance = ½‖·‖₁`. The ideal channels `Φ₁`, `Ψ₁` carry no grade (grade 0 against budget 0); ε₀ is a general parameter ("ε is inherited from the ideal composite", §2.3.2).
+Why: neither Mathlib nor Physlib has a diamond norm; the statement must still be type-correct and usable.
+Rejected: defining the diamond norm now (Phase III scope, §9.3); adding it as an `axiom` (violates §9.5.1's no-new-axioms discipline).
+Report §: 2.3.2, 9.3, 9.5.1.
+
+## 2026-10-23 — Theorem 3.1 stated in its concrete linear-algebra form (Stage 2)
+Decision: `no_cloning_obstruction` states: for finite `d` with `2 ≤ Fintype.card d`, no `ℂ`-linear `C : (d → ℂ) → (d × d → ℂ)` satisfies `C ψ = ψ ⊗ ψ` for all `ψ`. The categorical form (no monoidal functor `Cl_det → U` preserving (Δ, !)) is deferred — a documented gap between the report's statement and the formalized one.
+Why: Neither Mathlib nor Physlib has the category U; the report's "equivalently" form is the mathematical core and is stateable with Mathlib alone.
+Rejected: building U in Mathlib's `CategoryTheory` now (out of Stage 2 scope).
+Report §: 2.2.2.
+
+## 2026-10-23 — Test layout: `tests/CQRVTests/` picked up by a glob (Stage 2)
+Decision: Lean tests live under `tests/CQRVTests/` (modules `CQRVTests.*`); `lean_lib CQRVTests` keeps `roots := #[`CQRVTests, `PhyslibSmoke]` and adds `globs := #[.one `CQRVTests, .one `PhyslibSmoke, .submodules `CQRVTests]`, so a new test file is built without editing the lakefile or `tests/CQRVTests.lean`. `tests/Grades.lean` moved to `tests/CQRVTests/Grades.lean`; `PhyslibSmoke` unchanged.
+Why: listing each test root by hand (Stage 1) does not scale (Stage 1 review).
+Rejected: importing every test module from `tests/CQRVTests.lean` (a second list to keep in sync).
+Report §: 9.5.1.

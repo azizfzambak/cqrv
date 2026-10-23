@@ -23,7 +23,8 @@ lean_lib CQRV
 @[default_target]
 lean_lib CQRVTests where
   srcDir := "tests"
-  roots := #[`CQRVTests, `PhyslibSmoke, `Grades]
+  roots := #[`CQRVTests, `PhyslibSmoke]
+  globs := #[.one `CQRVTests, .one `PhyslibSmoke, .submodules `CQRVTests]
 
 @[default_target]
 lean_exe cqr where

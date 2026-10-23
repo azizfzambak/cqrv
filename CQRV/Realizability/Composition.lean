@@ -1,0 +1,161 @@
+module
+
+public import CQRV.Realizability.Realizes
+
+/-!
+# CQRV.Realizability.Composition
+
+Report §2.3.2 — Theorem 3.3a (measured-interface composition), with the hypotheses that the
+report lists under "Hypotheses made explicit": (i) domain compatibility, (ii) non-expansiveness.
+
+The measured interface measures the intermediate output with the first stage's decoding POVM
+and re-encodes it in the computational basis (`POVM.measureDiscard`, matching `encode`).
+-/
+
+@[expose] public section
+
+noncomputable section
+
+namespace CQRV
+
+/-! ## Event probabilities (helpers for the union bound) -/
+
+/-- Report §2.1.2 — event probabilities are non-negative. -/
+theorem prob_nonneg {Y : Type} [Fintype Y] (p : ProbDistribution Y) (E : Y → Prop) :
+    0 ≤ prob p E := by
+  unfold prob
+  exact Finset.sum_nonneg fun y _ => by split_ifs <;> simp [Prob.zero_le_coe]
+
+/-- Report §2.1.2 — event probability is monotone in the event. -/
+theorem prob_mono {Y : Type} [Fintype Y] (p : ProbDistribution Y) {E F : Y → Prop}
+    (h : ∀ y, E y → F y) : prob p E ≤ prob p F := by
+  unfold prob
+  refine Finset.sum_le_sum fun y _ => ?_
+  by_cases hE : E y
+  · simp [hE, h y hE]
+  · by_cases hF : F y <;> simp [hE, hF, Prob.zero_le_coe]
+
+/-- Report §2.3.2 — the probability of an event under a mixture `q = ∑ y, p y · qs y` is the
+`p`-average of its probabilities under the components. -/
+theorem prob_mixture {Y Z : Type} [Fintype Y] [Fintype Z] {p : ProbDistribution Y}
+    {qs : Y → ProbDistribution Z} {q : ProbDistribution Z}
+    (h : ∀ z, (q z : ℝ) = ∑ y, (p y : ℝ) * (qs y z : ℝ)) (E : Z → Prop) :
+    prob q E = ∑ y, (p y : ℝ) * prob (qs y) E := by
+  unfold prob
+  simp_rw [Finset.mul_sum]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun z _ => ?_
+  rw [h z]
+  split_ifs <;> simp
+
+/-! ## Linearity of a channel on a classical mixture -/
+
+/-- Report §2.1.2 — `POVM.measure` as a trace: `Pr[z] = Re tr(M_z ρ)`. -/
+theorem measure_eq_re_trace {Z dZ : Type} [Fintype Z] [DecidableEq Z] [Fintype dZ]
+    [DecidableEq dZ] (dec : POVM Z dZ) (ρ : MState dZ) (z : Z) :
+    (dec.measure ρ z : ℝ) = RCLike.re ((dec.mats z).mat * ρ.m).trace := by
+  show inner ℝ (dec.mats z) ρ.M = _
+  rw [HermitianMat.inner_eq_re_trace]
+  rfl
+
+/-- Report §2.1.2, §2.3.2 — a classical state is the `p`-mixture of encoded basis states:
+`ofClassical p = ∑ y, p y · |y⟩⟨y|` (as matrices). -/
+theorem ofClassical_m_eq_sum {Y : Type} [Fintype Y] [DecidableEq Y] (p : ProbDistribution Y) :
+    (MState.ofClassical p).m = ∑ y, ((p y : ℝ) : ℂ) • (encode y).m := by
+  ext i j
+  rw [MState.m, MState.coe_ofClassical, HermitianMat.diagonal_mat, Matrix.sum_apply]
+  simp only [encode, MState.m, MState.coe_ofClassical, HermitianMat.diagonal_mat,
+    Matrix.smul_apply, Matrix.diagonal_apply, ProbDistribution.constant_eq]
+  by_cases h : i = j <;> simp [h, apply_ite]
+
+/-- Report §2.3.2 — measuring `Ψ` applied to a classical mixture gives the mixture of the
+outcome distributions on the encoded basis states (linearity of `Ψ` and of the Born rule). -/
+theorem measure_chan_ofClassical {Y Z dZ : Type} [Fintype Y] [DecidableEq Y] [Fintype Z]
+    [DecidableEq Z] [Fintype dZ] [DecidableEq dZ] (dec : POVM Z dZ) (Ψ : CPTPMap Y dZ)
+    (p : ProbDistribution Y) (z : Z) :
+    (dec.measure (Ψ (MState.ofClassical p)) z : ℝ) =
+      ∑ y, (p y : ℝ) * (dec.measure (Ψ (encode y)) z : ℝ) := by
+  simp only [measure_eq_re_trace, CPTPMap.mat_coe_eq_apply_mat, ofClassical_m_eq_sum, map_sum,
+    map_smul, Matrix.mul_sum, Matrix.mul_smul, Matrix.trace_sum, Matrix.trace_smul, map_sum]
+  simp
+
+/-! ## The measured interface and Theorem 3.3a -/
+
+variable {X Y Z dY dZ : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
+  [Fintype Z] [DecidableEq Z] [Fintype dY] [DecidableEq dY] [Fintype dZ] [DecidableEq dZ]
+
+/-- Report §2.3.2, Theorem 3.3a — the measured interface `Ψ ∘ (measure-and-re-encode) ∘ Φ`:
+the first stage's output is measured with `dec_f` and re-encoded in the computational basis
+(`POVM.measureDiscard`). Its grade is `Φ.grade ⊕ Ψ.grade`: the measurement and the
+re-encoding are counted at grade 0, as in the report's `r ⊕ s` (docs/DECISIONS.md,
+2026-10-23). -/
+def measuredComp (Φ : GradedChannel X dY) (dec_f : POVM Y dY) (Ψ : GradedChannel Y dZ) :
+    GradedChannel X dZ :=
+  ⟨Ψ.chan ∘ₘ dec_f.measureDiscard ∘ₘ Φ.chan, Φ.grade + Ψ.grade⟩
+
+/-- Report §2.3.2, Theorem 3.3a with exact stages (`ε_f = ε_g = 0`, the Grover slice and the
+pipeline of §2.3.3). Hypotheses: (i) domain compatibility in its `ε_f = 0` form
+`S_f(dom S_f) ⊆ dom S_g`; and `0 ≤ δ_f`, `0 ≤ δ_g`, `δ_g ≤ 1`, which the report leaves
+implicit and the union bound `(1 − δ_f)(1 − δ_g) ≥ 1 − δ_f − δ_g` needs
+(docs/DECISIONS.md, 2026-10-23). -/
+theorem measured_composition_exact [MetricSpace Y] [MetricSpace Z]
+    {S_f : Spec X Y} {S_g : Spec Y Z} {dec_f : POVM Y dY} {dec_g : POVM Z dZ}
+    {Φ : GradedChannel X dY} {Ψ : GradedChannel Y dZ} {δ_f δ_g : ℝ} {r s : Grade}
+    (hf : Realizes S_f dec_f Φ 0 δ_f r) (hg : Realizes S_g dec_g Ψ 0 δ_g s)
+    (hdom : ∀ x ∈ S_f.dom, ∀ y, S_f x y → y ∈ S_g.dom)
+    (hδf : 0 ≤ δ_f) (hδg : 0 ≤ δ_g) (hδg1 : δ_g ≤ 1) :
+    Realizes (S_g.comp S_f) dec_g (measuredComp Φ dec_f Ψ) 0 (δ_f + δ_g) (r + s) := by
+  classical
+  refine ⟨Grade.seqComp_mono hf.1 hg.1, ?_⟩
+  rintro x ⟨z, y, hxy, -⟩
+  have hx : x ∈ S_f.dom := ⟨y, hxy⟩
+  have hf' := hf.2 x hx
+  rw [Spec.relax_zero] at hf'
+  set p := dec_f.measure (Φ.chan (encode x)) with hp
+  have hchan : (measuredComp Φ dec_f Ψ).chan (encode x) = Ψ.chan (MState.ofClassical p) := by
+    simp [measuredComp, POVM.measureDiscard_apply, hp]
+  rw [Spec.relax_zero, hchan, prob_mixture (measure_chan_ofClassical dec_g Ψ.chan p)]
+  -- Each intermediate value acceptable for `f` lies in `dom S_g`, where `g` succeeds w.p. ≥ 1 − δ_g.
+  have key : ∀ y', (p y' : ℝ) * (if S_f x y' then 1 - δ_g else 0) ≤
+      (p y' : ℝ) * prob (dec_g.measure (Ψ.chan (encode y'))) (S_g.comp S_f x) := by
+    intro y'
+    refine mul_le_mul_of_nonneg_left ?_ Prob.zero_le_coe
+    split_ifs with h
+    · have hg' := hg.2 y' (hdom x hx y' h)
+      rw [Spec.relax_zero] at hg'
+      exact hg'.trans (prob_mono _ fun z hz => ⟨y', h, hz⟩)
+    · exact prob_nonneg _ _
+  have hsum : ∑ y', (p y' : ℝ) * (if S_f x y' then 1 - δ_g else 0) =
+      (1 - δ_g) * prob p (S_f x) := by
+    unfold prob
+    rw [Finset.mul_sum]
+    refine Finset.sum_congr rfl fun y' _ => ?_
+    split_ifs <;> ring
+  have hlow := Finset.sum_le_sum fun y' (_ : y' ∈ Finset.univ) => key y'
+  rw [hsum] at hlow
+  have h2 : (1 - δ_g) * (1 - δ_f) ≤ (1 - δ_g) * prob p (S_f x) :=
+    mul_le_mul_of_nonneg_left hf' (by linarith)
+  nlinarith [mul_nonneg hδf hδg]
+
+/-- Report §2.3.2, Theorem 3.3a (general ε). Hypotheses: (i) domain compatibility
+`S_f^{ε_f}(dom S_f) ⊆ dom S_g`; (ii) non-expansiveness of `S_g` (`L_g ≤ 1`), stated
+relationally on the domain of `S_g`: for `y ∈ dom S_g`, every output `z'` acceptable for `y'`
+has an output acceptable for `y` within `dist y y'` (for a function on its domain this is
+exactly 1-Lipschitz; quantifying over all `y` would force `dom S_g = Y`,
+docs/DECISIONS.md, 2026-10-23); and the δ-ranges of `measured_composition_exact`.
+Statement only (tracked `sorry`, docs/SORRIES.md). -/
+theorem measured_composition [MetricSpace Y] [MetricSpace Z]
+    {S_f : Spec X Y} {S_g : Spec Y Z} {dec_f : POVM Y dY} {dec_g : POVM Z dZ}
+    {Φ : GradedChannel X dY} {Ψ : GradedChannel Y dZ} {ε_f ε_g δ_f δ_g : ℝ} {r s : Grade}
+    (hf : Realizes S_f dec_f Φ ε_f δ_f r) (hg : Realizes S_g dec_g Ψ ε_g δ_g s)
+    (hdom : ∀ x ∈ S_f.dom, ∀ y, S_f.relax ε_f x y → y ∈ S_g.dom)
+    (hnonexp : ∀ y ∈ S_g.dom, ∀ y' z', S_g y' z' → ∃ z, S_g y z ∧ dist z z' ≤ dist y y')
+    (hδf : 0 ≤ δ_f) (hδg : 0 ≤ δ_g) (hδg1 : δ_g ≤ 1) :
+    Realizes (S_g.comp S_f) dec_g (measuredComp Φ dec_f Ψ) (ε_f + ε_g) (δ_f + δ_g) (r + s) := by
+  sorry
+
+end CQRV
+
+end
+
+end
