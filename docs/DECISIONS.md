@@ -67,6 +67,6 @@ Report §: 3.1.3, 3.3.3, Table 3.5.
 ## 2026-10-23 — `CQRV/Grades` files use the Lean module system (Stage 1)
 Decision: `CQRV/Grades/{Basic,Order,Hardware}.lean` start with `module`, use `public import`, and wrap their content in `@[expose] public section` (bodies exposed so that `rfl`/`decide` work in importers, e.g. the Table 3.3 tests).
 Why: the pinned Mathlib is flagged `requiresModuleSystem`; a non-`module` file importing it makes Lake emit "imports `Mathlib…` from package `mathlib`, which is designed for use with the module system; consider adding `module`", a warning in our sources that `scripts/check_warnings.sh` would reject (CLAUDE.md rule 3). Files that import only our own modules (`CQRV.lean`, `tests/*.lean`) need no change.
-Rejected: `allowNonModules := true` in `lakefile.lean` (silences the warning package-wide, but it is a build-configuration change outside the Stage 1 scope; it is open for the reviewer whether later stages should use that switch or stay on the module system).
+Rejected: `allowNonModules := true` in `lakefile.lean` (silences the warning package-wide; rejected by the reviewer 2026-10-23).
 Report §: 9.5.1.
 Reviewer confirmed 2026-10-23: all later stages use the module system.
