@@ -54,6 +54,21 @@ def oracle (src : String) : Except Diagnostic Circuit :=
     some (groverNet.eval x) &&
   groverNet.eval x == [x 0 && x 3 && x 7]
 
+/-! ## DSL bridge (Stage 6a review): `toNetwork` of the source is `groverNet` -/
+
+/-- Field-by-field equality of networks (`Network` derives no `BEq`). -/
+def netEq (N M : Network) : Bool :=
+  N.nInputs == M.nInputs && N.nodes.toList == M.nodes.toList && N.outputs == M.outputs
+
+#guard match parse groverSrc >>= check >>= toNetwork with
+  | .ok N => netEq N groverNet
+  | .error _ => false
+-- `groverPred` (on `Reg 8`) is `x0 ∧ x3 ∧ x7` on all 256 inputs.
+#guard (List.range 256).all fun k =>
+  let x : Reg 8 := fun i => (k >>> i.val) % 2 == 1
+  groverPred x == (x 0 && x 3 && x 7) &&
+    groverPred x == ((k % 2 == 1) && ((k >>> 3) % 2 == 1) && ((k >>> 7) % 2 == 1))
+
 /-! ## Axiom audit (CLAUDE.md rule 10) -/
 
 -- Proved, expected axioms only `propext`, `Classical.choice`, `Quot.sound`:
@@ -63,6 +78,8 @@ def oracle (src : String) : Except Diagnostic Circuit :=
 #print axioms phaseDiag_mem_unitaryGroup
 #print axioms tempLogicalAND_correct
 #print axioms AncRestore.traced
+#print axioms Circuit.WF.bitsOk
+#print axioms channelDenote_of_WF
 -- Proved from `lemma_6_3_2`, which is a tracked `sorry`: these show `sorryAx` until 6b.
 #print axioms lemma_6_3_2_traced
 #print axioms grover_pred_037_ancRestore

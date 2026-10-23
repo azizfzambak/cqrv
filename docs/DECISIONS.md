@@ -309,3 +309,9 @@ Decision:
 Why: needed to implement the task; the report leaves these open.
 Rejected: (2) stating Lemma 6.3.2 for all accepted networks (stronger than asked; the 6b split covers no XOR gathers); (5) a separate `sorry` for the Grover instance.
 Report §: 6.1.1, 6.1.4, 6.2.2, 6.3.2, 8, 9.1.1.
+
+## 2026-10-23 — Stage 6a review: WF → bitsOk, XOR deferred, DSL bridge for `groverNet` (Stage 6 review, reviewer decisions)
+Decision: (1) `Circuit.WF.bitsOk : C.WF → C.bitsOk = true` and `channelDenote_of_WF` are proved, so no theorem relies on the `CPTPMap.id` fallback of `channelDenote`. (5) `lemma_6_3_2` keeps the hypothesis `N.xorFree`; the XOR case is the planned obligation `lemma_6_3_2_xor` (SORRIES.md, status "planned, before Stage 9", no `sorry` in code). `scripts/check_sorries.sh` skips rows whose status starts with "planned", like "closed": such a row has no `sorry` to count. (6) `tests/CQRVTests/Semantics.lean` checks by `#guard` that `toNetwork` of `examples/grover_pred_037.cqr` equals `groverNet` field by field (`Network` has no `BEq`) and that `groverPred` is `x0 && x3 && x7` on all 256 inputs.
+Why: reviewer decisions on Stage 6a; the audit change is needed for a planned row to pass the sorry audit.
+Rejected: (5) a placeholder `sorry` for `lemma_6_3_2_xor` now; a planned row under a pseudo-path (would hide which file the obligation belongs to).
+Report §: 6.1.2, 6.3.2, 8, 9.1.1, 9.5.1.

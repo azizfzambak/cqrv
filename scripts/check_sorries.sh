@@ -3,7 +3,8 @@
 #
 # Counts `sorry` tokens per .lean file in the repository (never inside .lake/) and fails unless,
 # for every file, the count equals the number of rows in docs/SORRIES.md whose File:line
-# column names that file and whose Status is not "closed". Matching is per file, not per
+# column names that file and whose Status is neither "closed" nor "planned" (a planned row
+# records an obligation that has no `sorry` in the code yet). Matching is per file, not per
 # line, because line numbers drift. With an empty table, any `sorry` fails.
 #
 # Limitations (this is a lexical scan, not a Lean parse):
@@ -62,7 +63,7 @@ count_sorries() {
 }
 
 expected_sorries() {
-  # Prints "<path> <count>" from docs/SORRIES.md rows with Status != closed.
+  # Prints "<path> <count>" from docs/SORRIES.md rows with Status not closed / planned.
   tr -d '\r' < "$SORRIES_MD" | awk -F'|' '
     /^[[:space:]]*\|/ {
       file = $2; status = $7
@@ -71,6 +72,7 @@ expected_sorries() {
       if (file == "" || file == "File:line" || file ~ /^-+$/) next
       sub(/:[0-9]+(-[0-9]+)?$/, "", file); sub(/^\.\//, "", file)
       if (tolower(substr(status, 1, 6)) == "closed") next
+      if (tolower(substr(status, 1, 7)) == "planned") next
       cnt[file]++
     }
     END { for (f in cnt) print f, cnt[f] }' | LC_ALL=C sort

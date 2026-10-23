@@ -635,12 +635,25 @@ theorem krausOps_complete (C : Circuit) (h : C.bitsOk = true) :
 
 /-- Report §9.1.1, §6.2.2 — the density-matrix semantics `ρ ↦ ∑_c K_c ρ K_cᴴ` of a circuit on
 `Reg n × Reg a` (Stage 6 decision 2). A circuit violating the classical-bit discipline has no
-Kraus decomposition of this form and is mapped to the identity channel (all theorems assume
-`Circuit.WF`, which includes `bitsOk`). -/
+Kraus decomposition of this form and is mapped to the identity channel. No theorem relies on
+that fallback: all theorems assume `Circuit.WF`, and `Circuit.WF.bitsOk` gives `C.bitsOk = true`,
+so `channelDenote_of_WF` rewrites to the Kraus channel. -/
 def channelDenote (C : Circuit) : CPTPMap (Reg n × Reg a) (Reg n × Reg a) :=
   if h : C.bitsOk = true then
     CPTPMap.of_kraus_CPTPMap (krausOps n a C.nBits C.gates) (krausOps_complete n a C h)
   else CPTPMap.id
+
+/-- Report §9.1.1 — well-formedness includes the classical-bit discipline. -/
+theorem Circuit.WF.bitsOk {C : Circuit} (h : C.WF) : C.bitsOk = true := by
+  simp only [Circuit.WF, Circuit.wf, Bool.and_eq_true] at h
+  exact h.2
+
+/-- Report §9.1.1 — on a well-formed circuit `channelDenote` is the Kraus channel (never the
+`CPTPMap.id` fallback). -/
+theorem channelDenote_of_WF {C : Circuit} (h : C.WF) :
+    channelDenote n a C =
+      CPTPMap.of_kraus_CPTPMap (krausOps n a C.nBits C.gates) (krausOps_complete n a C h.bitsOk) := by
+  simp only [channelDenote, h.bitsOk, ↓reduceDIte]
 
 end Kraus
 
