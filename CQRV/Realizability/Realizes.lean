@@ -61,6 +61,23 @@ def Realizes {X Y dY : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableE
     (S : Spec X Y) (dec : POVM Y dY) (Φ : GradedChannel X dY) (ε δ : ℝ) (r : Grade) : Prop :=
   Φ.grade ≤ r ∧ ∀ x ∈ S.dom, 1 - δ ≤ prob (dec.measure (Φ.chan (encode x))) (S.relax ε x)
 
+/-- Report §2.1.2 (Definition 2.2, discrete case ε = 0) and §2.3.1 — `Φ` (0,δ)-realizes `S`
+within grade `r`: decoding yields an `S`-acceptable answer (no relaxation) with probability at
+least `1 − δ`. Needs no metric on `Y`, so it applies to outputs such as `Fin (2^n)` that have
+no `MetricSpace` instance (docs/DECISIONS.md, 2026-10-23). -/
+def RealizesExact {X Y dY : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y]
+    [Fintype dY] [DecidableEq dY]
+    (S : Spec X Y) (dec : POVM Y dY) (Φ : GradedChannel X dY) (δ : ℝ) (r : Grade) : Prop :=
+  Φ.grade ≤ r ∧ ∀ x ∈ S.dom, 1 - δ ≤ prob (dec.measure (Φ.chan (encode x))) (S x)
+
+/-- Report §2.1.2 — on a metric output space, (0,δ)-realization is `RealizesExact`
+(`S^0 = S`, `Spec.relax_zero`). -/
+theorem realizes_zero_iff {X Y dY : Type} [Fintype X] [DecidableEq X] [Fintype Y]
+    [DecidableEq Y] [Fintype dY] [DecidableEq dY] [MetricSpace Y]
+    {S : Spec X Y} {dec : POVM Y dY} {Φ : GradedChannel X dY} {δ : ℝ} {r : Grade} :
+    Realizes S dec Φ 0 δ r ↔ RealizesExact S dec Φ δ r := by
+  rw [Realizes, RealizesExact, Spec.relax_zero]
+
 end CQRV
 
 end

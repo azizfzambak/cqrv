@@ -97,24 +97,24 @@ def measuredComp (Φ : GradedChannel X dY) (dec_f : POVM Y dY) (Ψ : GradedChann
 pipeline of §2.3.3). Hypotheses: (i) domain compatibility in its `ε_f = 0` form
 `S_f(dom S_f) ⊆ dom S_g`; and `0 ≤ δ_f`, `0 ≤ δ_g`, `δ_g ≤ 1`, which the report leaves
 implicit and the union bound `(1 − δ_f)(1 − δ_g) ≥ 1 − δ_f − δ_g` needs
-(docs/DECISIONS.md, 2026-10-23). -/
-theorem measured_composition_exact [MetricSpace Y] [MetricSpace Z]
+(docs/DECISIONS.md, 2026-10-23). Stated over `RealizesExact`, so no metric on `Y` or `Z` is
+needed; on metric spaces it is the `ε = 0` case of `Realizes` (`realizes_zero_iff`). -/
+theorem measured_composition_exact
     {S_f : Spec X Y} {S_g : Spec Y Z} {dec_f : POVM Y dY} {dec_g : POVM Z dZ}
     {Φ : GradedChannel X dY} {Ψ : GradedChannel Y dZ} {δ_f δ_g : ℝ} {r s : Grade}
-    (hf : Realizes S_f dec_f Φ 0 δ_f r) (hg : Realizes S_g dec_g Ψ 0 δ_g s)
+    (hf : RealizesExact S_f dec_f Φ δ_f r) (hg : RealizesExact S_g dec_g Ψ δ_g s)
     (hdom : ∀ x ∈ S_f.dom, ∀ y, S_f x y → y ∈ S_g.dom)
     (hδf : 0 ≤ δ_f) (hδg : 0 ≤ δ_g) (hδg1 : δ_g ≤ 1) :
-    Realizes (S_g.comp S_f) dec_g (measuredComp Φ dec_f Ψ) 0 (δ_f + δ_g) (r + s) := by
+    RealizesExact (S_g.comp S_f) dec_g (measuredComp Φ dec_f Ψ) (δ_f + δ_g) (r + s) := by
   classical
   refine ⟨Grade.seqComp_mono hf.1 hg.1, ?_⟩
   rintro x ⟨z, y, hxy, -⟩
   have hx : x ∈ S_f.dom := ⟨y, hxy⟩
   have hf' := hf.2 x hx
-  rw [Spec.relax_zero] at hf'
   set p := dec_f.measure (Φ.chan (encode x)) with hp
   have hchan : (measuredComp Φ dec_f Ψ).chan (encode x) = Ψ.chan (MState.ofClassical p) := by
     simp [measuredComp, POVM.measureDiscard_apply, hp]
-  rw [Spec.relax_zero, hchan, prob_mixture (measure_chan_ofClassical dec_g Ψ.chan p)]
+  rw [hchan, prob_mixture (measure_chan_ofClassical dec_g Ψ.chan p)]
   -- Each intermediate value acceptable for `f` lies in `dom S_g`, where `g` succeeds w.p. ≥ 1 − δ_g.
   have key : ∀ y', (p y' : ℝ) * (if S_f x y' then 1 - δ_g else 0) ≤
       (p y' : ℝ) * prob (dec_g.measure (Ψ.chan (encode y'))) (S_g.comp S_f x) := by
@@ -122,7 +122,6 @@ theorem measured_composition_exact [MetricSpace Y] [MetricSpace Z]
     refine mul_le_mul_of_nonneg_left ?_ Prob.zero_le_coe
     split_ifs with h
     · have hg' := hg.2 y' (hdom x hx y' h)
-      rw [Spec.relax_zero] at hg'
       exact hg'.trans (prob_mono _ fun z hz => ⟨y', h, hz⟩)
     · exact prob_nonneg _ _
   have hsum : ∑ y', (p y' : ℝ) * (if S_f x y' then 1 - δ_g else 0) =

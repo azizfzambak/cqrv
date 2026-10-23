@@ -88,6 +88,7 @@ Decision: `measuredComp Φ dec_f Ψ` has grade `Φ.grade + Ψ.grade`; the interm
 Why: Theorem 3.3a and Table 3 (§2.3.3) state the composite grade as `r ⊕ s`.
 Rejected: charging the measurement a grade of its own now (no number for it in the report). Open question to the reviewer: the measurement has a physical cost (depth ≥ 1 layer, classical feed-forward); whether a later stage should add a measurement grade.
 Report §: 2.3.2, 2.3.3, 3.1.1.
+Reviewer decided 2026-10-23: the interface grade stays 0 (consistent with §2.3.3); revisit at Stage 9 for multi-stage pipelines.
 
 ## 2026-10-23 — Explicit δ-range hypotheses in Theorem 3.3a (Stage 2)
 Decision: `measured_composition_exact` and `measured_composition` assume `0 ≤ δ_f`, `0 ≤ δ_g`, `δ_g ≤ 1`.
@@ -106,15 +107,23 @@ Decision: `coherent_composition` takes a channel distance `distD` (a family over
 Why: neither Mathlib nor Physlib has a diamond norm; the statement must still be type-correct and usable.
 Rejected: defining the diamond norm now (Phase III scope, §9.3); adding it as an `axiom` (violates §9.5.1's no-new-axioms discipline).
 Report §: 2.3.2, 9.3, 9.5.1.
+Reviewer confirmed 2026-10-23: the `distD` family and the general ε₀ are accepted.
 
 ## 2026-10-23 — Theorem 3.1 stated in its concrete linear-algebra form (Stage 2)
 Decision: `no_cloning_obstruction` states: for finite `d` with `2 ≤ Fintype.card d`, no `ℂ`-linear `C : (d → ℂ) → (d × d → ℂ)` satisfies `C ψ = ψ ⊗ ψ` for all `ψ`. The categorical form (no monoidal functor `Cl_det → U` preserving (Δ, !)) is deferred — a documented gap between the report's statement and the formalized one.
 Why: Neither Mathlib nor Physlib has the category U; the report's "equivalently" form is the mathematical core and is stateable with Mathlib alone.
 Rejected: building U in Mathlib's `CategoryTheory` now (out of Stage 2 scope).
 Report §: 2.2.2.
+Reviewer confirmed 2026-10-23: the categorical form stays deferred. The concrete form was proved in the Stage 2 review (`no_cloning_obstruction`, Mathlib only).
 
 ## 2026-10-23 — Test layout: `tests/CQRVTests/` picked up by a glob (Stage 2)
 Decision: Lean tests live under `tests/CQRVTests/` (modules `CQRVTests.*`); `lean_lib CQRVTests` keeps `roots := #[`CQRVTests, `PhyslibSmoke]` and adds `globs := #[.one `CQRVTests, .one `PhyslibSmoke, .submodules `CQRVTests]`, so a new test file is built without editing the lakefile or `tests/CQRVTests.lean`. `tests/Grades.lean` moved to `tests/CQRVTests/Grades.lean`; `PhyslibSmoke` unchanged.
 Why: listing each test root by hand (Stage 1) does not scale (Stage 1 review).
 Rejected: importing every test module from `tests/CQRVTests.lean` (a second list to keep in sync).
 Report §: 9.5.1.
+
+## 2026-10-23 — `RealizesExact`: the discrete case needs no metric (Stage 2 review, reviewer decision)
+Decision: `RealizesExact S dec Φ δ r := Φ.grade ≤ r ∧ ∀ x ∈ S.dom, 1 − δ ≤ prob (dec.measure (Φ.chan (encode x))) (S x)` has no metric instance on `Y`; `realizes_zero_iff [MetricSpace Y] : Realizes S dec Φ 0 δ r ↔ RealizesExact S dec Φ δ r` (via `Spec.relax_zero`). `measured_composition_exact` is stated over `RealizesExact`, with no `MetricSpace` instances; the proof is unchanged apart from dropping the `relax_zero` rewrites. This implements the 2026-10-21 decision (metric is a type parameter; the MVP uses ε = 0).
+Why: the pinned Mathlib has no `MetricSpace (Fin n)` or `MetricSpace Bool`, and the Grover output type is `Fin (2^n)` (Stage 7); the ε = 0 case never uses the metric.
+Rejected: adding a `MetricSpace` instance on `Fin n` (an orphan instance on a Mathlib type, and a choice of metric the discrete case does not need).
+Report §: 2.1.2, 2.3.2.

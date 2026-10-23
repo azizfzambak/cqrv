@@ -1,6 +1,7 @@
 module
 
 import CQRV.Realizability.Composition
+import CQRV.Realizability.Obstruction
 import Mathlib.Topology.Instances.Nat
 
 /-!
@@ -31,8 +32,17 @@ abbrev Sn : Spec (Fin 3) ℕ := fun x y => y = x.val + 1
 
 example : Sn.relax 0 0 1 := by rw [Spec.relax_zero]; rfl
 
-/-! ## Axiom audit (CLAUDE.md rule 10) — Theorem 3.3a, exact stages -/
+/-! ## `RealizesExact` needs no metric
+
+`Fin 4` has no `MetricSpace` instance, yet the discrete-case predicate typechecks (the Grover
+output type is `Fin (2^n)`, Stage 7). -/
+example (S : Spec (Fin 2) (Fin 4)) (dec : POVM (Fin 4) (Fin 4))
+    (Φ : GradedChannel (Fin 2) (Fin 4)) (δ : ℝ) (r : Grade) : Prop :=
+  RealizesExact S dec Φ δ r
+
+/-! ## Axiom audit (CLAUDE.md rule 10) — Theorem 3.3a (exact stages), Theorem 3.1 -/
 
 #print axioms measured_composition_exact
+#print axioms no_cloning_obstruction
 
 end CQRV.Tests.Realizability
