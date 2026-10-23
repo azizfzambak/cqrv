@@ -1,7 +1,11 @@
+module
+
+public import CQRV.Circuit.IR
+public import CQRV.Circuit.Schedule
+
 /-!
 # CQRV.Circuit
 
-Report §6, §9.1.1 — gate-level IR, denotational semantics, TempLogicalAND, MBU.
-
-Stage 0 placeholder: module doc-comment only, no definitions yet.
+Report §6, §9.1.1 — gate-level IR (`IR`) and the depth scheduler (`Schedule`). The
+denotational semantics into Physlib channels is Stage 6.
 -/

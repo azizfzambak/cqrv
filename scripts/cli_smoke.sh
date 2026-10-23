@@ -12,6 +12,9 @@
 # and `cqr match`: grover_pred_037 matches Grover (F₁=8, F₂=32, F₃=1, 32 ≥ 1); search_while
 # --solutions 64 gives the iter hint; search_or needs --solutions (5 matches, 0 fails F₂ ≥ 1).
 #
+# and `cqr synthesize` (Stage 5): the Grover oracle grade (10, 27, 8, 2) and its layer dump, the
+# and_chain_8 budgets (--amax 4 feasible, --amax 2 infeasible), search_while → unbounded_loop.
+#
 # Usage (after `lake build`): scripts/cli_smoke.sh
 # Portable: bash + grep; ubuntu and Git Bash on Windows.
 
@@ -96,6 +99,26 @@ expect_has "search_or --solutions 0 expected" '"expected":"F₂ ≥ 1"' "$out"
 out="$("${cqr[@]}" match examples/allocate_tree.cqr | tr -d '\r')"; rc=$?
 expect_exit "match allocate_tree (stops at the surface checker)" 1 "$out" "$rc"
 expect_has "allocate_tree match stage" '"stage":"surface"' "$out"
+
+# Stage 5 — `cqr synthesize` (report §6.1.3–6.1.4, §6.3.1): the measured Grover oracle grade
+# (Table 3 claims d = 21; the decision-4 scheduler measures 27, DECISIONS.md 2026-10-23),
+# the Table 2 budgets of the c∧ = 8 chain, and the two rejections.
+out="$("${cqr[@]}" synthesize examples/grover_pred_037.cqr --layers | tr -d '')"; rc=$?
+expect_exit "synthesize grover_pred_037" 0 "$out" "$rc"
+expect_has "grover_pred_037 oracle grade" '"grade": {"w": 10, "t": 8, "d": 27, "a": 2}' "$out"
+expect_has "grover_pred_037 layer 27" 'L27: if c0: CZ x[0] x[3]; if c0: X anc[0]' "$out"
+out="$("${cqr[@]}" synthesize examples/grover_pred_037.cqr --json | tr -d '')"; rc=$?
+expect_exit "synthesize grover_pred_037 --json" 0 "$out" "$rc"
+expect_has "grover_pred_037 IR" '"circuit":{"gates":[{"op":"alloc","q":[8]}' "$out"
+out="$("${cqr[@]}" synthesize examples/and_chain_8.cqr --amax 4 | tr -d '')"; rc=$?
+expect_exit "synthesize and_chain_8 --amax 4" 0 "$out" "$rc"
+expect_has "and_chain_8 --amax 4 grade" '"grade": {"w": 13, "t": 48, "d": 144, "a": 4}' "$out"
+out="$("${cqr[@]}" synthesize examples/and_chain_8.cqr --amax 2 | tr -d '')"; rc=$?
+expect_exit "synthesize and_chain_8 --amax 2 (infeasible, Table 2 erratum)" 1 "$out" "$rc"
+expect_has "and_chain_8 --amax 2 code" '"code":"infeasible_budget"' "$out"
+out="$("${cqr[@]}" synthesize examples/search_while.cqr | tr -d '')"; rc=$?
+expect_exit "synthesize search_while" 1 "$out" "$rc"
+expect_has "search_while synthesize code" '"code":"unbounded_loop"' "$out"
 
 [ "$fail" -eq 0 ] && echo "cli_smoke: all checks passed" || echo "cli_smoke: FAILED"
 exit "$fail"

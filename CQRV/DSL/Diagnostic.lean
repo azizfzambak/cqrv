@@ -20,15 +20,18 @@ open Lean
 /-- Report §4.2.2 — the front-end stage that issued a diagnostic. `hypothesis`: a user-supplied
 hypothesis (the ground solution count `--solutions`, §4.1.4) contradicts the extracted value;
 ℰ itself never fails (§7.2.1; DECISIONS.md 2026-10-23). `matching`: the matcher found no library
-pattern (§4.2.4, Algorithm 2; JSON name `match`). -/
+pattern (§4.2.4, Algorithm 2; JSON name `match`). `synthesis`: the oracle synthesizer cannot
+build the Boolean network or the circuit (§6.1.2; JSON name `synthesize`). -/
 inductive Stage where
   | parse
   | surface
   | hypothesis
   | matching
+  | synthesis
   deriving Repr, DecidableEq, Inhabited
 
-/-- Report §4.2.2–4.2.3, §4.2.4 — diagnostic codes of the front end and of the matcher. -/
+/-- Report §4.2.2–4.2.3, §4.2.4, §6.1.2 — diagnostic codes of the front end, the matcher and
+the synthesizer. -/
 inductive Code where
   | syntaxError
   | typeError
@@ -38,6 +41,9 @@ inductive Code where
   | foldDiscipline
   | solutionCountMismatch
   | noMatchingPattern
+  | unboundedLoop
+  | unsupportedNetwork
+  | infeasibleBudget
   deriving Repr, DecidableEq, Inhabited
 
 /-- Report §4.2.3 — JSON name of a stage. -/
@@ -46,6 +52,7 @@ def Stage.name : Stage → String
   | .surface => "surface"
   | .hypothesis => "hypothesis"
   | .matching => "match"
+  | .synthesis => "synthesize"
 
 /-- Report §4.2.3 — JSON name of a diagnostic code. -/
 def Code.name : Code → String
@@ -57,6 +64,9 @@ def Code.name : Code → String
   | .foldDiscipline => "fold_discipline"
   | .solutionCountMismatch => "solution_count_mismatch"
   | .noMatchingPattern => "no_matching_pattern"
+  | .unboundedLoop => "unbounded_loop"
+  | .unsupportedNetwork => "unsupported_network"
+  | .infeasibleBudget => "infeasible_budget"
 
 /-- Report §4.2.2–4.2.3 — a front-end diagnostic; `line`/`col` are 1-based. -/
 structure Diagnostic where

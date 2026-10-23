@@ -40,7 +40,7 @@ jobs:
           scripts/check_sorries.sh
           scripts/check_sorries.sh --self-test
 
-      - name: CLI smoke (cqr check / extract on examples/)
+      - name: CLI smoke (cqr check / extract / match / synthesize on examples/)
         run: scripts/cli_smoke.sh
 
       - name: Axiom printout (CQRV.Certify)
@@ -55,6 +55,9 @@ jobs:
 
       - name: Simulator self-test
         run: python -I tests/diff/statevector.py --selftest
+
+      - name: Differential oracle test (101 predicates, every measurement branch)
+        run: scripts/diff_oracles.sh
 
   candidate:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

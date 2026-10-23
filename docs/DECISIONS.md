@@ -226,3 +226,51 @@ Decision: (1) The lgg against φθ̂ (Stage 4 interpretations (3)) is accepted. 
 Why: reviewer answers to the Stage 4 open questions.
 Rejected: a θ̂ that depends on search order or backtracking (the hint would not be reproducible); putting every `SigmaIn` field into the term now (unconstrained fields would need wildcard metavariables in every pattern).
 Report §: 4.1.1, 4.1.4, 4.3.1, 4.3.2, 3.1.
+
+## 2026-10-23 — Synthesis input is a Boolean network built by `toNetwork` (Stage 5, reviewer decision 1)
+Decision: `CQRV/Synthesis/Network.lean`: `Network = {nInputs, nodes : Array Node, outputs}` with `Node = input | const | not | and | xor` (topological order) and `toNetwork : TypedProgram → Except Diagnostic Network`, structurally recursive on `TExpr` like ℰ: `or` by De Morgan `¬(¬a ∧ ¬b)`, `if` by the Stage 3 mux `b ⊕ (c ∧ (a ⊕ b))` per result bit, `let` shared, `for` unrolled, inputs laid out from bit 0 in parameter order (as ℰ), a `Nat m` value little-endian. `loop … while` has no finite network: diagnostic stage `synthesis` (JSON `synthesize`), code `unbounded_loop`. Test: AND count = ĉ∧ of ℰ on grover_pred_037, search_or, and_chain_8 and five inline programs (`for`, `if` on Bool and on `Vec Bool 3`, calls + `xor`, `let`).
+Why: `SigmaIn` carries counts only; the network is the structure the synthesizer needs. The return type is `Except` (the task writes `TypedProgram → Network`) because of `loop … while`.
+Rejected: re-parsing the source in the synthesizer; DNF for `or`.
+Report §: 6.1.2, 7.2.2, 7.3.2.
+
+## 2026-10-23 — Scope of the oracle synthesizer; XOR and `if` implemented (Stage 5, reviewer decision 2)
+Decision: `synthesizeOracle : Network → Except Diagnostic Circuit` synthesizes the cone of the single output: one fresh ancilla per AND, `TempLogicalAND` in topological order, `Z` on the qubit holding P(x) (last AND ancilla, or a data qubit when ĉ∧ = 0), MBU in reverse order. NOT and XOR cost no qubit: a node value is an affine form over atoms (input bits, AND results); before an AND its operands are brought onto two qubits by CNOTs onto an operand qubit (in-place XOR) and X for negative polarity, undone right after, and replayed around its MBU. Width stays n + ĉ∧, so XOR and `if` are implemented (the harness checks 30 xor/`if` predicates). A negative output literal gets `X Z X` (= −Z, exact). Rejected with `unsupported_network`: more than one output bit.
+Why: in-place XOR keeps the width of Eq. 5, which is the condition decision 2 sets.
+Rejected: an extra qubit per XOR (changes Eq. 5); deferring XOR/`if` to Stage 9 (not needed).
+Report §: 6.1.1, 6.1.2, 6.1.4, 6.3.1.
+
+## 2026-10-23 — Bennett pebbling only for AND chains; minimal forward placements (Stage 5, reviewer decision 3)
+Decision: `pebbleChain (L aMax) : Except String (List Move)` (`CQRV/Synthesis/Bennett.lean`). Moves as decided: `place i` / `remove i` only when node i−1 is pebbled (node 0: always); at most `aMax` pebbles; the last node is placed exactly once (Z right after it); start and end with no pebble. Among valid schedules it returns one with the fewest forward placements (executed T = 4 × placements), found by a 0-1 BFS over the 2^(L+1) states (L ≤ 16) with a fixed move order, so the result is deterministic. Infeasible budget → error (`cqr synthesize --amax k`: diagnostic `infeasible_budget`), never a circuit. `--amax k` below the straight-line ancilla count is accepted only when `Bennett.chainOf` recognizes the network as a chain of positive literals; otherwise `unsupported_network`. Measured quantities: "rounds" = the largest number of placements of any single node; depth = decision-4 depth of `chainCircuit` (lowest free ancilla index per placement); depth multiplier = depth / depth of the a_max = L schedule.
+Why: decision 3; minimal placements is the quantity the T column of Table 2 bounds.
+Rejected: a closed-form recursive Bennett strategy (not minimal in T); pebbling general networks.
+Report §: 6.1.3, Eq. 3, Table 2.
+
+## 2026-10-23 — Depth scheduler (Stage 5, reviewer decision 4)
+Decision: `CQRV/Circuit/Schedule.lean`: ASAP in program order; a gate occupies every qubit it touches (for `ifBit`, the qubits of the controlled gate); an `ifBit c` gate is placed after the measurement writing c (two `ifBit` gates on the same bit may share a layer); `alloc`/`free` take no layer. `depth`, `tCount` (T and T†), `peakAncilla` (live ancillae in program order), `width` = data register + peak ancilla, `layerDump` (`cqr synthesize --layers`). Not tuned to any report number.
+Rejected: tuning the scheduler to reproduce a number from the report.
+Report §: 3.1.1, 6.1.4.
+
+## 2026-10-23 — Report erratum: the §6.2.2 MBU listing has no reset (Stage 5)
+Decision: `UncomputeTempLogicalAND a b t m = [H t, measure t → m, if m: CZ a b, if m: X t]`. The listing says the target is "restored to |0⟩ (reset)" but contains no reset; after the X-basis measurement the target is |m⟩. The added `if m: X t` is Clifford, 0 T, and shares the layer of the CZ. The compute phase is the listing gate for gate and is exact (|a, b, 0⟩ ↦ |a, b, a∧b⟩, no phase; harness self-test). The harness self-test shows that the listing without the fix fails the restoration check (`free` sees |1⟩ in the m = 1 branch).
+Rejected: a `reset` instruction (not in the IR; the classically controlled X suffices).
+Report §: 6.2.2, 6.2.4.
+
+## 2026-10-23 — Report erratum: measured Grover oracle depth is 27, not 21 (Stage 5)
+Decision: `cqr synthesize examples/grover_pred_037.cqr` measures (w, d, t, a) = (10, 27, 8, 2); w, t, a agree with Table 3. Table 3 counts depth 7 per compute phase, but in the §6.2.2 listing 11 of the 13 compute gates act on the target (H, T, 4 CNOT, T, 2 CNOT, H, S), so no schedule fits a compute phase in fewer than 11 layers. Layer dump (decision-4 scheduler): L1 `H anc0; H anc1`, L2 `T anc0; T anc1`, L3–L11 the rest of AND(x0, x3) → anc0 (T† x0 shares L6, T† x3 and T anc0 share L7), L12–L20 AND(anc0, x7) → anc1 (its H, T already in L1–L2), L21 `Z anc1`, L22–L24 MBU anc1 (`H; measure; if c1: CZ anc0 x7; if c1: X anc1`), L25–L27 MBU anc0. So 11 + 9 + 1 + 3 + 3 = 27. The test asserts 27. Not changed: the scheduler and the circuit.
+Consequence (not acted on in Stage 5): the per-iteration depth 21 + 16 = 37 of Table 3 and the slice depth d = 74 (Table 3.3) rest on the 21; with the measured oracle they become 27 + 16 = 43 and 86, if the diffusion depth 16 holds (diffusion is a separate task).
+Report §: 6.1.4 (Table 3), 3.3 (Table 3.3).
+
+## 2026-10-23 — Report erratum: Table 2 rows a_max = 2 and 1 are infeasible (Stage 5)
+Decision: measured for the c∧ = 8 chain (`examples/and_chain_8.cqr`, n = 9): a_max = 8: feasible, 1 round, depth 99 (×1), T = 32; a_max = 4: feasible, 2 rounds, 12 placements, depth 144 (×1.45), T = 48 ≤ 32 × 2; a_max = 2 and a_max = 1: infeasible under decision 3 (with p pebbles the farthest reachable chain node is 2^p − 1, so 8 nodes need p ≥ 4; a_max = 3 is infeasible too). Table 2 lists a_max = 2 (4 rounds, ×8, ≤ 256) and a_max = 1 (8 rounds, ×128, ≤ 4096); under the decided move rules these rows are errata. No schedule was invented for them. The a_max ∈ {8, 4} chains of length 8 pass the harness in every measurement branch.
+Report §: 6.1.3 (Table 2, Eq. 3).
+
+## 2026-10-23 — Stage 5 interpretations not fixed by the task (Stage 5)
+Decision:
+(1) `Circuit` is a structure `{nData, gates : List Gate}`, not a bare `List Gate`: untouched data qubits (x1, x2, … in the Grover oracle) count in the width. `Qubit = data i | anc i`; `Gate` adds `ifBit c g` (Clifford only, checked by `Circuit.validate`) and `alloc`/`free`. The IR types live in namespace `CQRV` (like `Grade`): `CQRV.Circuit.Circuit` trips the duplicated-namespace linter.
+(2) `synthesizeOracle` returns `Except Diagnostic Circuit` (multi-output networks are rejected).
+(3) ANDs whose operands are a constant or have the same linear part are folded by exact identities (`1 ∧ v = v`, `0 ∧ v = 0`, `u ∧ u = u`, `u ∧ ¬u = 0`): no gate, no ancilla. Hence a ≤ ĉ∧ and t ≤ 4ĉ∧ (Eq. 2 as a bound, equality when nothing folds). Example: `for i in [0 ..< 4] with acc = false do acc or idx(x, i)` has ĉ∧ = 4 and synthesizes with t = 12, a = 3. Only the cone of the output is synthesized.
+(4) `cqr synthesize <file> [--amax k] [--json] [--layers]` prints `{name, schedule, and_complexity, grade: {w, d, t, a}}`; `--json` adds `circuit` (flat: `{n_data, n_anc, gates: [{op, q, c?, if?}]}`, data qubits 0..n_data, ancillae after) on one line; `--layers` appends the dump.
+(5) Harness: `MAX_QUBITS` = 20 (data ≤ 12 plus ancillae); each predicate is checked on 2 random complex superpositions; in every branch the overlap with U_P|ψ⟩ ⊗ |0…0⟩ must be ≥ 1 − 1e−9; `alloc`/`free` assert |0⟩ in every branch. The random predicates repeat variables freely, so folding is exercised. Driver `scripts/diff_oracles.sh`, CI step after the simulator self-test.
+Why: needed to implement the task; the report leaves these open.
+Rejected: (3) rejecting such ANDs (would reject the standard `for … acc = false do acc or …` fold).
+Report §: 6.1.2, 6.1.4, 6.2.4, 3.1.1.
