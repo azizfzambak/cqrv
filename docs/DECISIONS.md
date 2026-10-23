@@ -280,3 +280,32 @@ Decision: the headline grade (w, d, t, a) = (10, 74, 72, 2) of the report (Table
 Why: CLAUDE.md rule 9 and §9.5.1: no grade is claimed that the synthesized circuit does not have.
 Rejected: tuning the scheduler or the circuit to reach d = 21; editing the Stage 1 tests to the measured value.
 Report §: 3.3 (Table 3.3), 6.1.3 (Table 2), 6.1.4 (Table 3), 8, 9.5.1.
+
+## 2026-10-23 — Register `Reg k := Fin k → Bool`; circuits act on `Reg n × Reg a` (Stage 6, reviewer decision 1)
+Decision: basis index `Reg k := Fin k → Bool` (`CQRV/Circuit/Semantics.lean`); a circuit acts on `Reg n × Reg a` (data × ancilla), `x[i] = s.1 i`, `anc[i] = s.2 i`, so `MState.traceRight` / `CPTPMap.traceRight` traces out the ancilla. `channelDenote n a C` and `AncRestore n a C U` take the dimensions explicitly; Lemma 6.3.2 uses `n = C.nData`, `a = C.nAnc`.
+Why: reviewer decision 1; explicit dimensions keep the types of the 3-qubit statements (`Reg 2 × Reg 1`) syntactic, without reducing `Circuit.nAnc`.
+Rejected: a flat register `Reg (n + a)` (needs a reindexing equivalence before every partial trace).
+Report §: 9.1.1, 6.2.1.
+
+## 2026-10-23 — Measurement semantics by branches (Kraus) (Stage 6, reviewer decision 2)
+Decision: for `m = C.nBits` classical bits (one per `measure`), each `c : Fin m → Bool` gives `krausOps n a m gs c`, the gate product in which `measure q → j` is the projector onto `q = c j` and `ifBit j g` is `g` if `c j`, else `1`; `channelDenote n a C = CPTPMap.of_kraus_CPTPMap (krausOps …)`. `alloc`/`free` denote the identity. Completeness `∑_c K_cᴴ K_c = 1` is proved (`krausOps_complete`, no `sorry`) from the invariant "K_c depends only on the bits written so far and `2^|written| • ∑_c K_cᴴ K_c = 2^m • 1`" by induction from the end of the gate list (a fresh measurement halves the multiplicity by pairing `c` with `c` flipped at `j`). A circuit without the classical-bit discipline (`Circuit.bitsOk`) is mapped to `CPTPMap.id`, since `of_kraus_CPTPMap` needs the completeness proof.
+Why: reviewer decision 2; it is what the Python harness enumerates.
+Rejected: a classical-register channel on `Reg n × Reg a × Reg m` (heavier, no gain for MBU); taking a `WF` proof as an argument of `channelDenote` (every statement would carry it in its type).
+Report §: 9.1.1, 6.2.2.
+
+## 2026-10-23 — `Circuit.WF` (Stage 6, reviewer decision 3)
+Decision: `Circuit.wf : Circuit → Bool`, `WF C := C.wf = true` (decidable, checked by `#guard`): every data index `< nData` (ancilla indices are `< nAnc` by definition of `nAnc`); `cnot`/`cz` operands distinct, also under `ifBit`; classical bits: each `measure q → j` writes a fresh `j < nBits`, each `ifBit j g` reads a bit already written and controls a Clifford gate. Semantics outside `WF`: a gate on a qubit outside the register and a `cnot` with a repeated operand act as the identity, so every gate matrix is unitary unconditionally (`gateU_mem_unitaryGroup`).
+Why: reviewer decision 3. Making the out-of-range cases the identity keeps `gateU` total and unitary without hypotheses.
+Rejected: indexing qubits by `Fin` in the IR (would change the Stage 5 IR and synthesizer).
+Report §: 9.1.1, 6.2.2.
+
+## 2026-10-23 — Stage 6a interpretations not fixed by the task (Stage 6)
+Decision:
+(1) Gates are monomial matrices (`monoMat σ φ`: basis permutation σ times phase φ) except `H = (1/√2)(Z + X)`; `T = diag(1, ω)`, `T† = diag(1, ω̄)`, `ω = exp(π/4 · i)` with `ω² = i`, `ω⁴ = −1`, `ω̄ ω = 1`, `ω̄ = −ω³` proved. `unitaryDenote` treats `measure`/`ifBit` as `1`; on the unitary fragment it equals every Kraus operator (`krausOps_of_unitary`).
+(2) `lemma_6_3_2` carries the hypothesis `N.xorFree` (no XOR node), reading "for AND/NOT/OR networks" literally; the predicate is `Network.pred N n x` = first output bit with input `k` = `x[k]`. The synthesizer also handles XOR (Stage 5 decision 2); dropping the hypothesis is a reviewer decision.
+(3) CZ in `mbu_channel_correct` is `czU := phaseOracle (fun x => x 0 && x 1)` (CZ is the phase oracle of AND), and `U ρ Uᴴ` is Physlib's `U ◃ ρ` (`MState.uConj`).
+(4) The traced corollary is stated with `MState.traceRight` (`(channelDenote … ).traceRight`): `CPTPMap.traceRight (…)` applied to an `MState` does not elaborate without explicit type arguments; the two are equal by Physlib's `CPTPMap.traceRight_eq_MState_traceRight` (rfl).
+(5) The Grover instance is stated for a hand-written `groverNet` (inputs 0..7, `AND(0,3)`, `AND(8,7)`) and `groverOracle` (the §6.1.4 listing) and derived from `lemma_6_3_2`; `synthesizeOracle groverNet = .ok groverOracle` is proved by `rfl`, `WF` and `xorFree` by `decide`, the predicate by `rfl`. `tests/` checks by `#guard` that the DSL front end produces the same oracle and truth table. In a `module` file `decide` cannot unfold the Batteries `DecidableEq (Except …)` instance (body not exposed), hence `rfl` for the synthesizer equation.
+Why: needed to implement the task; the report leaves these open.
+Rejected: (2) stating Lemma 6.3.2 for all accepted networks (stronger than asked; the 6b split covers no XOR gathers); (5) a separate `sorry` for the Grover instance.
+Report §: 6.1.1, 6.1.4, 6.2.2, 6.3.2, 8, 9.1.1.
