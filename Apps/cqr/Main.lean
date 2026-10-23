@@ -9,7 +9,8 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
 * `cqr check <file>` — parse + surface check; exit 0, or print the diagnostic JSON and exit 1.
 * `cqr extract <file> [--solutions M]` — print the `SigmaIn` JSON (exit 0), or the diagnostic
   JSON (exit 1). `--solutions M` supplies the ground solution count when ℰ cannot compute it
-  (DECISIONS.md 2026-10-23, decision 5); a value that contradicts ℰ's is an error (exit 1).
+  (DECISIONS.md 2026-10-23, decision 5); a value that contradicts ℰ's is a diagnostic with
+  stage `extract`, code `solution_count_mismatch` (exit 1).
 -/
 
 open CQRV.DSL
@@ -23,10 +24,14 @@ def usage : String :=
     "  check <file>\n  extract <file> [--solutions M]\n" ++
     String.join ((subcommands.drop 2).map fun (c, _) => s!"  {c}\n")
 
-/-- Report §4.2.2 — parse and surface-check a source file. -/
-def frontEnd (path : String) : IO (Except Diagnostic TypedProgram) := do
+/-- Report §4.2.2 — parse and surface-check a source file; also returns the position of the
+entry `fn` (the last one), used by the `--solutions` diagnostic. -/
+def frontEnd (path : String) : IO (Except Diagnostic (TypedProgram × Pos)) := do
   let src ← IO.FS.readFile path
-  return parse src >>= check
+  return do
+    let prog ← parse src
+    let tp ← check prog
+    return (tp, (prog.fns.getLast?.map (·.pos)).getD ⟨1, 1⟩)
 
 /-- `cqr check <file>`. -/
 def runCheck (path : String) : IO UInt32 := do
@@ -38,13 +43,14 @@ def runCheck (path : String) : IO UInt32 := do
 def runExtract (path : String) (solutions : Option Nat) : IO UInt32 := do
   match ← frontEnd path with
   | .error d => IO.println d.toJson.compress; return 1
-  | .ok tp =>
+  | .ok (tp, p) =>
     let sig := extract tp
     match sig.solutionCount, solutions with
     | some m, some m' =>
       if m != m' then
-        IO.eprintln s!"cqr extract: --solutions {m'} contradicts the solution count {m} \
-          computed from the predicate"
+        let msg := s!"--solutions {m'} contradicts the solution count {m} computed from the \
+          predicate `{tp.name}` (report §4.1.4)"
+        IO.println (Diagnostic.at .extract .solutionCountMismatch p msg).toJson.compress
         return 1
       IO.println sig.toJson.pretty
       return 0

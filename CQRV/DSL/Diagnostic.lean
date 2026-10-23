@@ -17,10 +17,12 @@ namespace CQRV.DSL
 
 open Lean
 
-/-- Report §4.2.2 — the front-end stage that issued a diagnostic. -/
+/-- Report §4.2.2 — the front-end stage that issued a diagnostic. `extract` is used only for
+the ground solution count supplied with `--solutions` (§4.1.4; DECISIONS.md 2026-10-23). -/
 inductive Stage where
   | parse
   | surface
+  | extract
   deriving Repr, DecidableEq, Inhabited
 
 /-- Report §4.2.2–4.2.3 — diagnostic codes of the front end. -/
@@ -31,12 +33,14 @@ inductive Code where
   | unboundVariable
   | indexOutOfBounds
   | foldDiscipline
+  | solutionCountMismatch
   deriving Repr, DecidableEq, Inhabited
 
 /-- Report §4.2.3 — JSON name of a stage. -/
 def Stage.name : Stage → String
   | .parse => "parse"
   | .surface => "surface"
+  | .extract => "extract"
 
 /-- Report §4.2.3 — JSON name of a diagnostic code. -/
 def Code.name : Code → String
@@ -46,6 +50,7 @@ def Code.name : Code → String
   | .unboundVariable => "unbound_variable"
   | .indexOutOfBounds => "index_out_of_bounds"
   | .foldDiscipline => "fold_discipline"
+  | .solutionCountMismatch => "solution_count_mismatch"
 
 /-- Report §4.2.2–4.2.3 — a front-end diagnostic; `line`/`col` are 1-based. -/
 structure Diagnostic where

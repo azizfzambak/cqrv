@@ -173,3 +173,15 @@ Decision: (1) Parser: hand-written lexer and recursive descent (294 lines), tota
 Why: needed to implement the task; none is stated by the report.
 Rejected: `partial def` parser (not provable later); entry point by name `main` (no such convention in the report).
 Report §: 7.1.4, 7.2.2, 7.3.2.
+
+## 2026-10-23 — Report erratum: §7.2.2 Table 2 complexity tuple "8, 2, 3" (Stage 3 review, reviewer decision)
+Decision: the Grover example entry of §7.2.2 Table 2, "8, 2, 3: 8-bit input, 2 ANDs, AND-depth 2", is a report erratum: the tuple (n, c∧, d) is (8, 2, 2). and_depth = 2, as in the entry's own description and in §7.2.3 (`(x0 & x3) & x7`, two AND levels). The code and tests use 2. To be fixed in report v3.
+Why: the description and §7.2.3 agree on 2; the "3" contradicts both.
+Rejected: and_depth = 3 (no AND network of `b0 and b3 and b7` has depth 3).
+Report §: 7.2.2 (Table 2), 7.2.3.
+
+## 2026-10-23 — `--solutions` mismatch is a diagnostic `solution_count_mismatch` (Stage 3 review, reviewer decision)
+Decision: when ℰ computed M symbolically and `cqr extract --solutions M'` gives M' ≠ M, `cqr` prints a diagnostic JSON on stdout (same flat format as the front end) with code `solution_count_mismatch` and exits 1. Its stage is a new value `extract` (the mismatch is detected after ℰ, not by the parser or the surface checker); `line`/`col` are those of the entry `fn`. `--solutions M` equal to ℰ's M is accepted (exit 0).
+Why: reviewer answer to the Stage 3 open question (6); every front-end failure is machine-readable in one format.
+Rejected: a plain stderr message (the Stage 3 implementation); stage `surface` (the program is surface-well-typed).
+Report §: 4.1.4, 4.2.3.
