@@ -274,3 +274,9 @@ Decision:
 Why: needed to implement the task; the report leaves these open.
 Rejected: (3) rejecting such ANDs (would reject the standard `for … acc = false do acc or …` fold).
 Report §: 6.1.2, 6.1.4, 6.2.4, 3.1.1.
+
+## 2026-10-23 — Headline grade is the measured grade (Stage 5 review, reviewer decision)
+Decision: the headline grade (w, d, t, a) = (10, 74, 72, 2) of the report (Table 3.3, Chapter 8) assumes oracle depth 21 (Table 3), which the §6.2.2 TempLogicalAND listing cannot meet: the decision-4 scheduler measures 27 (entry "Report erratum: measured Grover oracle depth is 27, not 21"). The certified grade will be the circuit's measured grade, never a number copied from the report. Table 3, Table 3.3 and Chapter 8 are to be corrected in report v3. Stage 9 acceptance becomes "measured grade, deviations documented". The Stage 1 tests stay as they are: they check the report's grade arithmetic, not the circuit. Also accepted: the Table 2 errata (a_max = 2, 1 infeasible) and the "rounds" definition (largest number of placements of any single node); constant folding (Stage 5 interpretations (3)): the certificate grade is always the measured grade of the circuit, and ĉ∧ in `SigmaIn` stays an upper bound; Stage 5 interpretations (1), (2) (`Circuit` with `nData`; `Except` results).
+Why: CLAUDE.md rule 9 and §9.5.1: no grade is claimed that the synthesized circuit does not have.
+Rejected: tuning the scheduler or the circuit to reach d = 21; editing the Stage 1 tests to the measured value.
+Report §: 3.3 (Table 3.3), 6.1.3 (Table 2), 6.1.4 (Table 3), 8, 9.5.1.
