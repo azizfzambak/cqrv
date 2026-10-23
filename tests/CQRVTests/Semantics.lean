@@ -12,7 +12,7 @@ meta import CQRV.Synthesis.Basic
 
 `Circuit.WF` on the Stage 5 Grover oracle and on ill-formed circuits; the hand-written
 `groverNet` / `groverOracle` of the Grover instance against the DSL front end and the
-synthesizer; `#print axioms` for every proved theorem of Stage 6a, 6b-1 and 6b-2; the Grover
+synthesizer; `#print axioms` for every proved theorem of Stage 6a, 6b-1, 6b-2 and 6b-3; the Grover
 oracle as the shifted `Circuit.append` of its two pieces at the MBU cut; `mbu_branch_basis` on
 `|1,1,1⟩` in both branches.
 -/
@@ -111,6 +111,37 @@ example : krausOps 2 1 1 (UncomputeTempLogicalAND (.data 0) (.data 1) (.anc 0) 0
 example : (groverPiece₁.append groverPiece₂).WF :=
   Circuit.WF_append rfl (by decide) (by decide)
 
+/-! ## Stage 6b-3 — the synthesized oracle as AND records (`CQRV.Circuit.OracleCorrect`) -/
+
+def searchOrSrc : String := include_str "../../examples/search_or.cqr"
+
+-- The Grover oracle is `cmpBlocks ++ phaseFlip ++ uncBlocks` of its two AND records.
+#guard groverOracle.gates ==
+  cmpBlocks [⟨.data 0, false, .data 3, false⟩, ⟨.anc 0, false, .data 7, false⟩] 0 ++
+    Oracle.phaseFlip ⟨[.anc 1], false⟩ ++
+    uncBlocks [⟨.data 0, false, .data 3, false⟩, ⟨.anc 0, false, .data 7, false⟩] 0
+
+-- `search_or` (`x0 ∨ x1 = ¬(¬x0 ∧ ¬x1)`): one AND record with both polarities negative, and a
+-- negated output (`X Z X` on its ancilla).
+#guard ((oracle searchOrSrc).toOption.map (·.gates)) ==
+  some (cmpBlocks [⟨.data 0, true, .data 1, true⟩] 0 ++ Oracle.phaseFlip ⟨[.anc 0], true⟩ ++
+    uncBlocks [⟨.data 0, true, .data 1, true⟩] 0)
+
+-- `prepare` on single atoms emits only the polarity gates (`prepare_single`).
+#guard Oracle.prepare ⟨[.data 2], true⟩ ⟨[.anc 0], false⟩ ==
+  .ok ((⟨.data 2, true, .anc 0, false⟩ : AndRec).pre, .data 2, .anc 0)
+
+-- The folding identities (`fold_eval`): `u ∧ ¬u = 0`, `u ∧ u = u`, `1 ∧ v = v`, `0 ∧ v = 0`.
+#guard Oracle.fold ⟨[.data 0], false⟩ ⟨[.data 0], true⟩ == some ⟨[], false⟩
+#guard Oracle.fold ⟨[.data 0], true⟩ ⟨[.data 0], true⟩ == some ⟨[.data 0], true⟩
+#guard Oracle.fold ⟨[], true⟩ ⟨[.anc 1], false⟩ == some ⟨[.anc 1], false⟩
+#guard Oracle.fold ⟨[], false⟩ ⟨[.anc 1], false⟩ == some ⟨[], false⟩
+#guard Oracle.fold ⟨[.data 0], false⟩ ⟨[.data 1], false⟩ == none
+
+-- `Aff.eval` on a basis state of `Reg 2 × Reg 1`: `x1 ⊕ 1` and the constant 1.
+#guard (Aff.mk [.data 1] true).eval ((![true, false], ![false]) : Reg 2 × Reg 1) == true
+#guard (Aff.mk [] true).eval ((![true, false], ![false]) : Reg 2 × Reg 1) == true
+
 /-! ## Axiom audit (CLAUDE.md rule 10) -/
 
 -- Proved, expected axioms only `propext`, `Classical.choice`, `Quot.sound`:
@@ -140,7 +171,17 @@ example : (groverPiece₁.append groverPiece₂).WF :=
 #print axioms cnot_basis
 #print axioms cz_basis
 #print axioms Qubit.set_comm
--- Proved from `lemma_6_3_2`, which is a tracked `sorry`: these show `sorryAx` until 6b.
+-- Stage 6b-3 (`CQRV.Circuit.OracleCorrect`): Lemma 6.3.2 for xor-free networks and its parts.
+#print axioms fold_eval
+#print axioms step_ok_inv
+#print axioms fold_inv
+#print axioms cmp_kraus
+#print axioms unc_kraus
+#print axioms chain_kraus
+#print axioms phaseFlip_kraus
+#print axioms Circuit.WF.gatesOk
+#print axioms kraus_mul_ancProj
+#print axioms lemma_6_3_2
 #print axioms lemma_6_3_2_traced
 #print axioms grover_pred_037_ancRestore
 

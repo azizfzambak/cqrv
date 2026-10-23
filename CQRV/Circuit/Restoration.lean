@@ -14,9 +14,9 @@ density operators, following the three layers of §6.2.4:
   exactly (phase 1), on 3 qubits. The lift to an arbitrary register and the other oracle blocks
   on basis vectors are in `CQRV.Circuit.OracleBlocks` (Stage 6b-2).
 * Layer 2 — `mbu_channel_correct` (MBU is a channel-level statement, §6.2.2; proved in Stage
-  6b-1) and `lemma_6_3_2` (Lemma 6.3.2): the synthesized oracle restores its ancillae and
-  applies the phase oracle `(−1)^P(x)`. `lemma_6_3_2` is a statement only; its proof is split in
-  docs/SORRIES.md.
+  6b-1). Lemma 6.3.2 (`lemma_6_3_2`: the synthesized oracle restores its ancillae and applies
+  the phase oracle `(−1)^P(x)`), its traced form and the Grover instance are in
+  `CQRV.Circuit.OracleCorrect` (Stage 6b-3), which imports this file.
 * Layer 3 — `AncRestore` (§6.2.1: the output factorizes as |ψ_out⟩ ⊗ |0…0⟩_anc), its traced
   form (the report's statement of Lemma 6.3.2), and the restoration template
   `ancRestore_of_kraus`: if every Kraus operator acts on the |0…0⟩-ancilla subspace as a scalar
@@ -340,40 +340,6 @@ theorem mbu_channel_correct (ρ : MState (Reg 2)) :
     Fintype.card_fin, hn, norm_inv, Complex.norm_real, Real.norm_eq_abs, inv_pow, sq_abs,
     Real.sq_sqrt (show (0 : ℝ) ≤ 2 by norm_num)]
   norm_num
-
-/-! ## Layer 2 — Lemma 6.3.2 (statement) -/
-
-/-- Report §6.3.2, Lemma 6.3.2 — parametric over the Stage 5 synthesizer: for an AND/NOT/OR
-network `N` whose oracle `C` is synthesized and well formed, `C` restores its ancillae and
-applies the phase oracle of `N`'s predicate. The statement is on density operators, not on
-basis states (§6.2.4: on basis states the phase cancels); Theorem 3.3a is not used inside the
-oracle (§6.3.2). Statement only (Stage 6a); the 6b proof split is in docs/SORRIES.md. -/
-theorem lemma_6_3_2 (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C)
-    (hN : N.xorFree = true) (hWF : C.WF) :
-    AncRestore C.nData C.nAnc C (phaseOracle (N.pred C.nData)) := by
-  sorry
-
-/-- Report §6.3.2, Lemma 6.3.2 in the report's traced form:
-`Tr_anc (⟦C⟧ (ρ ⊗ |0…0⟩⟨0…0|)) = U_P ρ U_Pᴴ`. Proved from `lemma_6_3_2` (so it inherits its
-`sorry` until 6b). -/
-theorem lemma_6_3_2_traced (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C)
-    (hN : N.xorFree = true) (hWF : C.WF) (ρ : MState (Reg C.nData)) :
-    (channelDenote C.nData C.nAnc C (ρ ⊗ᴹ ancZero C.nAnc)).traceRight =
-      phaseOracle (N.pred C.nData) ◃ ρ :=
-  (lemma_6_3_2 N C hC hN hWF).traced ρ
-
-/-- Report §8, §6.3.2 — the `grover_pred_037` instance of Lemma 6.3.2: the synthesized Grover
-oracle on `x[0..8) × anc[0..2)` restores its ancillae and applies `(−1)^(x0 ∧ x3 ∧ x7)`.
-Derived from `lemma_6_3_2`; the side conditions (`synthesizeOracle groverNet = .ok
-groverOracle`, AND/NOT/OR, `WF`, the predicate) are checked by the kernel (`decide`, `rfl`). -/
-theorem grover_pred_037_ancRestore : AncRestore 8 2 groverOracle (phaseOracle groverPred) := by
-  have hC : synthesizeOracle groverNet = .ok groverOracle := by rfl
-  have hN : groverNet.xorFree = true := by decide
-  have hWF : groverOracle.WF := by decide
-  have hP : groverNet.pred groverOracle.nData = groverPred := by funext x; rfl
-  have h := lemma_6_3_2 groverNet groverOracle hC hN hWF
-  rw [hP] at h
-  exact h
 
 end
 

@@ -11,6 +11,11 @@ is test-only: nothing here is part of the trusted pipeline.
   phase oracles in every measurement branch on random complex superpositions (report §6.2.4):
   100 random AND/NOT/OR predicates (fixed seed, n ≤ 12) + `grover_pred_037`, 30 xor/`if`
   predicates, and Bennett-pebbled AND chains. Driver: `scripts/diff_oracles.sh` (CI).
+- Stage 6b-3: `oracle_json.py` checks that `cqr synthesize --json` on the corpus files
+  (grover_pred_037, search_or, and_chain_8) and 20 random predicates (fixed seed) is
+  byte-identical to `oracle_json_golden.txt` (proof-only synthesizer changes must not change
+  the circuit). Driver: `scripts/check_oracle_json.sh` (CI); `--write` regenerates the golden
+  file.
 
 Run from the repository root:
 
