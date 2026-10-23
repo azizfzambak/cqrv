@@ -4,7 +4,7 @@
 # Runs the three corpus files of examples/ through the built `cqr` executable:
 #   grover_pred_037  extracts with "and_complexity": 2 and no field named *minimum*
 #                    (ĉ∧ is a syntactic upper bound, §7.2.2);
-#                    with --solutions 31 (contradicts M = 32): stage extract,
+#                    with --solutions 31 (contradicts M = 32): stage hypothesis,
 #                    code solution_count_mismatch, exit 1;
 #   search_while     passes `check`, extracts with iter = unbounded;
 #   allocate_tree    fails `check`: stage surface, code non_structural_recursion, exit 1.
@@ -38,7 +38,7 @@ fi
 
 out="$("${cqr[@]}" extract examples/grover_pred_037.cqr --solutions 31 | tr -d '\r')"; rc=$?
 expect_exit "extract grover_pred_037 --solutions 31 (contradicts M = 32)" 1 "$out" "$rc"
-expect_has "grover_pred_037 --solutions 31 stage" '"stage":"extract"' "$out"
+expect_has "grover_pred_037 --solutions 31 stage" '"stage":"hypothesis"' "$out"
 expect_has "grover_pred_037 --solutions 31 code" '"code":"solution_count_mismatch"' "$out"
 out="$("${cqr[@]}" extract examples/grover_pred_037.cqr --solutions 32 | tr -d '\r')"; rc=$?
 expect_exit "extract grover_pred_037 --solutions 32 (agrees with M = 32)" 0 "$out" "$rc"

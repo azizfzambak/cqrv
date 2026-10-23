@@ -10,7 +10,7 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
 * `cqr extract <file> [--solutions M]` — print the `SigmaIn` JSON (exit 0), or the diagnostic
   JSON (exit 1). `--solutions M` supplies the ground solution count when ℰ cannot compute it
   (DECISIONS.md 2026-10-23, decision 5); a value that contradicts ℰ's is a diagnostic with
-  stage `extract`, code `solution_count_mismatch` (exit 1).
+  stage `hypothesis`, code `solution_count_mismatch` (exit 1).
 -/
 
 open CQRV.DSL
@@ -50,7 +50,7 @@ def runExtract (path : String) (solutions : Option Nat) : IO UInt32 := do
       if m != m' then
         let msg := s!"--solutions {m'} contradicts the solution count {m} computed from the \
           predicate `{tp.name}` (report §4.1.4)"
-        IO.println (Diagnostic.at .extract .solutionCountMismatch p msg).toJson.compress
+        IO.println (Diagnostic.at .hypothesis .solutionCountMismatch p msg).toJson.compress
         return 1
       IO.println sig.toJson.pretty
       return 0

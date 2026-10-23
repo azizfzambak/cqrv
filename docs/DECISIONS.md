@@ -181,7 +181,7 @@ Rejected: and_depth = 3 (no AND network of `b0 and b3 and b7` has depth 3).
 Report §: 7.2.2 (Table 2), 7.2.3.
 
 ## 2026-10-23 — `--solutions` mismatch is a diagnostic `solution_count_mismatch` (Stage 3 review, reviewer decision)
-Decision: when ℰ computed M symbolically and `cqr extract --solutions M'` gives M' ≠ M, `cqr` prints a diagnostic JSON on stdout (same flat format as the front end) with code `solution_count_mismatch` and exits 1. Its stage is a new value `extract` (the mismatch is detected after ℰ, not by the parser or the surface checker); `line`/`col` are those of the entry `fn`. `--solutions M` equal to ℰ's M is accepted (exit 0).
+Decision: when ℰ computed M symbolically and `cqr extract --solutions M'` gives M' ≠ M, `cqr` prints a diagnostic JSON on stdout (same flat format as the front end) with code `solution_count_mismatch` and exits 1. Its stage is a new value `hypothesis`: ℰ is total (§7.2.1), so no diagnostic may say that extraction failed; the mismatch is between a user-supplied hypothesis (`--solutions`) and the extracted value; `line`/`col` are those of the entry `fn`. `--solutions M` equal to ℰ's M is accepted (exit 0).
 Why: reviewer answer to the Stage 3 open question (6); every front-end failure is machine-readable in one format.
-Rejected: a plain stderr message (the Stage 3 implementation); stage `surface` (the program is surface-well-typed).
-Report §: 4.1.4, 4.2.3.
+Rejected: a plain stderr message (the Stage 3 implementation); stage `extract` (reads as an extraction failure; first version of this entry, renamed by the reviewer in the Stage 3 review); stage `surface` (the program passed the surface check).
+Report §: 4.1.4, 4.2.3, 7.2.1.
