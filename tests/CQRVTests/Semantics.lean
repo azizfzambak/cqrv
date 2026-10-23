@@ -12,7 +12,8 @@ meta import CQRV.Synthesis.Basic
 
 `Circuit.WF` on the Stage 5 Grover oracle and on ill-formed circuits; the hand-written
 `groverNet` / `groverOracle` of the Grover instance against the DSL front end and the
-synthesizer; `#print axioms` for every proved theorem of Stage 6a.
+synthesizer; `#print axioms` for every proved theorem of Stage 6a and Stage 6b-1; the Stage 6b-1
+finding that blocks the composition lemma (bit numbering).
 -/
 
 namespace CQRV.Tests.Semantics
@@ -69,6 +70,17 @@ def netEq (N M : Network) : Bool :=
   groverPred x == (x 0 && x 3 && x 7) &&
     groverPred x == ((k % 2 == 1) && ((k >>> 3) % 2 == 1) && ((k >>> 7) % 2 == 1))
 
+/-! ## Stage 6b-1 finding: composition under `m = nBits` bit numbering
+
+A well-formed circuit writes exactly the bits `0..nBits−1`, so the Grover oracle cannot be cut
+between its two MBU blocks (bits 1, then 0) into two well-formed circuits: at every cut from the
+first `measure` (gate 30) to the last `ifBit` (gate 37) the prefix or the suffix is not `WF`. -/
+
+#guard !(Circuit.mk 8 (groverOracle.gates.take 34)).wf
+#guard (List.range 7).all fun k =>
+  !(Circuit.mk 8 (groverOracle.gates.take (31 + k))).wf ||
+    !(Circuit.mk 8 (groverOracle.gates.drop (31 + k))).wf
+
 /-! ## Axiom audit (CLAUDE.md rule 10) -/
 
 -- Proved, expected axioms only `propext`, `Classical.choice`, `Quot.sound`:
@@ -80,6 +92,9 @@ def netEq (N M : Network) : Bool :=
 #print axioms AncRestore.traced
 #print axioms Circuit.WF.bitsOk
 #print axioms channelDenote_of_WF
+-- Stage 6b-1:
+#print axioms ancRestore_of_kraus
+#print axioms mbu_channel_correct
 -- Proved from `lemma_6_3_2`, which is a tracked `sorry`: these show `sorryAx` until 6b.
 #print axioms lemma_6_3_2_traced
 #print axioms grover_pred_037_ancRestore
