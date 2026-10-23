@@ -130,8 +130,8 @@ def oracle (src : String) : Except Diagnostic Circuit :=
   ([.alloc (.anc 0)] ++ TempLogicalAND (.data 0) (.data 3) (.anc 0) ++
    [.alloc (.anc 1)] ++ TempLogicalAND (.anc 0) (.data 7) (.anc 1) ++
    [.z (.anc 1)] ++
-   UncomputeTempLogicalAND (.anc 0) (.data 7) (.anc 1) 1 ++ [.free (.anc 1)] ++
-   UncomputeTempLogicalAND (.data 0) (.data 3) (.anc 0) 0 ++ [.free (.anc 0)])
+   UncomputeTempLogicalAND (.anc 0) (.data 7) (.anc 1) 0 ++ [.free (.anc 1)] ++
+   UncomputeTempLogicalAND (.data 0) (.data 3) (.anc 0) 1 ++ [.free (.anc 0)])
 /-- Eq. 2 / Eq. 5 measured: `(t, a, w − n, ĉ∧)`, and the circuit is well formed. -/
 def eq2 (s : String) : Option (Nat × Nat × Nat × Nat) :=
   match oracle s, cAnd s, typed s with

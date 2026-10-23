@@ -87,6 +87,12 @@ def WF (C : Circuit) : Prop := C.wf = true
 
 instance (C : Circuit) : Decidable C.WF := inferInstanceAs (Decidable (C.wf = true))
 
+/-- Report §6.2.2, §9.1.1 — sequential composition with shifted classical bits: the gates of
+`C₁`, then those of `C₂` with every classical bit shifted up by `C₁.nBits`, so the bits of the
+two pieces never clash (DECISIONS.md, Stage 6b-1 review, (A)). The register is `C₁`'s. -/
+def append (C₁ C₂ : Circuit) : Circuit :=
+  ⟨C₁.nData, C₁.gates ++ C₂.gates.map (Gate.shiftBits C₁.nBits)⟩
+
 end Circuit
 
 noncomputable section
@@ -654,6 +660,208 @@ theorem channelDenote_of_WF {C : Circuit} (h : C.WF) :
     channelDenote n a C =
       CPTPMap.of_kraus_CPTPMap (krausOps n a C.nBits C.gates) (krausOps_complete n a C h.bitsOk) := by
   simp only [channelDenote, h.bitsOk, ↓reduceDIte]
+
+/-- Report §9.1.1 — the matrix of `channelDenote` under the classical-bit discipline:
+`∑_c K_c ρ K_cᴴ`. -/
+theorem channelDenote_m_of_bitsOk {C : Circuit} (h : C.bitsOk = true)
+    (ρ : MState (Reg n × Reg a)) :
+    (channelDenote n a C ρ).m =
+      ∑ c, krausOps n a C.nBits C.gates c * ρ.m * (krausOps n a C.nBits C.gates c)ᴴ := by
+  simp only [channelDenote, h, ↓reduceDIte]
+  rw [CPTPMap.mat_coe_eq_apply_mat]
+  change (∑ k, _ : MatrixMap _ _ ℂ) ρ.m = _
+  rw [LinearMap.sum_apply]
+  rfl
+
+/-! ## Composition with shifted classical bits (`Circuit.append`) -/
+
+theorem Gate.writes_shiftBits (k : ℕ) (g : Gate) :
+    (g.shiftBits k).writes = g.writes.map (· + k) := by
+  cases g <;> rfl
+
+theorem written_append_list (gs₁ gs₂ : List Gate) :
+    Circuit.written (gs₁ ++ gs₂) = Circuit.written gs₁ ++ Circuit.written gs₂ := by
+  simp [Circuit.written, List.flatMap_append]
+
+theorem written_map_shiftBits (k : ℕ) (gs : List Gate) :
+    Circuit.written (gs.map (Gate.shiftBits k)) = (Circuit.written gs).map (· + k) := by
+  induction gs with
+  | nil => rfl
+  | cons g gs ih =>
+    simp only [List.map_cons, Circuit.written, List.flatMap_cons, List.map_append] at ih ⊢
+    rw [Gate.writes_shiftBits, ih]
+
+theorem Circuit.nBits_append (C₁ C₂ : Circuit) :
+    (C₁.append C₂).nBits = C₁.nBits + C₂.nBits := by
+  simp [Circuit.append, Circuit.nBits, written_append_list, written_map_shiftBits]
+
+theorem bitsOkFrom_append_list (m : ℕ) (W : List ℕ) (gs₁ gs₂ : List Gate) :
+    Circuit.bitsOkFrom m W (gs₁ ++ gs₂) =
+      (Circuit.bitsOkFrom m W gs₁ && Circuit.bitsOkFrom m (W ++ Circuit.written gs₁) gs₂) := by
+  induction gs₁ generalizing W with
+  | nil => simp [Circuit.bitsOkFrom, Circuit.written]
+  | cons g gs ih =>
+    simp only [List.cons_append, Circuit.bitsOkFrom, ih, Circuit.written, List.flatMap_cons,
+      List.append_assoc, Bool.and_assoc]
+
+/-- The bit discipline survives a larger bit count, and the bits written stay below `m`. -/
+theorem bitsOkFrom_mono {m M : ℕ} (hmM : m ≤ M) (W : List ℕ) (gs : List Gate)
+    (h : Circuit.bitsOkFrom m W gs = true) :
+    Circuit.bitsOkFrom M W gs = true ∧ ∀ j ∈ Circuit.written gs, j < m := by
+  induction gs generalizing W with
+  | nil => simp [Circuit.bitsOkFrom, Circuit.written]
+  | cons g gs ih =>
+    simp only [Circuit.bitsOkFrom, Bool.and_eq_true] at h ⊢
+    obtain ⟨h1, h2⟩ := ih _ h.2
+    refine ⟨⟨?_, h1⟩, ?_⟩
+    · have := h.1
+      cases g <;> simp_all [Gate.bitOk]
+      omega
+    · intro j hj
+      simp only [Circuit.written, List.flatMap_cons, List.mem_append] at hj
+      rcases hj with hj | hj
+      · have := h.1
+        cases g <;> simp_all [Gate.writes, Gate.bitOk]
+      · exact h2 j hj
+
+/-- The bit discipline of a list shifted by `m₁`, after a prefix that wrote bits `V < m₁`. -/
+theorem bitsOkFrom_shift {m₁ m₂ : ℕ} (W V : List ℕ) (hV : ∀ j ∈ V, j < m₁) (gs : List Gate)
+    (h : Circuit.bitsOkFrom m₂ W gs = true) :
+    Circuit.bitsOkFrom (m₁ + m₂) (V ++ W.map (· + m₁)) (gs.map (Gate.shiftBits m₁)) = true := by
+  induction gs generalizing W with
+  | nil => rfl
+  | cons g gs ih =>
+    simp only [Circuit.bitsOkFrom, Bool.and_eq_true, List.map_cons] at h ⊢
+    refine ⟨?_, ?_⟩
+    · have := h.1
+      cases g with
+      | measure q j =>
+        simp only [Gate.shiftBits, Gate.bitOk, Bool.and_eq_true, decide_eq_true_eq,
+          Bool.not_eq_true'] at this ⊢
+        simp only [← Bool.not_eq_true, List.contains_iff_mem] at this ⊢
+        obtain ⟨hj, hW⟩ := this
+        refine ⟨by omega, ?_⟩
+        simp only [List.mem_append, List.mem_map, not_or, not_exists, not_and]
+        exact ⟨fun hmem => by have := hV _ hmem; omega,
+          fun b hb he => hW ((by omega : b = j) ▸ hb)⟩
+      | ifBit j u =>
+        simp only [Gate.shiftBits, Gate.bitOk, Bool.and_eq_true, List.contains_iff_mem] at this ⊢
+        exact ⟨List.mem_append_right _ (List.mem_map_of_mem this.1), this.2⟩
+      | _ => rfl
+    · have := ih (W ++ g.writes) h.2
+      rwa [List.map_append, ← List.append_assoc, ← Gate.writes_shiftBits] at this
+
+/-- Report §9.1.1 — `Circuit.append` preserves the classical-bit discipline. -/
+theorem Circuit.bitsOk_append {C₁ C₂ : Circuit} (h₁ : C₁.bitsOk = true)
+    (h₂ : C₂.bitsOk = true) : (C₁.append C₂).bitsOk = true := by
+  have hm := bitsOkFrom_mono (Nat.le_add_right C₁.nBits C₂.nBits) [] C₁.gates h₁
+  have hs := bitsOkFrom_shift [] (Circuit.written C₁.gates) hm.2 C₂.gates h₂
+  simp only [List.map_nil, List.append_nil] at hs
+  unfold Circuit.bitsOk
+  rw [Circuit.nBits_append]
+  change Circuit.bitsOkFrom _ [] (C₁.gates ++ C₂.gates.map (Gate.shiftBits C₁.nBits)) = true
+  rw [bitsOkFrom_append_list, hm.1, Bool.true_and, List.nil_append]
+  exact hs
+
+theorem bitVal_castAdd {m₁ m₂ : ℕ} (c : Fin (m₁ + m₂) → Bool) {j : ℕ} (hj : j < m₁) :
+    bitVal c j = bitVal (fun i => c (Fin.castAdd m₂ i)) j := by
+  simp [bitVal, hj, show j < m₁ + m₂ by omega]
+
+theorem bitVal_natAdd {m₁ m₂ : ℕ} (c : Fin (m₁ + m₂) → Bool) (j : ℕ) :
+    bitVal c (j + m₁) = bitVal (fun i => c (Fin.natAdd m₁ i)) j := by
+  unfold bitVal
+  by_cases hj : j < m₂
+  · simp only [show j + m₁ < m₁ + m₂ by omega, hj, ↓reduceDIte]
+    congr 1; ext; simp; omega
+  · simp only [show ¬ j + m₁ < m₁ + m₂ by omega, hj, ↓reduceDIte]
+
+/-- Report §9.1.1 — the Kraus operator of a concatenation, in one branch `c` over the same
+classical bits: `K_c(gs₁ ++ gs₂) = K_c(gs₂) · K_c(gs₁)`. -/
+theorem krausOps_append_gates (m : ℕ) (gs₁ gs₂ : List Gate) (c : Fin m → Bool) :
+    krausOps n a m (gs₁ ++ gs₂) c = krausOps n a m gs₂ c * krausOps n a m gs₁ c := by
+  induction gs₁ with
+  | nil => simp [krausOps]
+  | cons g gs ih => simp [krausOps, ih, Matrix.mul_assoc]
+
+/-- A disciplined prefix with `m₁` bits only reads the first `m₁` bits of a branch. -/
+theorem krausOps_castAdd {m₁ m₂ : ℕ} (W : List ℕ) (hW : ∀ j ∈ W, j < m₁) (gs : List Gate)
+    (h : Circuit.bitsOkFrom m₁ W gs = true) (c : Fin (m₁ + m₂) → Bool) :
+    krausOps n a (m₁ + m₂) gs c = krausOps n a m₁ gs (fun i => c (Fin.castAdd m₂ i)) := by
+  induction gs generalizing W with
+  | nil => rfl
+  | cons g gs ih =>
+    simp only [Circuit.bitsOkFrom, Bool.and_eq_true] at h
+    have hg := h.1
+    rw [krausOps, krausOps, ih (W ++ g.writes) ?_ h.2]
+    · congr 1
+      cases g with
+      | measure q j =>
+        simp only [Gate.bitOk, Bool.and_eq_true, decide_eq_true_eq] at hg
+        simp only [gateK, bitVal_castAdd c hg.1]
+      | ifBit j u =>
+        simp only [Gate.bitOk, Bool.and_eq_true, List.contains_iff_mem] at hg
+        simp only [gateK, bitVal_castAdd c (hW j hg.1)]
+      | _ => rfl
+    · intro j hj
+      rcases List.mem_append.mp hj with hj | hj
+      · exact hW j hj
+      · cases g <;> simp_all [Gate.writes, Gate.bitOk]
+
+/-- A list shifted by `m₁` only reads the last `m₂` bits of a branch. -/
+theorem krausOps_shift {m₁ m₂ : ℕ} (gs : List Gate) (c : Fin (m₁ + m₂) → Bool) :
+    krausOps n a (m₁ + m₂) (gs.map (Gate.shiftBits m₁)) c =
+      krausOps n a m₂ gs (fun i => c (Fin.natAdd m₁ i)) := by
+  induction gs with
+  | nil => rfl
+  | cons g gs ih =>
+    rw [List.map_cons, krausOps, krausOps, ih]
+    congr 1
+    cases g with
+    | measure q j => simp only [Gate.shiftBits, gateK, bitVal_natAdd]
+    | ifBit j u => simp only [Gate.shiftBits, gateK, bitVal_natAdd]
+    | _ => rfl
+
+/-- Branch assignments of `m₁ + m₂` bits are pairs of assignments (`Fin.append`). -/
+def appendEquiv (m₁ m₂ : ℕ) : (Fin (m₁ + m₂) → Bool) ≃ (Fin m₁ → Bool) × (Fin m₂ → Bool) where
+  toFun c := (fun i => c (Fin.castAdd m₂ i), fun i => c (Fin.natAdd m₁ i))
+  invFun p := Fin.append p.1 p.2
+  left_inv _ := Fin.append_castAdd_natAdd
+  right_inv _ := Prod.ext (funext fun i => Fin.append_left _ _ i)
+    (funext fun i => Fin.append_right _ _ i)
+
+/-- The Kraus sum of a shifted concatenation is the composition of the two Kraus sums (split
+the branch with `appendEquiv`). -/
+theorem sum_krausOps_append {m₁ : ℕ} (m₂ : ℕ) (gs₁ gs₂ : List Gate)
+    (h₁ : Circuit.bitsOkFrom m₁ [] gs₁ = true) (X : Matrix (Reg n × Reg a) (Reg n × Reg a) ℂ) :
+    ∑ c, krausOps n a (m₁ + m₂) (gs₁ ++ gs₂.map (Gate.shiftBits m₁)) c * X *
+        (krausOps n a (m₁ + m₂) (gs₁ ++ gs₂.map (Gate.shiftBits m₁)) c)ᴴ =
+      ∑ c₂, krausOps n a m₂ gs₂ c₂ *
+        (∑ c₁, krausOps n a m₁ gs₁ c₁ * X * (krausOps n a m₁ gs₁ c₁)ᴴ) *
+          (krausOps n a m₂ gs₂ c₂)ᴴ := by
+  rw [Fintype.sum_equiv (appendEquiv m₁ m₂) _ (fun p => krausOps n a m₂ gs₂ p.2 *
+      (krausOps n a m₁ gs₁ p.1 * X * (krausOps n a m₁ gs₁ p.1)ᴴ) * (krausOps n a m₂ gs₂ p.2)ᴴ)
+      fun c => ?_, Fintype.sum_prod_type, Finset.sum_comm]
+  · refine Finset.sum_congr rfl fun c₂ _ => ?_
+    rw [Finset.mul_sum, Finset.sum_mul]
+  · rw [krausOps_append_gates, krausOps_castAdd n a [] (by simp) gs₁ h₁, krausOps_shift,
+      Matrix.conjTranspose_mul]
+    simp only [appendEquiv, Equiv.coe_fn_mk, Matrix.mul_assoc]
+
+/-- Report §9.1.1, §6.2.4 — channel composition: for circuits obeying the classical-bit
+discipline (implied by `Circuit.WF`), the shifted append denotes the composed channel. -/
+theorem channelDenote_append {C₁ C₂ : Circuit} (h₁ : C₁.bitsOk = true) (h₂ : C₂.bitsOk = true) :
+    channelDenote n a (C₁.append C₂) = channelDenote n a C₂ ∘ₘ channelDenote n a C₁ := by
+  apply CPTPMap.funext
+  intro ρ
+  apply MState.ext_m
+  rw [CPTPMap.compose_eq, channelDenote_m_of_bitsOk n a (Circuit.bitsOk_append h₁ h₂),
+    channelDenote_m_of_bitsOk n a h₂, channelDenote_m_of_bitsOk n a h₁]
+  have hg : (C₁.append C₂).gates = C₁.gates ++ C₂.gates.map (Gate.shiftBits C₁.nBits) := rfl
+  rw [hg]
+  generalize hM : (C₁.append C₂).nBits = M
+  rw [Circuit.nBits_append] at hM
+  subst hM
+  exact sum_krausOps_append n a C₂.nBits C₁.gates C₂.gates h₁ ρ.m
 
 end Kraus
 

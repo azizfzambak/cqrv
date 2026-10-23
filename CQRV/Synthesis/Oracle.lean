@@ -89,7 +89,8 @@ def fold (u v : Aff) : Option Aff :=
   else none
 
 /-- Synthesis state: node values, the compute blocks and the uncompute blocks (in order of
-the ANDs; uncompute runs them reversed), the next ancilla. -/
+the ANDs; uncompute runs them reversed; each block measures into bit 0 and is shifted to its
+measurement-order bit when emitted), the next ancilla. -/
 structure St where
   vals : Array (Option Aff)
   compute : Array (List Gate) := #[]
@@ -119,9 +120,8 @@ def step (N : Network) (mark : Array Bool) (st : St) (k : Nat) : Except Diagnost
     if let some r := fold u v then return { st with vals := st.vals.push (some r) }
     let (pre, pu, pv) ← prepare u v
     let t := Qubit.anc st.nextAnc
-    let m := st.nextAnc
     let cmp := pre ++ [.alloc t] ++ TempLogicalAND pu pv t ++ pre.reverse
-    let unc := pre ++ UncomputeTempLogicalAND pu pv t m ++ [.free t] ++ pre.reverse
+    let unc := pre ++ UncomputeTempLogicalAND pu pv t 0 ++ [.free t] ++ pre.reverse
     return { vals := st.vals.push (some ⟨[t], false⟩), compute := st.compute.push cmp,
              uncompute := st.uncompute.push unc, nextAnc := st.nextAnc + 1 }
   | none => fail "internal: node index out of range"
@@ -140,7 +140,10 @@ end Oracle
 
 open Oracle in
 /-- Report §6.1.4, decision 2 — the phase oracle of a one-output network on `x[0..n)` with
-`anc[0..ĉ∧)`: compute blocks, phase flip, uncompute blocks in reverse order. -/
+`anc[0..ĉ∧)`: compute blocks, phase flip, uncompute blocks in reverse order. Classical bits
+are numbered in measurement order: the `i`-th executed uncompute block measures into bit `i`
+(DECISIONS.md, Stage 6b-1 review: the oracle is literally a shifted `Circuit.append` of its
+pieces). -/
 def synthesizeOracle (N : Network) : Except Diagnostic Circuit := do
   let out ← match N.outputs with
     | [o] => pure o
@@ -150,7 +153,8 @@ def synthesizeOracle (N : Network) : Except Diagnostic Circuit := do
   let p ← match st.vals.getD out none with
     | some p => pure p
     | none => fail "internal: output outside the cone"
-  let gates := st.compute.toList.flatten ++ phaseFlip p ++ st.uncompute.toList.reverse.flatten
+  let unc := st.uncompute.toList.reverse.mapIdx fun i blk => blk.map (Gate.shiftBits i)
+  let gates := st.compute.toList.flatten ++ phaseFlip p ++ unc.flatten
   return { nData := N.nInputs, gates }
 
 /-- Report §6.1.4 (Table 3), §6.3.1 (Eq. 5) — the measured grade of a circuit:

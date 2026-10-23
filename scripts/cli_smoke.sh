@@ -106,7 +106,7 @@ expect_has "allocate_tree match stage" '"stage":"surface"' "$out"
 out="$("${cqr[@]}" synthesize examples/grover_pred_037.cqr --layers | tr -d '')"; rc=$?
 expect_exit "synthesize grover_pred_037" 0 "$out" "$rc"
 expect_has "grover_pred_037 oracle grade" '"grade": {"w": 10, "t": 8, "d": 27, "a": 2}' "$out"
-expect_has "grover_pred_037 layer 27" 'L27: if c0: CZ x[0] x[3]; if c0: X anc[0]' "$out"
+expect_has "grover_pred_037 layer 27" 'L27: if c1: CZ x[0] x[3]; if c1: X anc[0]' "$out"
 out="$("${cqr[@]}" synthesize examples/grover_pred_037.cqr --json | tr -d '')"; rc=$?
 expect_exit "synthesize grover_pred_037 --json" 0 "$out" "$rc"
 expect_has "grover_pred_037 IR" '"circuit":{"gates":[{"op":"alloc","q":[8]}' "$out"

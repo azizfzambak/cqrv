@@ -61,8 +61,8 @@ def groverOracle : Circuit :=
   ⟨8, [.alloc (.anc 0)] ++ TempLogicalAND (.data 0) (.data 3) (.anc 0) ++
    [.alloc (.anc 1)] ++ TempLogicalAND (.anc 0) (.data 7) (.anc 1) ++
    [.z (.anc 1)] ++
-   UncomputeTempLogicalAND (.anc 0) (.data 7) (.anc 1) 1 ++ [.free (.anc 1)] ++
-   UncomputeTempLogicalAND (.data 0) (.data 3) (.anc 0) 0 ++ [.free (.anc 0)]⟩
+   UncomputeTempLogicalAND (.anc 0) (.data 7) (.anc 1) 0 ++ [.free (.anc 1)] ++
+   UncomputeTempLogicalAND (.data 0) (.data 3) (.anc 0) 1 ++ [.free (.anc 0)]⟩
 
 /-- Report §8 — the Grover predicate `x0 ∧ x3 ∧ x7`. -/
 def groverPred (x : Reg 8) : Bool := x 0 && x 3 && x 7
@@ -153,6 +153,25 @@ theorem AncRestore.traced {n a : ℕ} {C : Circuit} {U : 𝐔[Reg n]} (h : AncRe
     (channelDenote n a C (ρ ⊗ᴹ ancZero a)).traceRight = U ◃ ρ := by
   rw [h ρ, MState.traceRight_prod_eq]
 
+/-- Conjugating by `U₁`, then by `U₂`, is conjugating by `U₂ U₁`. -/
+theorem uConj_uConj {n : ℕ} (ρ : MState (Reg n)) (U₁ U₂ : 𝐔[Reg n]) :
+    U₂ ◃ (U₁ ◃ ρ) = (U₂ * U₁) ◃ ρ := by
+  apply MState.ext_m
+  change U₂.val * (U₁.val * ρ.m * U₁.valᴴ) * U₂.valᴴ =
+    (U₂.val * U₁.val) * ρ.m * (U₂.val * U₁.val)ᴴ
+  rw [Matrix.conjTranspose_mul]
+  simp only [Matrix.mul_assoc]
+
+/-- Report §6.2.4, §6.3.2 — restoration composes: if `C₁` restores its ancillae applying `U₁`
+and `C₂` applying `U₂`, their shifted append (`Circuit.append`) restores them applying
+`U₂ U₁`. The step of the induction over the AND list (Lemma 6.3.2). -/
+theorem AncRestore.comp {n a : ℕ} {C₁ C₂ : Circuit} {U₁ U₂ : 𝐔[Reg n]}
+    (h₁ : C₁.bitsOk = true) (h₂ : C₂.bitsOk = true)
+    (r₁ : AncRestore n a C₁ U₁) (r₂ : AncRestore n a C₂ U₂) :
+    AncRestore n a (C₁.append C₂) (U₂ * U₁) := by
+  intro ρ
+  rw [channelDenote_append n a h₁ h₂, CPTPMap.compose_eq, r₁ ρ, r₂, uConj_uConj]
+
 /-! ## Layer 3 — the restoration template -/
 
 /-- Report §6.2.1 — the matrix of |0…0⟩⟨0…0| (Physlib's `MState.pure (Ket.basis 0)` unfolds to
@@ -203,11 +222,8 @@ theorem prod_ancZero_m_eq {n a : ℕ} (ρ : MState (Reg n)) :
 /-- Report §9.1.1 — the matrix of `channelDenote` on a well-formed circuit: `∑_c K_c ρ K_cᴴ`. -/
 theorem channelDenote_m {n a : ℕ} {C : Circuit} (h : C.WF) (ρ : MState (Reg n × Reg a)) :
     (channelDenote n a C ρ).m =
-      ∑ c, krausOps n a C.nBits C.gates c * ρ.m * (krausOps n a C.nBits C.gates c)ᴴ := by
-  rw [channelDenote_of_WF n a h, CPTPMap.mat_coe_eq_apply_mat]
-  change (∑ k, _ : MatrixMap _ _ ℂ) ρ.m = _
-  rw [LinearMap.sum_apply]
-  rfl
+      ∑ c, krausOps n a C.nBits C.gates c * ρ.m * (krausOps n a C.nBits C.gates c)ᴴ :=
+  channelDenote_m_of_bitsOk n a h.bitsOk ρ
 
 /-- Report §6.2.4 Layer 3 template — restoration from the Kraus operators: if `C` is well formed
 and every Kraus operator acts on the |0…0⟩-ancilla subspace as a scalar multiple of
@@ -253,14 +269,6 @@ theorem krausOps_cons_mulVec (n a m : ℕ) (g : Gate) (gs : List Gate) (c : Fin 
     (v : Reg n × Reg a → ℂ) :
     krausOps n a m (g :: gs) c *ᵥ v = krausOps n a m gs c *ᵥ (gateK n a c g *ᵥ v) := by
   rw [krausOps, Matrix.mulVec_mulVec]
-
-/-- Report §9.1.1 — the Kraus operator of a concatenation, in one branch `c` over the same
-classical bits: `K_c(gs₁ ++ gs₂) = K_c(gs₂) · K_c(gs₁)`. -/
-theorem krausOps_append_gates (n a m : ℕ) (gs₁ gs₂ : List Gate) (c : Fin m → Bool) :
-    krausOps n a m (gs₁ ++ gs₂) c = krausOps n a m gs₂ c * krausOps n a m gs₁ c := by
-  induction gs₁ with
-  | nil => simp [krausOps]
-  | cons g gs ih => simp [krausOps, ih, Matrix.mul_assoc]
 
 theorem projMat_mulVec (n a : ℕ) (q : Qubit) (v : Bool) (w : Reg n × Reg a → ℂ)
     (i : Reg n × Reg a) : (projMat n a q v *ᵥ w) i = (if q.get i = v then 1 else 0) * w i := by

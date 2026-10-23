@@ -82,6 +82,14 @@ def tCount : Gate → Nat
   | .ifBit _ g => g.tCount
   | _ => 0
 
+/-- Report §6.2.2, §9.1.1 — shift the classical bits of a gate up by `k` (`measure q → j` writes
+`j + k`, `ifBit j g` reads `j + k`); used by `Circuit.append` and by the synthesizer, which numbers
+bits in measurement order (DECISIONS.md, Stage 6b-1 review). -/
+def shiftBits (k : Nat) : Gate → Gate
+  | .measure q j => .measure q (j + k)
+  | .ifBit j g => .ifBit (j + k) g
+  | g => g
+
 /-- Readable form, as in the §6.1.4 / §6.2.2 listings (used by the layer dump). -/
 def render : Gate → String
   | .h q => s!"H {q.render}"
