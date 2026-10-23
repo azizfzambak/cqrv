@@ -60,10 +60,19 @@ def library : List LibEntry := [groverEntry]
 /-! ## Algorithm 2 -/
 
 mutual
-/-- Report §4.3.1 — the bindings Algorithm 1 can make before (and despite) a failure:
-the same traversal as `matchAt`, but a failing position is skipped instead of aborting. The
-lgg is taken against φ under these bindings, so that positions φ's metavariables match are
-not counted as disagreements (DECISIONS.md 2026-10-23, Stage 4 interpretations). -/
+/-- Report §4.3.1 — θ̂, the bindings Algorithm 1 can make before (and despite) a failure.
+The lgg is taken against φθ̂, so that positions φ's metavariables match are not counted as
+disagreements (DECISIONS.md 2026-10-23, Stage 4 interpretations (3); reviewer, Stage 4 review).
+
+θ̂ is deterministic — a pure function of (φ, σ_in), computed as follows:
+* **fixed traversal order**: the same order as `matchAt` — pre-order, arguments left to right
+  (the field order of `sigFields` at the root), the body of a `lam` after the binder;
+* **first consistent occurrence**: a metavariable is bound at its first occurrence in that
+  order whose candidate passes steps 2–4 of `assign` (sort, scope, occurs, consistency with
+  the bindings so far); later occurrences only re-check consistency and never rebind it;
+* **clashes are skipped**: a rigid clash (different head, arity or literal) skips that whole
+  subterm, and a failing `assign` leaves θ̂ unchanged; the scan continues with the next
+  sibling. No backtracking, no choice point. -/
 def looseAt : Term → Term → Subst → Subst
   | .mvar m args, t, σ =>
     match assign [] m args t σ with

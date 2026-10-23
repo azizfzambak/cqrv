@@ -220,3 +220,9 @@ Decision:
 Why: needed to implement the task; the report leaves these open.
 Rejected: (3) the literal lgg against φ (gives dist 4 and a gap at every metavariable); (5) a JSON list of hints (the output must be one hint, never a list).
 Report §: 4.1.1, 4.1.2, 4.1.3, 4.1.4, 4.2.4, 4.3.1, 4.3.2.
+
+## 2026-10-23 — θ̂ is deterministic; the matching term is a projection of SigmaIn (Stage 4 review, reviewer decisions)
+Decision: (1) The lgg against φθ̂ (Stage 4 interpretations (3)) is accepted. θ̂ (`looseAt`, `CQRV/Matching/Library.lean`) is a pure function of (φ, σ_in): fixed traversal order (that of `matchAt`: pre-order, arguments left to right, i.e. `sigFields` order at the root); a metavariable is bound at its first consistent occurrence (the first candidate that passes steps 2–4 of `assign`; it is never rebound); clashes are skipped (a rigid clash skips the subterm, a failing `assign` leaves θ̂ unchanged), with no backtracking. Documented in the doc-comment of `looseAt`; tests: θ̂ of `search_while` = {F₁ ↦ 8, F₂ ↦ 64, F₄ ↦ {0, 3}} with F₃ unbound, first-occurrence binding F₁ ↦ 8 on the inconsistent signature, and the while hint (JSON + text) identical across two runs. (2) The sort check in step 2 is accepted. (3) F₄ ranging over the whole support set is confirmed. (4) The matching term is a library-chosen projection of `SigmaIn`; fields are added to it when a pattern first constrains them; ĉ∧/depth/ancilla still feed the grade. (5), (7) of the Stage 4 interpretations are accepted.
+Why: reviewer answers to the Stage 4 open questions.
+Rejected: a θ̂ that depends on search order or backtracking (the hint would not be reproducible); putting every `SigmaIn` field into the term now (unconstrained fields would need wildcard metavariables in every pattern).
+Report §: 4.1.1, 4.1.4, 4.3.1, 4.3.2, 3.1.

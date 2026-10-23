@@ -93,6 +93,33 @@ def missOf : Option LibResult → Option (String × List String × Nat)
 -- Without M: two gaps, M first (field order), then iter.
 #guard (hintsOf whileSrc).map (·.location) == ["M", "iter"]
 
+/-! ## θ̂ is deterministic (Stage 4 review) -/
+
+/-- θ̂ of φ_Grover against a source, as `(name, rendered body)` pairs sorted by metavariable. -/
+def thetaOf (src : String) (solutions : Option Nat := none) : Option (List (String × String)) :=
+  (sigTerm src solutions).map fun t =>
+    ((looseAt phiGrover t []).mergeSort fun a b => Term.MVar.cmp a.1 b.1 != .gt).map
+      fun (m, b) => (m.name, b.body.render)
+
+/-- The full `cqr match` output of a near miss (JSON line and text), as one string. -/
+def hintOutput (src : String) (solutions : Option Nat := none) : String :=
+  match sigTerm src solutions with
+  | some t =>
+    match matchLibrary library t with
+    | r@(.noMatch _ _ _ _ d) =>
+      let hs := renderHints t r
+      String.join (hs.map fun h => (h.toJson d hs.length).compress) ++ hintsText hs d
+    | _ => ""
+  | none => ""
+
+-- search_while: θ̂ binds F₁, F₂, F₄; the iter clash is skipped, so F₃ stays unbound (rigid).
+#guard thetaOf whileSrc (some 64) == some [("F₁", "8"), ("F₂", "64"), ("F₄", "{0, 3}")]
+-- The while hint is identical across two runs (two independent evaluations).
+def whileRun₁ : String := hintOutput whileSrc (some 64)
+def whileRun₂ : String := hintOutput (include_str "../../examples/search_while.cqr") (some 64)
+#guard whileRun₁ != "" && whileRun₁ == whileRun₂
+#guard hintOutput whileSrc == hintOutput whileSrc
+
 /-! ## Decision 3 — unknown M -/
 
 #guard missOf (run orSrc) == some ("Grover", ["G₁"], 1)
@@ -135,6 +162,8 @@ def inconsistentSig : Term :=
   | .ok _ => false
 #guard (renderHints inconsistentSig (matchLibrary library inconsistentSig)).map
   (fun h => (h.location, h.expected, h.found)) == [("P (position 0.0)", "8", "7")]
+-- θ̂ binds F₁ at its first consistent occurrence (`n` ↦ 8); the later 7 does not rebind it.
+#guard (looseAt phiGrover inconsistentSig []).lookup F₁ == some ⟨0, .nat 8⟩
 
 -- Side condition (§4.1.4): M = 0 binds F₂ ↦ 0, then `F₂ ≥ 1` fails.
 #guard match matchPrecondition phiGrover groverEntry.sides (sigOf 8 0 [0]) with
