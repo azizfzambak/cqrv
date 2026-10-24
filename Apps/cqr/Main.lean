@@ -1,6 +1,8 @@
 import CQRV.DSL.Basic
 import CQRV.Matching.Basic
 import CQRV.Synthesis.Basic
+import CQRV.Certify.Basic
+import CQRV.Emit.Basic
 
 /-!
 # `cqr` command-line interface
@@ -30,9 +32,15 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   Default `r = r⋆ = ⌊π/(4θ)⌋`, `sin²θ = M/2ⁿ` (M from ℰ or `--solutions`). Prints the grades of
   the oracle, the diffusion, one iteration (measured, and the ⊕ of the two measured parts) and
   the full circuit, and `r_star`; `--json` adds `circuit` and `iteration_circuit` (one line).
+* `cqr emit <file> --format qir|qasm [--iterations r] [--solutions M] [--oracle]` — report
+  §8.4.3 (Stage 8a): match (must be Grover), then print the QIR Adaptive Profile module or the
+  OpenQASM 3 program of the Grover circuit (`r` as for `--grover`, default r⋆), with one
+  terminal measurement of the data register. `--oracle` emits the phase oracle alone (for the
+  differential test of the re-parsed program). Failures: diagnostic JSON, exit 1; no `r` and no
+  M: message, exit 2. The emitters are unverified (§5.3); `tests/diff/` re-parses their output.
 -/
 
-open CQRV CQRV.DSL CQRV.Matching CQRV.Synthesis
+open CQRV CQRV.DSL CQRV.Matching CQRV.Synthesis CQRV.Certify CQRV.Emit
 
 /-- Subcommands and the stage (docs/PLAN.md) that implements each. -/
 def subcommands : List (String × Nat) :=
@@ -211,6 +219,44 @@ def synthFlags : List String → Option (Option Nat × Bool × Bool)
     return (some k, j, l)
   | _ => none
 
+/-- Report §8.4.3 — output formats of `cqr emit`. -/
+inductive EmitFormat where
+  | qir
+  | qasm
+
+/-- Parse `--format qir|qasm [--iterations r] [--solutions M] [--oracle]` in any order. -/
+def emitFlags : List String → Option (Option EmitFormat × Option Nat × Option Nat × Bool)
+  | [] => some (none, none, none, false)
+  | "--oracle" :: rest => (emitFlags rest).map fun (f, r, m, _) => (f, r, m, true)
+  | "--format" :: f :: rest => do
+    let f ← match f with | "qir" => some EmitFormat.qir | "qasm" => some .qasm | _ => none
+    let (_, r, m, o) ← emitFlags rest
+    return (some f, r, m, o)
+  | "--iterations" :: r :: rest => do
+    let r ← r.toNat?
+    let (f, _, m, o) ← emitFlags rest
+    return (f, some r, m, o)
+  | "--solutions" :: m :: rest => do
+    let m ← m.toNat?
+    let (f, r, _, o) ← emitFlags rest
+    return (f, r, some m, o)
+  | _ => none
+
+/-- `cqr emit <file> --format qir|qasm [--iterations r] [--solutions M] [--oracle]` — report
+§8.4.3: the Grover circuit (or its oracle) of the matched instance as QIR or OpenQASM 3. -/
+def runEmit (path : String) (fmt : EmitFormat) (iters solutions : Option Nat) (oracle : Bool) :
+    IO UInt32 := do
+  match ← frontEnd path, ← signature path solutions with
+  | .error d, _ | _, .error d => IO.println d.toJson.compress; return 1
+  | .ok (tp, _), .ok sig =>
+    match groverInstance tp sig (if oracle then iters.getD 0 else iters) with
+    | .error (.diagnostic d) => IO.println d.toJson.compress; return 1
+    | .error (.usage msg) => IO.eprintln s!"cqr emit: {msg}"; return 2
+    | .ok gi =>
+      let (name, C) := if oracle then (s!"{tp.name}_oracle", gi.oracle) else (tp.name, gi.circuit)
+      IO.print (match fmt with | .qir => emitQIR name C | .qasm => emitQASM name C)
+      return 0
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["check", file] => runCheck file
@@ -235,10 +281,14 @@ def main (args : List String) : IO UInt32 := do
     match synthFlags flags with
     | some (k, j, l) => runSynthesize file k j l
     | none => IO.eprint usage; return 2
+  | "emit" :: file :: flags =>
+    match emitFlags flags with
+    | some (some f, r, m, o) => runEmit file f r m o
+    | _ => IO.eprint usage; return 2
   | cmd :: _ =>
     match subcommands.lookup cmd with
     | some stage =>
-      if stage ≤ 5 then IO.eprint usage; return 2
+      if stage ≤ 5 || cmd == "emit" then IO.eprint usage; return 2
       IO.eprintln s!"cqr {cmd}: not implemented (Stage {stage})"
       return 2
     | none =>

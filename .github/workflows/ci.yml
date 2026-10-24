@@ -65,6 +65,12 @@ jobs:
       - name: Diffusion and Grover circuit (Stage 5b, every branch; success probability)
         run: scripts/diff_grover.sh
 
+      - name: Install llvm (llvm-as for the QIR assembly check)
+        run: sudo apt-get update && sudo apt-get install -y llvm && llvm-as --version
+
+      - name: SHA3, certificate schema, QIR / QASM re-parse (Stage 8a; llvm-as mandatory)
+        run: REQUIRE_LLVM_AS=1 scripts/check_emit.sh
+
   candidate:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

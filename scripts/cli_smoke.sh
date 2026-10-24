@@ -12,6 +12,8 @@
 # and `cqr match`: grover_pred_037 matches Grover (F₁=8, F₂=32, F₃=1, 32 ≥ 1); search_while
 # --solutions 64 gives the iter hint; search_or needs --solutions (5 matches, 0 fails F₂ ≥ 1).
 #
+# and `cqr emit` (Stage 8a): QIR / QASM of the Grover circuit.
+#
 # and `cqr synthesize` (Stage 5): the Grover oracle grade (10, 27, 8, 2) and its layer dump, the
 # and_chain_8 budgets (--amax 4 feasible, --amax 2 infeasible), search_while → unbounded_loop.
 #
@@ -142,6 +144,35 @@ expect_exit "synthesize grover_pred_037 --grover --iterations 1" 0 "$out" "$rc"
 expect_has "grover --iterations 1" '"iterations": 1' "$out"
 "${cqr[@]}" synthesize examples/search_or.cqr --grover >/dev/null 2>&1; rc=$?
 expect_exit "synthesize search_or --grover (M unknown, no --iterations)" 2 "" "$rc"
+
+# Stage 8a — `cqr emit` (report §8.4.3): QIR Adaptive Profile and OpenQASM 3 of the Grover
+# circuit at r* = 2; one terminal measurement block over the 8 data qubits. The re-parse against
+# the Lean IR is scripts/check_emit.sh.
+out="$("${cqr[@]}" emit examples/grover_pred_037.cqr --format qir | tr -d '')"; rc=$?
+expect_exit "emit grover_pred_037 --format qir" 0 "$out" "$rc"
+expect_has "qir adaptive profile" '"qir_profiles"="adaptive_profile"' "$out"
+expect_has "qir required_num_qubits" '"required_num_qubits"="15"' "$out"
+expect_has "qir required_num_results" '"required_num_results"="26"' "$out"
+expect_has "qir dynamic_qubit_management" '!"dynamic_qubit_management", i1 false' "$out"
+nblk=$(grep -c '^measurements:$' <<<"$out")
+nmz=$(sed -n '/^measurements:$/,/^  br label %output$/p' <<<"$out" | grep -c '__quantum__qis__mz__body')
+[ "$nblk" -eq 1 ] && [ "$nmz" -eq 8 ] && ok "qir: one terminal measurement block, 8 mz"   || bad "qir: $nblk measurement blocks, $nmz mz in the terminal block (expected 1, 8)"
+out="$("${cqr[@]}" emit examples/grover_pred_037.cqr --format qasm --iterations 1 | tr -d '')"; rc=$?
+expect_exit "emit grover_pred_037 --format qasm --iterations 1" 0 "$out" "$rc"
+expect_has "qasm header" 'OPENQASM 3.0;' "$out"
+expect_has "qasm registers" 'qubit[7] anc;' "$out"
+expect_has "qasm conditional" 'if (c[0]) { cz anc[0], x[7]; }' "$out"
+expect_has "qasm terminal measurement" 'out = measure x;' "$out"
+"${cqr[@]}" emit examples/grover_pred_037.cqr >/dev/null 2>&1; rc=$?
+expect_exit "emit without --format" 2 "" "$rc"
+out="$("${cqr[@]}" emit examples/search_or.cqr --format qir | tr -d '')"; rc=$?
+expect_exit "emit search_or (M unknown: no match, as cqr match)" 1 "$out" "$rc"
+expect_has "emit search_or code" '"code":"no_matching_pattern"' "$out"
+"${cqr[@]}" emit examples/search_or.cqr --format qasm --solutions 5 >/dev/null; rc=$?
+expect_exit "emit search_or --solutions 5" 0 "" "$rc"
+out="$("${cqr[@]}" emit examples/search_while.cqr --format qir --solutions 64 | tr -d '')"; rc=$?
+expect_exit "emit search_while --solutions 64 (no match)" 1 "$out" "$rc"
+expect_has "emit search_while code" '"code":"no_matching_pattern"' "$out"
 
 [ "$fail" -eq 0 ] && echo "cli_smoke: all checks passed" || echo "cli_smoke: FAILED"
 exit "$fail"

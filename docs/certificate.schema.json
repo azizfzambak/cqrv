@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CQRV certificate envelope, schema v1.0.0",
+  "description": "Report §8.4.2, §8.4.4, §9.5.1, §9.5.3; DECISIONS.md 2026-10-24 (Stage 8a, reviewer decision 3). Written by CQRV.Certify.Certificate.toJson. Stage 8a writes proof = null, cpu = null, axioms = [] and status = \"not yet audited\"; any other status requires the Stage 8b fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "pattern", "instance", "spec", "grade", "hypotheses",
+               "restoration", "hashes", "trust_boundary", "hardware_perturbation",
+               "reference_configuration", "axioms", "status"],
+  "$defs": {
+    "sha3": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nat": {"type": "integer", "minimum": 0},
+    "rational": {
+      "description": "An exact non-negative rational as Lean's `toString` of `Rat`: \"0\", \"7\", \"7/128\" (lowest terms, positive denominator > 1).",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"
+    }
+  },
+  "properties": {
+    "schema_version": {"type": "string", "const": "1.0.0"},
+    "pattern": {"type": "string", "minLength": 1},
+    "instance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["n", "M", "r"],
+      "properties": {
+        "n": {"$ref": "#/$defs/nat"},
+        "M": {"$ref": "#/$defs/nat"},
+        "r": {"$ref": "#/$defs/nat"}
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["epsilon", "delta", "success_probability"],
+      "properties": {
+        "epsilon": {"const": "0"},
+        "delta": {"$ref": "#/$defs/rational"},
+        "success_probability": {"$ref": "#/$defs/rational"}
+      }
+    },
+    "grade": {
+      "description": "Measured grade (w, d, t, a) of the emitted circuit (report §3.1.1).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["w", "d", "t", "a"],
+      "properties": {
+        "w": {"$ref": "#/$defs/nat"},
+        "d": {"$ref": "#/$defs/nat"},
+        "t": {"$ref": "#/$defs/nat"},
+        "a": {"$ref": "#/$defs/nat"}
+      }
+    },
+    "hypotheses": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "restoration": {"type": "string", "minLength": 1},
+    "hashes": {
+      "description": "SHA3-256, lower-case hex. predicate: DSL source with LF line endings; circuit: compact sorted-key IR JSON; proof: certificate .lean file with the pinned configuration (Stage 8b; null before).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["predicate", "circuit", "proof"],
+      "properties": {
+        "predicate": {"$ref": "#/$defs/sha3"},
+        "circuit": {"$ref": "#/$defs/sha3"},
+        "proof": {"oneOf": [{"$ref": "#/$defs/sha3"}, {"type": "null"}]}
+      }
+    },
+    "trust_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["emitted", "profile", "emitter"],
+      "properties": {
+        "emitted": {"const": "QIR text"},
+        "profile": {"const": "adaptive_profile"},
+        "emitter": {"const": "unverified; translation-validated by re-parse"}
+      }
+    },
+    "hardware_perturbation": {
+      "description": "Report §3.3.3: δ_hw ≤ δ + G·p̄; G = gates of the IR acting on qubits (alloc/free excluded); p̄ is a parameter of the hardware profile.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["formula", "G", "p_bar"],
+      "properties": {
+        "formula": {"const": "δ_hw ≤ δ + G·p̄"},
+        "G": {"$ref": "#/$defs/nat"},
+        "p_bar": {"const": "profile parameter"}
+      }
+    },
+    "reference_configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lean", "mathlib", "physlib", "cpu"],
+      "properties": {
+        "lean": {"type": "string", "pattern": "^leanprover/lean4:"},
+        "mathlib": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "physlib": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "cpu": {"type": ["string", "null"]}
+      }
+    },
+    "axioms": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "status": {"enum": ["not yet audited", "certified", "certificate with tracked obligations"]}
+  },
+  "if": {"properties": {"status": {"const": "not yet audited"}}},
+  "then": {
+    "properties": {
+      "hashes": {"properties": {"proof": {"type": "null"}}},
+      "axioms": {"maxItems": 0}
+    }
+  },
+  "else": {
+    "properties": {
+      "hashes": {"properties": {"proof": {"$ref": "#/$defs/sha3"}}},
+      "reference_configuration": {"properties": {"cpu": {"type": "string"}}},
+      "axioms": {"minItems": 1}
+    }
+  }
+}

@@ -21,6 +21,16 @@ is test-only: nothing here is part of the trusted pipeline.
   measurement branch (depth-first enumeration, `statevector.iter_ir_branches`), and the full
   Grover circuit at r* = 2 on one sampled branch (`statevector.run_ir_sampled`): success
   probability = sin²(5θ), sin²θ = 32/256, to 1e-9. Driver: `scripts/diff_grover.sh` (CI).
+- Stage 8a: `sha3_diff.py` compares the Lean SHA3-256 (`CQRV.Certify.SHA3`, run through
+  `scripts/CertifyTool.lean` by `lean_tool.py`) with `hashlib.sha3_256` (test oracle only) on
+  the two reviewer vectors, 200 random strings of lengths 0..600 and the block-boundary lengths.
+  `cert_schema.py` validates the Lean-built sample certificate of `grover_pred_037` against
+  `docs/certificate.schema.json` (`jsonschema`, draft 2020-12), checks δ = 7/128, the grade,
+  the status "not yet audited" and both hashes, and rejects mutated envelopes. `reparse_qir.py`
+  and `reparse_qasm.py` read the output of `cqr emit` back into the IR JSON format;
+  `emit_diff.py` requires exact equality with the Lean IR (first differing gate reported),
+  simulates the re-parsed QASM oracle in every branch, and runs `llvm-as` on the QIR when it is
+  on PATH (skipped with a message otherwise; mandatory in CI). Driver: `scripts/check_emit.sh`.
 
 Run from the repository root:
 
