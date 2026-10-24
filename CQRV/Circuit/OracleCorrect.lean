@@ -99,6 +99,12 @@ def GatesOk (n a : ℕ) (gs : List Gate) : Prop :=
 theorem GatesOk.of_subset {n a : ℕ} {gs gs' : List Gate} (h : GatesOk n a gs) (hs : gs' ⊆ gs) :
     GatesOk n a gs' := fun g hg => h g (hs hg)
 
+/-- A larger ancilla register keeps every qubit in range. -/
+theorem GatesOk.mono {n a a' : ℕ} {gs : List Gate} (h : GatesOk n a gs) (ha : a ≤ a') :
+    GatesOk n a' gs := fun g hg => ⟨fun q hq => by
+      have := (h g hg).1 q hq
+      cases q <;> simp_all [Qubit.inRange]; omega, (h g hg).2⟩
+
 noncomputable section
 
 open Matrix
@@ -839,16 +845,18 @@ theorem kraus_mul_ancProj (M : Matrix (Reg n × Reg a) (Reg n × Reg a) ℂ) (P 
 
 /-- Report §6.3.2, Lemma 6.3.2 — parametric over the Stage 5 synthesizer: for an AND/NOT/OR
 network `N` whose oracle `C` is synthesized and well formed, `C` restores its ancillae and
-applies the phase oracle of `N`'s predicate. The statement is on density operators, not on
+applies the phase oracle of `N`'s predicate, on any ancilla register `a ≥ C.nAnc` (the ancillae
+`≥ C.nAnc` are never touched; Stage 7a: the Grover circuit shares one register between the
+oracle and the larger MCZ of the diffusion). The statement is on density operators, not on
 basis states (§6.2.4: on basis states the phase cancels); Theorem 3.3a is not used inside the
 oracle (§6.3.2). Proof (Stage 6b-3, basis-vector route): the synthesizer's fold keeps `Inv`
 (`fold_inv`), so the gate list is `cmpBlocks ++ phaseFlip ++ uncBlocks` of the AND records;
 in every branch `c` it maps `|x, 0…0⟩` to `(1/√2)^K · ε · (−1)^{P(x)} |x, 0…0⟩` (`chain_kraus`,
 `phaseFlip_kraus`; `ε = ±1` is the global sign of a constant `P`, whose phase flip has no
 gate), there are `K` classical bits, and `ancRestore_of_kraus` concludes. -/
-theorem lemma_6_3_2 (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C)
-    (hN : N.xorFree = true) (hWF : C.WF) :
-    AncRestore C.nData C.nAnc C (phaseOracle (N.pred C.nData)) := by
+theorem lemma_6_3_2_of_le (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C)
+    (hN : N.xorFree = true) (hWF : C.WF) (a : ℕ) (ha : C.nAnc ≤ a) :
+    AncRestore C.nData a C (phaseOracle (N.pred C.nData)) := by
   obtain ⟨out, st, pp, hout, hst, hpp, hCeq⟩ := synthesizeOracle_ok hC
   obtain ⟨recs, -, -, hcmp, hunc, hpq, -, hvals⟩ :=
     fold_inv hN (Oracle.cone N out) C.nData N.nodes.size le_rfl st hst
@@ -857,13 +865,13 @@ theorem lemma_6_3_2 (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C
     have h2 := flatten_mapIdx_unc recs 0
     simp only [Nat.zero_add] at h1 h2
     rw [hCeq, hcmp, hunc, h1, h2]
-  have hok := hWF.gatesOk
+  have hok := hWF.gatesOk.mono ha
   rw [hgates] at hok
-  have hokc : GatesOk C.nData C.nAnc (cmpBlocks recs 0) :=
+  have hokc : GatesOk C.nData a (cmpBlocks recs 0) :=
     hok.of_subset (fun g hg => by simp [hg])
-  have hokp : GatesOk C.nData C.nAnc (Oracle.phaseFlip pp) :=
+  have hokp : GatesOk C.nData a (Oracle.phaseFlip pp) :=
     hok.of_subset (fun g hg => by simp [hg])
-  have hKa : recs.length ≤ C.nAnc := by
+  have hKa : recs.length ≤ a := by
     rcases cmpBlocks_length_le hokc with h | h
     · simp [h]
     · omega
@@ -874,14 +882,14 @@ theorem lemma_6_3_2 (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C
   have gp := hvals out pp hpp
   -- the predicate is the value of the output on the atom state
   have hpred : ∀ x, N.pred C.nData x =
-      pp.eval (runC (a := C.nAnc) recs 0 (x, fun _ => false)) := by
+      pp.eval (runC (a := a) recs 0 (x, fun _ => false)) := by
     intro x
     rw [gp.2.2 _ hKa x, ← values_eq_valuesUpTo]
     simp only [Network.pred, Network.eval, hout, List.map_cons, List.map_nil, List.headD_cons]
     rfl
   -- the global sign of a constant predicate
   set ε : ℂ := if pp.lin = [] then (if pp.c then -1 else 1) else 1 with hε
-  have hphase : ∀ x, phaseVal pp (runC (a := C.nAnc) recs 0 (x, fun _ => false)) =
+  have hphase : ∀ x, phaseVal pp (runC (a := a) recs 0 (x, fun _ => false)) =
       ε * (if N.pred C.nData x then -1 else 1) := by
     intro x
     rw [hpred]
@@ -909,6 +917,13 @@ theorem lemma_6_3_2 (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C
     rw [hgates, chain_kraus C.nBits c (Oracle.phaseFlip pp) (phaseVal pp)
       (fun s => phaseFlip_kraus C.nBits c pp gp.1 hokp s) recs 0 _ hokc hpq
       (fun i _ => by simp [Qubit.get]), hphase, mul_assoc]
+
+/-- Report §6.3.2, Lemma 6.3.2 — parametric over the Stage 5 synthesizer, at the circuit's own
+ancilla register `a = C.nAnc` (the case `lemma_6_3_2_of_le` with `a = C.nAnc`). -/
+theorem lemma_6_3_2 (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C)
+    (hN : N.xorFree = true) (hWF : C.WF) :
+    AncRestore C.nData C.nAnc C (phaseOracle (N.pred C.nData)) :=
+  lemma_6_3_2_of_le N C hC hN hWF C.nAnc le_rfl
 
 /-- Report §6.3.2, Lemma 6.3.2 in the report's traced form:
 `Tr_anc (⟦C⟧ (ρ ⊗ |0…0⟩⟨0…0|)) = U_P ρ U_Pᴴ`. Proved from `lemma_6_3_2`. -/

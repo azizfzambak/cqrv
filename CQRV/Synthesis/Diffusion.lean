@@ -45,11 +45,13 @@ open Diffusion
 /-- Report §8.2 — the network of `P_all(y) = y₀ ∧ … ∧ y_{n−1}` on `n ≥ 1` inputs: nodes
 `0..n−1` are the inputs, node `n` is `AND(y₀, y₁)`, node `n + k − 1` is `AND(node n+k−2, y_k)`
 (`k ≥ 2`). The output is the last AND (`y₀` itself when `n = 1`). A chain in the sense of
-`Bennett.chainOf`, with operands `0, …, n − 1`. -/
+`Bennett.chainOf`, with operands `0, …, n − 1`. The node array is built from `List.range`, not
+`Array.range`, whose body is not exposed to importing modules, so that the kernel can evaluate
+the diffusion (`decide +kernel` in `CQRV.Grover.Instance`; DECISIONS.md, Stage 7a). -/
 def allNet (n : Nat) : Network :=
   let ands := (List.range (n - 1)).map fun k =>
     if k == 0 then Node.and 0 1 else Node.and (n + k - 1) (k + 1)
-  { nInputs := n, nodes := (Array.range n).map .input ++ ands.toArray,
+  { nInputs := n, nodes := ((List.range n).map Node.input).toArray ++ ands.toArray,
     outputs := [if n ≤ 1 then 0 else 2 * n - 2] }
 
 /-- Report §6.1.3–6.1.4 — the oracle circuit of a network under ancilla budget `aMax`, with the
