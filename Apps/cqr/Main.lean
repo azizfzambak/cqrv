@@ -301,14 +301,11 @@ def median (xs : List Nat) : Nat :=
   let s := xs.mergeSort
   s.getD ((s.length - 1) / 2) 0
 
-/-- Report §9.5.1 — the tracked obligations of a failed audit: `sorryAx` is explained by the
-obligations the generator wrote (`lemma_6_3_2_xor`), otherwise it is named itself; every other
-offending axiom is named. -/
-def obligationsOf (q : CertRequest) (bad : List String) : List String :=
-  let sorries := if bad.contains "sorryAx" then
-      (if q.obligations.isEmpty then ["sorryAx"] else q.obligations)
-    else []
-  sorries ++ bad.filter (· != "sorryAx")
+/-- Report §9.5.1 — the tracked obligations of a failed audit: every offending axiom by its
+name, `sorryAx` first. Since Stage 9a the generator writes no `sorry` (Lemma 6.3.2 holds for XOR
+networks), so a `sorryAx` is never explained by a generator obligation. -/
+def obligationsOf (bad : List String) : List String :=
+  (if bad.contains "sorryAx" then ["sorryAx"] else []) ++ bad.filter (· != "sorryAx")
 
 /-- Milliseconds as seconds with two decimals. -/
 def secs (ms : Nat) : String :=
@@ -366,7 +363,7 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
           | none => "single run" }
     let (status, obligations) := match last.result with
       | .pass => (Status.certified, [])
-      | .fail bad => (Status.withObligations, obligationsOf q bad)
+      | .fail bad => (Status.withObligations, obligationsOf bad)
     let (cpu, cpus, clock) ← detectMachine
     let cfg := { cfg with cpu := some (cpu.getD "unknown"), logicalCpus := cpus, clock,
                           leanThreads := ← IO.getEnv "LEAN_NUM_THREADS", kernelCheck := timing }

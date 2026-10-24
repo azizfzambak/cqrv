@@ -1,25 +1,29 @@
 module
 
-public import CQRV.Circuit.OracleBlocks
+public import CQRV.Circuit.OracleCorrectXor
 
 /-!
 # CQRV.Circuit.OracleCorrect
 
 Report §6.3.2 (Lemma 6.3.2), §6.2.4 (Layers 1–3), §6.1.1/§6.1.4 (Z on the qubit holding P(x)),
-§6.2.2 (MBU) — Lemma 6.3.2 for xor-free networks, by induction over the synthesizer
-(Stage 6b-3; basis-vector route of DECISIONS.md, Stage 6b-2):
+§6.1.2 (in-place XOR), §6.2.2 (MBU) — Lemma 6.3.2 for every network the synthesizer accepts,
+with or without XOR nodes, by induction over the synthesizer (Stage 6b-3 for xor-free networks,
+generalized in Stage 9a; basis-vector route of DECISIONS.md, Stage 6b-2):
 
-* item 1 — `Aff.eval` (an affine form on a basis state) and `runC` (the basis state after the
-  compute blocks: ancilla `j` holds the `j`-th non-folded AND);
-* item 2 — the invariant `Inv` of the synthesizer's fold and `step_ok_inv`: every recorded
-  value evaluates, on `runC`, to the node value of the network; the compute / uncompute blocks
-  are those of a list of AND records (`AndRec`);
-* item 3 — `cmp_kraus`: one compute block on a basis vector;
-* item 4 — `phaseFlip_kraus`: the phase flip is `(−1)^{P}` (no gate for a constant `P`);
-* item 5 — `unc_kraus`: one uncompute block, every branch, `(1/√2)` and the ancilla reset;
+* atoms — `Aff.eval` (`OracleCorrectXor`) and `runC` (the basis state after the compute blocks:
+  ancilla `j` holds the `j`-th non-folded AND);
+* the invariant `Inv` of the synthesizer's fold and `step_ok_inv`: every recorded value has
+  distinct atoms (any number of them) and evaluates, on `runC`, to the node value of the
+  network; the compute / uncompute blocks are those of a list of AND records (`AndRec`: the
+  `prepare` gates, the two operand qubits, the two operands), each satisfying `AndRec.Ok`
+  (`prepare_ok`, `OracleCorrectXor`);
+* `cmp_kraus`: one compute block on a basis vector (`pre`, `TempLogicalAND`, `preᴿ`);
+* `phaseFlip_kraus`: the phase flip (gather, `X`, `Z`, `X`, ungather) is `(−1)^{P}` (no gate for
+  a constant `P`);
+* `unc_kraus`: one uncompute block, every branch, `(1/√2)` and the ancilla reset;
   `chain_kraus` nests compute blocks, phase, and uncompute blocks in reverse order;
-* item 6 — `lemma_6_3_2` (moved here from `Restoration`, which this file imports), its traced
-  form and the Grover instance.
+* `lemma_6_3_2_xor` (Stage 9a) and `lemma_6_3_2` (its corollary, statement of Stage 6a), the
+  traced form and the Grover instance.
 
 The synthesizer is unchanged: the AND records exist only in the invariant (existentially).
 -/
@@ -30,28 +34,19 @@ namespace CQRV
 
 open CQRV.Synthesis
 
-/-! ## Item 1 — atom semantics -/
+/-! ## AND records -/
 
-/-- Report §6.1.2, §6.3.2 — the value of an affine form on a basis state: the XOR of its atoms
-(each read on its home qubit) and its constant. -/
-def Synthesis.Aff.eval {n a : ℕ} (u : Aff) (s : Reg n × Reg a) : Bool :=
-  u.lin.foldr (fun q b => q.get s ^^ b) u.c
-
-/-- Report §6.1.2, §6.2.2 — a non-folded AND of an xor-free network as the synthesizer emits it:
-operand atoms `p`, `q` with the polarities `cu`, `cv` (the `X` gates of `prepare`). The `j`-th
-such AND has the target `anc j`. -/
+/-- Report §6.1.2, §6.2.2 — a non-folded AND as the synthesizer emits it: the preparation gates
+`pre` of `prepare` (gather CNOTs and polarity `X`), the operand qubits `p`, `q` and the operands
+`u`, `v` (affine forms over atoms). The `j`-th such AND has the target `anc j`. -/
 structure AndRec where
+  pre : List Gate
   p : Qubit
-  cu : Bool
   q : Qubit
-  cv : Bool
+  u : Aff
+  v : Aff
 
 namespace AndRec
-
-/-- Report §6.1.2 — the polarity gates of `prepare` (no `gather` CNOT: each operand is one
-atom). -/
-def pre (r : AndRec) : List Gate :=
-  (if r.cu then [.x r.p] else []) ++ (if r.cv then [.x r.q] else [])
 
 /-- Report §6.1.4, §6.2.2 — the compute block of the AND with target `anc j`. -/
 def cmp (r : AndRec) (j : ℕ) : List Gate :=
@@ -62,11 +57,47 @@ into the classical bit `b`. -/
 def unc (r : AndRec) (j b : ℕ) : List Gate :=
   r.pre ++ UncomputeTempLogicalAND r.p r.q (.anc j) b ++ [.free (.anc j)] ++ r.pre.reverse
 
-/-- Report §6.1.2 — the value of the AND on a basis state: `(p ⊕ cu) ∧ (q ⊕ cv)`. -/
+/-- Report §6.1.2 — the value of the AND on a basis state: `u ∧ v`. -/
 def val {n a : ℕ} (r : AndRec) (s : Reg n × Reg a) : Bool :=
-  (r.p.get s ^^ r.cu) && (r.q.get s ^^ r.cv)
+  r.u.eval s && r.v.eval s
 
 end AndRec
+
+/-- The atoms of `u` are data qubits or ancillae `anc j` with `j < K`. -/
+def AtomsBelow (K : ℕ) (u : Aff) : Prop := ∀ q ∈ u.lin, ∀ j, q = .anc j → j < K
+
+/-- Report §6.1.2, §6.3.2 — what the invariant records about the AND with target `anc j`:
+distinct operand qubits; operand atoms below `anc j`; `pre` is a list of `X` / `CNOT` gates on
+qubits below `anc j`; and on every basis state (operand qubits in range), after `pre` the qubit
+`p` holds `u` and `q` holds `v` (`prepare_ok`). -/
+def AndRec.Ok (r : AndRec) (j : ℕ) : Prop :=
+  r.p ≠ r.q ∧ AtomsBelow j r.u ∧ AtomsBelow j r.v ∧ (∀ g ∈ r.pre, g.isPerm = true) ∧
+    (∀ g ∈ r.pre, ∀ q ∈ g.qubits, ∀ i, q = .anc i → i < j) ∧
+    ∀ {n a : ℕ} (s : Reg n × Reg a), r.p.inRange n a = true → r.q.inRange n a = true →
+      r.p.get (permRun r.pre s) = r.u.eval s ∧ r.q.get (permRun r.pre s) = r.v.eval s
+
+/-- `AndRec.Ok` for every record, the first one with target `anc j`. -/
+def RecsOk : List AndRec → ℕ → Prop
+  | [], _ => True
+  | r :: rs, j => r.Ok j ∧ RecsOk rs (j + 1)
+
+theorem RecsOk.append_singleton {rs : List AndRec} {r : AndRec} {j : ℕ} (h : RecsOk rs j)
+    (hr : r.Ok (j + rs.length)) : RecsOk (rs ++ [r]) j := by
+  induction rs generalizing j with
+  | nil => exact ⟨by simpa using hr, trivial⟩
+  | cons r' rs ih =>
+    refine ⟨h.1, ih h.2 ?_⟩
+    rw [List.length_cons] at hr
+    rwa [show j + 1 + rs.length = j + (rs.length + 1) by omega]
+
+theorem RecsOk.isPerm {rs : List AndRec} {j : ℕ} (h : RecsOk rs j) :
+    ∀ r ∈ rs, ∀ g ∈ r.pre, g.isPerm = true := by
+  induction rs generalizing j with
+  | nil => simp
+  | cons r' rs ih =>
+    intro r hr
+    rcases List.mem_cons.mp hr with rfl | hr
+    exacts [h.1.2.2.2.1, ih h.2 r hr]
 
 /-- Report §6.1.4 — the compute blocks of the ANDs `rs`, the first one with target `anc j`, in
 order. -/
@@ -80,16 +111,12 @@ def uncBlocks : List AndRec → ℕ → List Gate
   | [], _ => []
   | r :: rs, j => uncBlocks rs (j + 1) ++ r.unc j rs.length
 
-/-- Report §6.3.2 (item 1) — the basis state after the compute blocks of `rs` (the first with
-target `anc j`): ancilla `j + k` holds the value of the `k`-th AND. On `(x, 0…0)` from `j = 0`
-this is the atom state of `x`. -/
+/-- Report §6.3.2 — the basis state after the compute blocks of `rs` (the first with target
+`anc j`): ancilla `j + k` holds the value of the `k`-th AND. On `(x, 0…0)` from `j = 0` this is
+the atom state of `x`. -/
 def runC {n a : ℕ} : List AndRec → ℕ → Reg n × Reg a → Reg n × Reg a
   | [], _, s => s
   | r :: rs, j, s => runC rs (j + 1) ((Qubit.anc j).set (r.val s) s)
-
-/-- Report §6.1.2 — flip `q` when `b` (the action of an optional polarity `X`). -/
-def polFlip {n a : ℕ} (b : Bool) (q : Qubit) (s : Reg n × Reg a) : Reg n × Reg a :=
-  if b then q.flip s else s
 
 /-- Report §9.1.1 — the qubit discipline that `Circuit.WF` gives on a piece of the gate list:
 qubits in the register, CNOT operands distinct. -/
@@ -112,67 +139,27 @@ open scoped MState Kronecker
 
 variable {n a : ℕ}
 
-/-! ## Lens lemmas for the polarity flips -/
+theorem Synthesis.Aff.eval_set_anc {n a K : ℕ} {u : Aff} (hu : AtomsBelow K u) (v : Bool)
+    (s : Reg n × Reg a) : u.eval ((Qubit.anc K).set v s) = u.eval s := by
+  obtain ⟨lin, c⟩ := u
+  simp only [Aff.eval]
+  induction lin with
+  | nil => rfl
+  | cons q l ih =>
+    have hq : q ≠ .anc K := fun e => by
+      have := hu q (by simp) K e; omega
+    simp only [List.foldr_cons, Qubit.get_set_ne hq]
+    rw [ih (fun q' hq' => hu q' (by simp [hq']))]
 
-theorem Qubit.flip_set_comm {q t : Qubit} (hqt : q ≠ t) (v : Bool) (s : Reg n × Reg a) :
-    q.flip (t.set v s) = t.set v (q.flip s) := by
-  rw [Qubit.flip, Qubit.flip, Qubit.get_set_ne hqt, Qubit.set_comm hqt]
-
-theorem polFlip_set_comm {q t : Qubit} (hqt : q ≠ t) (b v : Bool) (s : Reg n × Reg a) :
-    polFlip b q (t.set v s) = t.set v (polFlip b q s) := by
-  cases b
-  · rfl
-  · exact Qubit.flip_set_comm hqt v s
-
-theorem polFlip_polFlip (b : Bool) (q : Qubit) (s : Reg n × Reg a) :
-    polFlip b q (polFlip b q s) = s := by
-  cases b
-  · rfl
-  · exact Qubit.flip_involutive q s
-
-theorem get_polFlip_self {q : Qubit} (hq : q.inRange n a = true) (b : Bool) (s : Reg n × Reg a) :
-    q.get (polFlip b q s) = (q.get s ^^ b) := by
-  cases b
-  · simp [polFlip]
-  · simp [polFlip, Qubit.get_flip_self q hq]
-
-theorem get_polFlip_ne {p q : Qubit} (hpq : p ≠ q) (b : Bool) (s : Reg n × Reg a) :
-    p.get (polFlip b q s) = p.get s := by
-  cases b
-  · rfl
-  · exact Qubit.get_flip_ne hpq s
-
-/-! ## Polarity gates, `alloc`, `free` on basis vectors -/
+/-! ## Compute and uncompute blocks on basis vectors -/
 
 section Blocks
 
 variable (nb : ℕ) (c : Fin nb → Bool)
 
-theorem polX_kraus (b : Bool) (q : Qubit) (s : Reg n × Reg a) :
-    krausOps n a nb (if b then [Gate.x q] else []) c *ᵥ basisVec s = basisVec (polFlip b q s) := by
-  cases b
-  · simp [polFlip, krausOps_nil]
-  · simp only [↓reduceIte]
-    rw [krausOps_cons_mulVec, krausOps_nil, Matrix.one_mulVec]
-    exact x_basis n a q s
-
-theorem pre_kraus (r : AndRec) (s : Reg n × Reg a) :
-    krausOps n a nb r.pre c *ᵥ basisVec s = basisVec (polFlip r.cv r.q (polFlip r.cu r.p s)) := by
-  rw [AndRec.pre, krausOps_append_mulVec, polX_kraus, polX_kraus]
-
-theorem preRev_kraus (r : AndRec) (s : Reg n × Reg a) :
-    krausOps n a nb r.pre.reverse c *ᵥ basisVec s =
-      basisVec (polFlip r.cu r.p (polFlip r.cv r.q s)) := by
-  have hrev : ∀ (b : Bool) (q : Qubit),
-      (if b then [Gate.x q] else []).reverse = (if b then [Gate.x q] else []) := by
-    intro b q; cases b <;> rfl
-  rw [AndRec.pre, List.reverse_append, hrev, hrev, krausOps_append_mulVec, polX_kraus, polX_kraus]
-
 theorem single_kraus_one (g : Gate) (hg : gateK n a c g = 1) (v : Reg n × Reg a → ℂ) :
     krausOps n a nb [g] c *ᵥ v = v := by
   rw [krausOps_cons_mulVec, krausOps_nil, Matrix.one_mulVec, hg, Matrix.one_mulVec]
-
-/-! ## Items 3 and 5 — one compute block, one uncompute block -/
 
 /-- The range and distinctness facts of one AND that `Circuit.WF` gives on its compute block. -/
 theorem AndRec.ok_of_gatesOk {r : AndRec} {j : ℕ} (h : GatesOk n a (r.cmp j)) :
@@ -183,43 +170,55 @@ theorem AndRec.ok_of_gatesOk {r : AndRec} {j : ℕ} (h : GatesOk n a (r.cmp j)) 
   exact ⟨h1.1 _ (by simp [Gate.qubits]), h2.1 _ (by simp [Gate.qubits]),
     h1.1 _ (by simp [Gate.qubits]), h1.2 _ _ rfl, h2.2 _ _ rfl⟩
 
-/-- Report §6.2.2, §6.2.4 Layer 1 (item 3) — the compute block of one AND, in any branch: on a
-basis state with `anc j = 0`, it sets `anc j` to the AND value and changes nothing else. -/
-theorem cmp_kraus {r : AndRec} {j : ℕ} (hpq : r.p ≠ r.q) (hok : GatesOk n a (r.cmp j))
+/-- `pre` and `preᴿ` do not touch the target `anc j`. -/
+theorem AndRec.Ok.avoid {r : AndRec} {j : ℕ} (hr : r.Ok j) :
+    ∀ g ∈ r.pre, Qubit.anc j ∉ g.qubits :=
+  fun g hg hm => by have := hr.2.2.2.2.1 g hg _ hm j rfl; omega
+
+theorem AndRec.Ok.avoid_rev {r : AndRec} {j : ℕ} (hr : r.Ok j) :
+    ∀ g ∈ r.pre.reverse, Qubit.anc j ∉ g.qubits :=
+  fun g hg => hr.avoid g (List.mem_reverse.mp hg)
+
+theorem AndRec.Ok.isPerm_rev {r : AndRec} {j : ℕ} (hr : r.Ok j) :
+    ∀ g ∈ r.pre.reverse, g.isPerm = true :=
+  fun g hg => hr.2.2.2.1 g (List.mem_reverse.mp hg)
+
+/-- Report §6.1.2, §6.2.2, §6.2.4 Layer 1 — the compute block of one AND, in any branch: on a
+basis state with `anc j = 0`, it sets `anc j` to the AND value `u ∧ v` and changes nothing else
+(`pre` puts `u`, `v` on `p`, `q`; `TempLogicalAND` writes `anc j`; `preᴿ` restores the atoms). -/
+theorem cmp_kraus {r : AndRec} {j : ℕ} (hr : r.Ok j) (hok : GatesOk n a (r.cmp j))
     (s : Reg n × Reg a) (hs : (Qubit.anc j).get s = false) :
     krausOps n a nb (r.cmp j) c *ᵥ basisVec s = basisVec ((Qubit.anc j).set (r.val s) s) := by
   obtain ⟨hp, hq, ht, hpt, hqt⟩ := AndRec.ok_of_gatesOk hok
-  have hqp : r.q ≠ r.p := Ne.symm hpq
-  have hs1 : (Qubit.anc j).get (polFlip r.cv r.q (polFlip r.cu r.p s)) = false := by
-    rw [get_polFlip_ne (Ne.symm hqt), get_polFlip_ne (Ne.symm hpt), hs]
+  have hs1 : (Qubit.anc j).get (permRun r.pre s) = false := by
+    rw [get_permRun_of_avoid hr.avoid, hs]
+  have hsem := hr.2.2.2.2.2 s hp hq
   rw [AndRec.cmp, krausOps_append_mulVec, krausOps_append_mulVec, krausOps_append_mulVec,
-    pre_kraus, single_kraus_one nb c _ rfl,
-    tempLogicalAND_kraus_basis nb c r.p r.q _ hpq hpt hqt hp hq ht _ hs1, preRev_kraus,
-    get_polFlip_ne hpq, get_polFlip_self hp, get_polFlip_self hq, get_polFlip_ne hqp,
-    polFlip_set_comm hqt, polFlip_set_comm hpt, polFlip_polFlip, polFlip_polFlip]
+    perm_kraus nb c hr.2.2.2.1, single_kraus_one nb c _ rfl,
+    tempLogicalAND_kraus_basis nb c r.p r.q _ hr.1 hpt hqt hp hq ht _ hs1,
+    perm_kraus nb c hr.isPerm_rev, permRun_set_comm hr.avoid_rev,
+    permRun_reverse hr.2.2.2.1, hsem.1, hsem.2]
   rfl
 
-/-- Report §6.2.2, §6.2.4 Layer 2 (item 5) — the uncompute block of one AND, in every branch
-`c` and for any classical bit `b`: on a basis state whose `anc j` holds the AND value, it resets
-`anc j` with amplitude `1/√2` and no sign. -/
-theorem unc_kraus {r : AndRec} {j : ℕ} (b : ℕ) (hpq : r.p ≠ r.q) (hok : GatesOk n a (r.cmp j))
+/-- Report §6.2.2, §6.2.4 Layer 2 — the uncompute block of one AND, in every branch `c` and for
+any classical bit `b`: on a basis state whose `anc j` holds the AND value, it resets `anc j`
+with amplitude `1/√2` and no sign. -/
+theorem unc_kraus {r : AndRec} {j : ℕ} (b : ℕ) (hr : r.Ok j) (hok : GatesOk n a (r.cmp j))
     (s : Reg n × Reg a) (hs : (Qubit.anc j).get s = r.val s) :
     krausOps n a nb (r.unc j b) c *ᵥ basisVec s =
       ((Real.sqrt 2)⁻¹ : ℂ) • basisVec ((Qubit.anc j).set false s) := by
   obtain ⟨hp, hq, ht, hpt, hqt⟩ := AndRec.ok_of_gatesOk hok
-  have hqp : r.q ≠ r.p := Ne.symm hpq
-  have hs1 : (Qubit.anc j).get (polFlip r.cv r.q (polFlip r.cu r.p s)) =
-      (r.p.get (polFlip r.cv r.q (polFlip r.cu r.p s)) &&
-        r.q.get (polFlip r.cv r.q (polFlip r.cu r.p s))) := by
-    rw [get_polFlip_ne (Ne.symm hqt), get_polFlip_ne (Ne.symm hpt), hs, get_polFlip_ne hpq,
-      get_polFlip_self hp, get_polFlip_self hq, get_polFlip_ne hqp]
+  have hsem := hr.2.2.2.2.2 s hp hq
+  have hs1 : (Qubit.anc j).get (permRun r.pre s) =
+      (r.p.get (permRun r.pre s) && r.q.get (permRun r.pre s)) := by
+    rw [get_permRun_of_avoid hr.avoid, hs, hsem.1, hsem.2]
     rfl
   rw [AndRec.unc, krausOps_append_mulVec, krausOps_append_mulVec, krausOps_append_mulVec,
-    pre_kraus, mbu_branch_basis r.p r.q _ b hpt hqt ht c _ hs1, Matrix.mulVec_smul,
-    single_kraus_one nb c _ rfl, Matrix.mulVec_smul, preRev_kraus,
-    polFlip_set_comm hqt, polFlip_set_comm hpt, polFlip_polFlip, polFlip_polFlip]
+    perm_kraus nb c hr.2.2.2.1, mbu_branch_basis r.p r.q _ b hpt hqt ht c _ hs1,
+    Matrix.mulVec_smul, single_kraus_one nb c _ rfl, Matrix.mulVec_smul,
+    perm_kraus nb c hr.isPerm_rev, permRun_set_comm hr.avoid_rev, permRun_reverse hr.2.2.2.1]
 
-/-! ## Item 5 — nesting: compute blocks, phase, uncompute blocks in reverse order -/
+/-! ## Nesting: compute blocks, phase, uncompute blocks in reverse order -/
 
 theorem runC_fst (rs : List AndRec) (j : ℕ) (s : Reg n × Reg a) : (runC rs j s).1 = s.1 := by
   induction rs generalizing j s with
@@ -229,48 +228,48 @@ theorem runC_fst (rs : List AndRec) (j : ℕ) (s : Reg n × Reg a) : (runC rs j 
     simp only [Qubit.set]
     split_ifs <;> rfl
 
-/-- Report §6.2.4, §6.3.2 (items 3–5) — the nested brackets of the oracle on a basis vector, in
-any branch: if the middle part `Φ` is diagonal on basis vectors (`φ`), the compute blocks of
-`rs`, `Φ`, and the uncompute blocks in reverse order map `|s⟩` (ancillae `≥ j` at 0) to
+/-- Report §6.2.4, §6.3.2 — the nested brackets of the oracle on a basis vector, in any branch:
+if the middle part `Φ` is diagonal on basis vectors (`φ`), the compute blocks of `rs`, `Φ`, and
+the uncompute blocks in reverse order map `|s⟩` (ancillae `≥ j` at 0) to
 `(1/√2)^{|rs|} · φ(runC rs j s) · |s⟩`. Induction on `rs`: the outermost compute block sets
 `anc j`, the inner part acts as a scalar, the outermost uncompute block resets `anc j`. -/
 theorem chain_kraus (Φ : List Gate) (φ : Reg n × Reg a → ℂ)
     (hΦ : ∀ s, krausOps n a nb Φ c *ᵥ basisVec s = φ s • basisVec s) :
     ∀ (rs : List AndRec) (j : ℕ) (s : Reg n × Reg a), GatesOk n a (cmpBlocks rs j) →
-      (∀ r ∈ rs, r.p ≠ r.q) → (∀ i, j ≤ i → (Qubit.anc i).get s = false) →
+      RecsOk rs j → (∀ i, j ≤ i → (Qubit.anc i).get s = false) →
       krausOps n a nb (cmpBlocks rs j ++ Φ ++ uncBlocks rs j) c *ᵥ basisVec s =
         (((Real.sqrt 2)⁻¹ : ℂ) ^ rs.length * φ (runC rs j s)) • basisVec s
   | [], j, s, _, _, _ => by
     simp only [cmpBlocks, uncBlocks, List.nil_append, List.append_nil, hΦ, runC, List.length_nil,
       pow_zero, one_mul]
-  | r :: rs, j, s, hok, hpq, hs => by
+  | r :: rs, j, s, hok, hrs, hs => by
     have hokr : GatesOk n a (r.cmp j) := hok.of_subset (by simp [cmpBlocks])
     have hokrs : GatesOk n a (cmpBlocks rs (j + 1)) := hok.of_subset (by simp [cmpBlocks])
     obtain ⟨hp, hq, ht, hpt, hqt⟩ := AndRec.ok_of_gatesOk hokr
-    have hpq₀ : r.p ≠ r.q := hpq r (by simp)
+    have hr : r.Ok j := hrs.1
     set s' := (Qubit.anc j).set (r.val s) s with hs'
     have hs'' : ∀ i, j + 1 ≤ i → (Qubit.anc i).get s' = false := by
       intro i hi
       rw [hs', Qubit.get_set_ne (by simp; omega)]
       exact hs i (by omega)
-    have ih := chain_kraus Φ φ hΦ rs (j + 1) s' hokrs (fun r' hr' => hpq r' (by simp [hr'])) hs''
+    have ih := chain_kraus Φ φ hΦ rs (j + 1) s' hokrs hrs.2 hs''
     have hsplit : cmpBlocks (r :: rs) j ++ Φ ++ uncBlocks (r :: rs) j =
         r.cmp j ++ (cmpBlocks rs (j + 1) ++ Φ ++ uncBlocks rs (j + 1)) ++ r.unc j rs.length := by
       simp only [cmpBlocks, uncBlocks, List.append_assoc]
     have hval : (Qubit.anc j).get s' = r.val s' := by
-      rw [hs', Qubit.get_set_self _ ht, AndRec.val, AndRec.val, Qubit.get_set_ne hpt,
-        Qubit.get_set_ne hqt]
+      rw [hs', Qubit.get_set_self _ ht, AndRec.val, AndRec.val, Aff.eval_set_anc hr.2.1,
+        Aff.eval_set_anc hr.2.2.1]
     have hback : (Qubit.anc j).set false s' = s := by
       rw [hs', Qubit.set_set, ← hs j le_rfl, Qubit.set_get]
-    rw [hsplit, krausOps_append_mulVec, krausOps_append_mulVec, cmp_kraus nb c hpq₀ hokr s
-      (hs j le_rfl), ← hs', ih, Matrix.mulVec_smul, unc_kraus nb c _ hpq₀ hokr s' hval, hback,
+    rw [hsplit, krausOps_append_mulVec, krausOps_append_mulVec, cmp_kraus nb c hr hokr s
+      (hs j le_rfl), ← hs', ih, Matrix.mulVec_smul, unc_kraus nb c _ hr hokr s' hval, hback,
       smul_smul, runC, List.length_cons, pow_succ]
     congr 1
     ring
 
 end Blocks
 
-/-! ## Item 2 — the invariant of the synthesizer's fold -/
+/-! ## The invariant of the synthesizer's fold -/
 
 /-- Report §6.1.2 — the value of one node from the values `vs` of the earlier nodes (the body of
 `Network.values`). -/
@@ -339,22 +338,7 @@ theorem Synthesis.Aff.eval_nil {n a : ℕ} (u : Aff) (h : u.lin = []) (s : Reg n
 theorem Synthesis.Aff.eval_single {n a : ℕ} (p : Qubit) (c : Bool) (s : Reg n × Reg a) :
     (Aff.mk [p] c).eval s = (p.get s ^^ c) := rfl
 
-/-- The atoms of `u` are data qubits or ancillae `anc j` with `j < K`. -/
-def AtomsBelow (K : ℕ) (u : Aff) : Prop := ∀ q ∈ u.lin, ∀ j, q = .anc j → j < K
-
-theorem Synthesis.Aff.eval_set_anc {n a K : ℕ} {u : Aff} (hu : AtomsBelow K u) (v : Bool)
-    (s : Reg n × Reg a) : u.eval ((Qubit.anc K).set v s) = u.eval s := by
-  obtain ⟨lin, c⟩ := u
-  simp only [Aff.eval]
-  induction lin with
-  | nil => rfl
-  | cons q l ih =>
-    have hq : q ≠ .anc K := fun e => by
-      have := hu q (by simp) K e; omega
-    simp only [List.foldr_cons, Qubit.get_set_ne hq]
-    rw [ih (fun q' hq' => hu q' (by simp [hq']))]
-
-/-- Report §6.1.2 (item 2) — the folding identities are exact on every state:
+/-- Report §6.1.2 — the folding identities are exact on every state:
 `fold u v = some r → r = u ∧ v` (`1 ∧ v = v`, `0 ∧ v = 0`, `u ∧ u = u`, `u ∧ ¬u = 0`). -/
 theorem fold_eval {n a : ℕ} {u v r : Aff} (h : Oracle.fold u v = some r) (s : Reg n × Reg a) :
     r.eval s = (u.eval s && v.eval s) := by
@@ -390,37 +374,25 @@ theorem fold_cases {u v r : Aff} (h : Oracle.fold u v = some r) :
   unfold Oracle.fold at h
   split_ifs at h <;> simp only [Option.some.injEq] at h <;> subst h <;> simp
 
-/-- Report §6.1.2 — `prepare` on two single-atom operands with distinct atoms: no `gather`
-CNOT, only the polarity `X` gates; the operand qubits are the atoms. -/
-theorem prepare_single (p q : Qubit) (cu cv : Bool) (hpq : p ≠ q) :
-    Oracle.prepare ⟨[p], cu⟩ ⟨[q], cv⟩ = .ok ((⟨p, cu, q, cv⟩ : AndRec).pre, p, q) := by
-  have h1 : [q].contains p = false := by simp [hpq]
-  have h2 : [q].filter (· != p) = [q] := by simp [Ne.symm hpq]
-  have h3 : ∀ r : Qubit, [r].filter (· != r) = [] := by simp
-  simp only [Oracle.prepare, pure_bind, h1, Bool.false_eq_true, ↓reduceIte, h2, Oracle.gather, h3,
-    List.map_nil, List.nil_append]
-  rfl
-
-/-- Report §6.3.2 (item 2) — what the invariant asks of the recorded value `u` of node `i`
-after the nodes `< k`, the non-folded ANDs so far being `recs`: at most one atom, atoms below
-`anc recs.length`, and on the atom state `runC recs 0 (x, 0…0)` the value of node `i` on `x`. -/
+/-- Report §6.3.2 — what the invariant asks of the recorded value `u` of node `i` after the
+nodes `< k`, the non-folded ANDs so far being `recs`: distinct atoms (any number: XOR nodes
+have several), atoms below `anc recs.length`, and on the atom state `runC recs 0 (x, 0…0)` the
+value of node `i` on `x`. (Stage 6b-3 had `u.lin.length ≤ 1` in place of `u.lin.Nodup`.) -/
 def Good (N : Network) (n k : ℕ) (recs : List AndRec) (i : ℕ) (u : Aff) : Prop :=
-  u.lin.length ≤ 1 ∧ AtomsBelow recs.length u ∧
+  u.lin.Nodup ∧ AtomsBelow recs.length u ∧
     ∀ a, recs.length ≤ a → ∀ x : Reg n,
       u.eval (runC (a := a) recs 0 (x, fun _ => false)) =
         (valuesUpTo N (inputOf x) k).getD i false
 
-/-- Report §6.3.2 (item 2) — the invariant of the synthesizer's fold after the nodes `< k` of
-an xor-free network: the non-folded ANDs so far are the records `recs` (the `j`-th has target
-`anc j`; its operands are distinct atoms below `anc j`), the compute / uncompute blocks are
-theirs, and every recorded value is `Good`. -/
+/-- Report §6.3.2 — the invariant of the synthesizer's fold after the nodes `< k`: the non-folded
+ANDs so far are the records `recs` (the `j`-th has target `anc j` and satisfies `AndRec.Ok`),
+the compute / uncompute blocks are theirs, and every recorded value is `Good`. -/
 def Inv (N : Network) (n k : ℕ) (st : Oracle.St) : Prop :=
   ∃ recs : List AndRec,
     st.vals.size = k ∧ st.nextAnc = recs.length ∧
     st.compute.toList = recs.mapIdx (fun j r => r.cmp j) ∧
     st.uncompute.toList = recs.mapIdx (fun j r => r.unc j 0) ∧
-    (∀ r ∈ recs, r.p ≠ r.q) ∧
-    (∀ j (h : j < recs.length) i, (recs[j].p = .anc i ∨ recs[j].q = .anc i) → i < j) ∧
+    RecsOk recs 0 ∧
     ∀ i u, st.vals.getD i none = some u → Good N n k recs i u
 
 theorem runC_append (rs : List AndRec) (r : AndRec) (j : ℕ) (s : Reg n × Reg a) :
@@ -463,22 +435,12 @@ theorem vals_push {N : Network} {n k : ℕ} {recs : List AndRec} {vals : Array (
       cases hu
     exact good_lift_k hk hi (hvals i u hu)
 
-theorem except_bind_eq_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} :
-    x >>= f = .ok b ↔ ∃ a, x = .ok a ∧ f a = .ok b := by
-  cases x <;> simp [bind, Except.bind]
-
-theorem except_pure_eq_ok {ε α : Type} {x y : α} : (pure x : Except ε α) = .ok y ↔ x = y := by
-  simp [pure, Except.pure]
-
-theorem fail_ne_ok {α : Type} (msg : String) (y : α) : Oracle.fail msg ≠ .ok y := by
-  intro h; cases h
-
-/-- Report §6.1.2, §6.3.2 (item 2) — one step of the synthesizer preserves the invariant
-(xor-free network, node `k` in range, the step succeeded). -/
-theorem step_ok_inv {N : Network} (hN : N.xorFree = true) (mark : Array Bool) {n k : ℕ}
+/-- Report §6.1.2, §6.3.2 (Stage 9a item 3) — one step of the synthesizer preserves the
+invariant, for every node kind (XOR included; node `k` in range, the step succeeded). -/
+theorem step_ok_inv {N : Network} (mark : Array Bool) {n k : ℕ}
     (hk : k < N.nodes.size) {st st' : Oracle.St} (h : Oracle.step N mark st k = .ok st')
     (hinv : Inv N n k st) : Inv N n (k + 1) st' := by
-  obtain ⟨recs, hsize, hnext, hcmp, hunc, hpq, hbelow, hvals⟩ := hinv
+  obtain ⟨recs, hsize, hnext, hcmp, hunc, hrecs, hvals⟩ := hinv
   have hval : ∀ x : Reg n, (valuesUpTo N (inputOf x) (k + 1)).getD k false =
       nodeVal (inputOf x) (valuesUpTo N (inputOf x) k) N.nodes[k] := fun x => by
     rw [valuesUpTo_succ N _ hk, nodeStep, Array.getD_push_eq, valuesUpTo_size N _ hk.le]
@@ -486,15 +448,14 @@ theorem step_ok_inv {N : Network} (hN : N.xorFree = true) (mark : Array Bool) {n
   -- a value pushed with unchanged records
   have keep : ∀ e : Option Aff, (∀ u, e = some u → Good N n (k + 1) recs k u) →
       Inv N n (k + 1) { st with vals := st.vals.push e } := fun e he =>
-    ⟨recs, by simp [hsize], hnext, hcmp, hunc, hpq, hbelow, vals_push hk hsize hvals e he⟩
-  have hmem := List.all_eq_true.mp hN N.nodes[k] (Array.getElem_mem_toList hk)
+    ⟨recs, by simp [hsize], hnext, hcmp, hunc, hrecs, vals_push hk hsize hvals e he⟩
   unfold Oracle.step at h
   split at h
   · rw [except_pure_eq_ok] at h
     subst h
     exact keep none (fun u hu => by cases hu)
   rw [Array.getElem?_eq_getElem hk] at h
-  generalize hnd : N.nodes[k] = nd at h hval hmem
+  generalize hnd : N.nodes[k] = nd at h hval
   cases nd with
   | input i =>
     rw [except_pure_eq_ok] at h
@@ -529,7 +490,32 @@ theorem step_ok_inv {N : Network} (hN : N.xorFree = true) (mark : Array Bool) {n
       refine ⟨h1, h2, fun a ha x => ?_⟩
       rw [Aff.eval_not, h3 a ha x, hval x, nodeVal]
     · exact absurd hu (fail_ne_ok _ _)
-  | xor i j => exact absurd hmem (by simp)
+  | xor i j =>
+    rw [except_bind_eq_ok] at h
+    obtain ⟨u, hu, h⟩ := h
+    rw [except_bind_eq_ok] at h
+    obtain ⟨v, hv, h⟩ := h
+    beta_reduce at hu hv
+    split at hu
+    swap; · exact absurd hu (fail_ne_ok _ _)
+    rename_i u' hu'
+    rw [except_pure_eq_ok] at hu
+    subst hu
+    split at hv
+    swap; · exact absurd hv (fail_ne_ok _ _)
+    rename_i v' hv'
+    rw [except_pure_eq_ok] at hv
+    subst hv
+    rw [except_pure_eq_ok] at h
+    subst h
+    have gu := hvals i u' hu'
+    have gv := hvals j v' hv'
+    refine keep _ (fun w hw => ?_)
+    cases hw
+    refine ⟨symDiff_nodup gu.1 gv.1, fun q hq => ?_, fun a ha x => ?_⟩
+    · rcases mem_symDiff hq with hq | hq
+      exacts [gu.2.1 q hq, gv.2.1 q hq]
+    · rw [Aff.eval_symDiff gu.1 gv.1, gu.2.2 a ha x, gv.2.2 a ha x, hval x, nodeVal]
   | and i j =>
     rw [except_bind_eq_ok] at h
     obtain ⟨u, hu, h⟩ := h
@@ -561,56 +547,25 @@ theorem step_ok_inv {N : Network} (hN : N.xorFree = true) (mark : Array Bool) {n
       · rcases fold_cases hr with rfl | rfl | rfl
         exacts [gu.2.1, gv.2.1, fun q hq => by simp at hq]
       · rw [fold_eval hr, gu.2.2 a ha x, gv.2.2 a ha x, hval x, nodeVal]
-    · -- a new ancilla
-      rename_i hnone
+    · -- a new ancilla: the record of `prepare`
       rw [except_bind_eq_ok] at h
       obtain ⟨⟨pre, pu, pv⟩, hprep, h⟩ := h
       rw [except_pure_eq_ok] at h
       subst h
-      -- the operands are single atoms (`fold` did not apply), distinct
-      obtain ⟨p, hp⟩ : ∃ p, u'.lin = [p] := by
-        rcases hl : u'.lin with _ | ⟨p, _ | ⟨p', l⟩⟩
-        · exact absurd (by simp [Oracle.fold, hl]) (hnone (if u'.c then v' else ⟨[], false⟩))
-        · exact ⟨p, rfl⟩
-        · have := gu.1; rw [hl] at this; simp at this
-      obtain ⟨q, hq⟩ : ∃ q, v'.lin = [q] := by
-        rcases hl : v'.lin with _ | ⟨q, _ | ⟨q', l⟩⟩
-        · exact absurd (by simp [Oracle.fold, hp, hl]) (hnone (if v'.c then u' else ⟨[], false⟩))
-        · exact ⟨q, rfl⟩
-        · have := gv.1; rw [hl] at this; simp at this
-      have hpq' : p ≠ q := by
-        rintro rfl
-        exact hnone (if u'.c == v'.c then u' else ⟨[], false⟩) (by simp [Oracle.fold, hp, hq])
-      have hu'' : u' = ⟨[p], u'.c⟩ := by obtain ⟨l, c⟩ := u'; simp only at hp; subst hp; rfl
-      have hv'' : v' = ⟨[q], v'.c⟩ := by obtain ⟨l, c⟩ := v'; simp only at hq; subst hq; rfl
-      have eu : ∀ {a : ℕ} (S : Reg n × Reg a), u'.eval S = (p.get S ^^ u'.c) := fun S => by
-        simp [Aff.eval, hp]
-      have ev : ∀ {a : ℕ} (S : Reg n × Reg a), v'.eval S = (q.get S ^^ v'.c) := fun S => by
-        simp [Aff.eval, hq]
-      rw [hu'', hv'', prepare_single p q _ _ hpq'] at hprep
-      simp only [Except.ok.injEq, Prod.mk.injEq] at hprep
-      obtain ⟨rfl, rfl, rfl⟩ := hprep
-      refine ⟨recs ++ [⟨p, u'.c, q, v'.c⟩], by simp [hsize], by simp [hnext], ?_, ?_, ?_, ?_, ?_⟩
+      obtain ⟨hpq, hperm, hqub, hsem⟩ := prepare_ok hprep gu.1 gv.1
+      have hrok : (AndRec.mk pre pu pv u' v').Ok (0 + recs.length) := by
+        rw [Nat.zero_add]
+        refine ⟨hpq, gu.2.1, gv.2.1, hperm, fun g hg q hq i hi => ?_, fun s hp hq => hsem s hp hq⟩
+        rcases hqub g hg q hq with hq | hq
+        exacts [gu.2.1 q hq i hi, gv.2.1 q hq i hi]
+      refine ⟨recs ++ [⟨pre, pu, pv, u', v'⟩], by simp [hsize], by simp [hnext], ?_, ?_,
+        hrecs.append_singleton hrok, ?_⟩
       · simp only [Array.toList_push, hcmp, List.mapIdx_append, List.mapIdx_cons, List.mapIdx_nil,
           hnext, Nat.zero_add]
         rfl
       · simp only [Array.toList_push, hunc, List.mapIdx_append, List.mapIdx_cons, List.mapIdx_nil,
           hnext, Nat.zero_add]
         rfl
-      · intro r hr
-        simp only [List.mem_append, List.mem_singleton] at hr
-        rcases hr with hr | rfl
-        exacts [hpq r hr, hpq']
-      · intro j hj i hi
-        by_cases hjl : j < recs.length
-        · rw [List.getElem_append_left hjl] at hi
-          exact hbelow j hjl i hi
-        · have hjeq : j = recs.length := by simp at hj; omega
-          rw [List.getElem_concat_length hjeq] at hi
-          rw [hjeq]
-          rcases hi with hi | hi
-          · exact gu.2.1 p (by simp [hp]) i hi
-          · exact gv.2.1 q (by simp [hq]) i hi
       · refine vals_push hk hsize (fun i w hw => good_lift_recs _ (hvals i w hw)) _ (fun w hw => ?_)
         cases hw
         refine ⟨by simp, fun q' hq' j' hj' => ?_, fun a ha x => ?_⟩
@@ -621,23 +576,23 @@ theorem step_ok_inv {N : Network} (hN : N.xorFree = true) (mark : Array Bool) {n
         · have ha' : recs.length < a := by simp at ha; omega
           rw [Aff.eval_single, Bool.xor_false, hnext, runC_append, Nat.zero_add,
             Qubit.get_set_self _ (by simp [Qubit.inRange, ha']), hval x, nodeVal, AndRec.val,
-            ← gu.2.2 a ha'.le x, ← gv.2.2 a ha'.le x, eu, ev]
+            ← gu.2.2 a ha'.le x, ← gv.2.2 a ha'.le x]
 
-/-- Report §6.3.2 (item 2) — the invariant holds after the synthesizer's fold over the first `m`
-nodes (`List.foldlM` induction; every `step` returned `.ok`). -/
-theorem fold_inv {N : Network} (hN : N.xorFree = true) (mark : Array Bool) (n : ℕ) :
+/-- Report §6.3.2 — the invariant holds after the synthesizer's fold over the first `m` nodes
+(`List.foldlM` induction; every `step` returned `.ok`). -/
+theorem fold_inv {N : Network} (mark : Array Bool) (n : ℕ) :
     ∀ m, m ≤ N.nodes.size → ∀ st,
       (List.range m).foldlM (Oracle.step N mark) ({ vals := #[] } : Oracle.St) = .ok st →
         Inv N n m st
   | 0, _, st, h => by
     rw [List.range_zero, List.foldlM_nil, except_pure_eq_ok] at h
     subst h
-    exact ⟨[], rfl, rfl, rfl, rfl, by simp, by simp, fun i u hu => by simp at hu⟩
+    exact ⟨[], rfl, rfl, rfl, rfl, trivial, fun i u hu => by simp at hu⟩
   | m + 1, hm, st, h => by
     rw [List.range_succ, List.foldlM_append, except_bind_eq_ok] at h
     obtain ⟨st₁, h₁, h⟩ := h
     simp only [List.foldlM_cons, List.foldlM_nil, bind_pure] at h
-    exact step_ok_inv hN mark (by omega) h (fold_inv hN mark n m (by omega) st₁ h₁)
+    exact step_ok_inv mark (by omega) h (fold_inv mark n m (by omega) st₁ h₁)
 
 /-! ## Item 6 — ranges, bits, and the gate list of the synthesized oracle -/
 
@@ -691,31 +646,59 @@ theorem cmpBlocks_length_le {rs : List AndRec} {j : ℕ} (h : GatesOk n a (cmpBl
     · simp; omega
     · simp; omega
 
-theorem written_cmp (r : AndRec) (j : ℕ) : Circuit.written (r.cmp j) = [] := by
-  obtain ⟨p, cu, q, cv⟩ := r
-  cases cu <;> cases cv <;>
-    simp [Circuit.written, AndRec.cmp, AndRec.pre, TempLogicalAND, Gate.writes]
+theorem Gate.writes_of_isPerm {g : Gate} (hg : g.isPerm = true) : g.writes = [] := by
+  cases g <;> simp_all [Gate.isPerm, Gate.writes]
 
-theorem written_unc (r : AndRec) (j b : ℕ) : Circuit.written (r.unc j b) = [b] := by
-  obtain ⟨p, cu, q, cv⟩ := r
-  cases cu <;> cases cv <;>
-    simp [Circuit.written, AndRec.unc, AndRec.pre, UncomputeTempLogicalAND, Gate.writes]
+theorem Gate.shiftBits_of_isPerm {g : Gate} (hg : g.isPerm = true) (k : ℕ) : g.shiftBits k = g := by
+  cases g <;> simp_all [Gate.isPerm, Gate.shiftBits]
 
-theorem written_cmpBlocks (rs : List AndRec) (j : ℕ) : Circuit.written (cmpBlocks rs j) = [] := by
+/-- `X` / `CNOT` gates write no classical bit. -/
+theorem written_perm {gs : List Gate} (h : ∀ g ∈ gs, g.isPerm = true) :
+    gs.flatMap Gate.writes = [] := by
+  induction gs with
+  | nil => rfl
+  | cons g gs ih =>
+    rw [List.flatMap_cons, Gate.writes_of_isPerm (h g (by simp)),
+      ih (fun g' hg' => h g' (by simp [hg']))]
+    rfl
+
+theorem map_shift_perm {gs : List Gate} (h : ∀ g ∈ gs, g.isPerm = true) (k : ℕ) :
+    gs.map (Gate.shiftBits k) = gs := by
+  induction gs with
+  | nil => rfl
+  | cons g gs ih =>
+    rw [List.map_cons, Gate.shiftBits_of_isPerm (h g (by simp)),
+      ih (fun g' hg' => h g' (by simp [hg']))]
+
+theorem written_cmp {r : AndRec} (hp : ∀ g ∈ r.pre, g.isPerm = true) (j : ℕ) :
+    Circuit.written (r.cmp j) = [] := by
+  have h2 : r.pre.reverse.flatMap Gate.writes = [] :=
+    written_perm (fun g hg => hp g (List.mem_reverse.mp hg))
+  simp [Circuit.written, AndRec.cmp, TempLogicalAND, Gate.writes, written_perm hp, h2]
+
+theorem written_unc {r : AndRec} (hp : ∀ g ∈ r.pre, g.isPerm = true) (j b : ℕ) :
+    Circuit.written (r.unc j b) = [b] := by
+  have h2 : r.pre.reverse.flatMap Gate.writes = [] :=
+    written_perm (fun g hg => hp g (List.mem_reverse.mp hg))
+  simp [Circuit.written, AndRec.unc, UncomputeTempLogicalAND, Gate.writes, written_perm hp, h2]
+
+theorem written_cmpBlocks {rs : List AndRec} (hp : ∀ r ∈ rs, ∀ g ∈ r.pre, g.isPerm = true)
+    (j : ℕ) : Circuit.written (cmpBlocks rs j) = [] := by
   induction rs generalizing j with
   | nil => rfl
   | cons r rs ih =>
     rw [cmpBlocks, Circuit.written, List.flatMap_append, ← Circuit.written, ← Circuit.written,
-      written_cmp, ih]
+      written_cmp (hp r (by simp)), ih (fun r' hr' => hp r' (by simp [hr']))]
     rfl
 
-theorem written_uncBlocks_length (rs : List AndRec) (j : ℕ) :
+theorem written_uncBlocks_length {rs : List AndRec}
+    (hp : ∀ r ∈ rs, ∀ g ∈ r.pre, g.isPerm = true) (j : ℕ) :
     (Circuit.written (uncBlocks rs j)).length = rs.length := by
   induction rs generalizing j with
   | nil => rfl
   | cons r rs ih =>
     rw [uncBlocks, Circuit.written, List.flatMap_append, ← Circuit.written, ← Circuit.written,
-      written_unc, List.length_append, ih]
+      written_unc (hp r (by simp)), List.length_append, ih (fun r' hr' => hp r' (by simp [hr']))]
     rfl
 
 theorem written_phaseFlip (pp : Aff) : Circuit.written (Oracle.phaseFlip pp) = [] := by
@@ -725,11 +708,10 @@ theorem written_phaseFlip (pp : Aff) : Circuit.written (Oracle.phaseFlip pp) = [
   · cases pp.c <;> simp [Circuit.written, Oracle.gather, Gate.writes] <;>
       (intro g _ _ _ hg; subst hg; rfl)
 
-theorem unc_map_shift (r : AndRec) (j b k : ℕ) :
+theorem unc_map_shift {r : AndRec} (hp : ∀ g ∈ r.pre, g.isPerm = true) (j b k : ℕ) :
     (r.unc j b).map (Gate.shiftBits k) = r.unc j (b + k) := by
-  obtain ⟨p, cu, q, cv⟩ := r
-  cases cu <;> cases cv <;>
-    simp [AndRec.unc, AndRec.pre, UncomputeTempLogicalAND, Gate.shiftBits]
+  have h2 := map_shift_perm (fun g hg => hp g (List.mem_reverse.mp hg)) k
+  simp [AndRec.unc, UncomputeTempLogicalAND, Gate.shiftBits, map_shift_perm hp, h2]
 
 /-- The synthesizer's compute list (`st.compute.toList.flatten`) is `cmpBlocks`. -/
 theorem flatten_mapIdx_cmp (rs : List AndRec) (j : ℕ) :
@@ -745,7 +727,8 @@ theorem flatten_mapIdx_cmp (rs : List AndRec) (j : ℕ) :
 
 /-- The synthesizer's uncompute list (reversed, each block shifted to its measurement-order
 bit) is `uncBlocks`. -/
-theorem flatten_mapIdx_unc (rs : List AndRec) (j : ℕ) :
+theorem flatten_mapIdx_unc {rs : List AndRec} (hp : ∀ r ∈ rs, ∀ g ∈ r.pre, g.isPerm = true)
+    (j : ℕ) :
     ((rs.mapIdx (fun i r => r.unc (j + i) 0)).reverse.mapIdx
       (fun i blk => blk.map (Gate.shiftBits i))).flatten = uncBlocks rs j := by
   induction rs generalizing j with
@@ -753,9 +736,9 @@ theorem flatten_mapIdx_unc (rs : List AndRec) (j : ℕ) :
   | cons r rs ih =>
     have hf : (fun i r => AndRec.unc r (j + (i + 1)) 0) = (fun i r => r.unc (j + 1 + i) 0) := by
       funext i r'; congr 1; omega
-    rw [List.mapIdx_cons, hf, List.reverse_cons, List.mapIdx_append, List.flatten_append, ih,
-      uncBlocks, Nat.add_zero]
-    simp [unc_map_shift]
+    rw [List.mapIdx_cons, hf, List.reverse_cons, List.mapIdx_append, List.flatten_append,
+      ih (fun r' hr' => hp r' (by simp [hr'])), uncBlocks, Nat.add_zero]
+    simp [unc_map_shift (hp r (by simp))]
 
 /-- Report §6.1.4 — what `synthesizeOracle N = .ok C` means: one output `out`, the fold over
 the nodes succeeded with final state `st`, `out` has the value `pp`, and `C` is the compute
@@ -797,30 +780,35 @@ section Phase
 
 variable (nb : ℕ) (c : Fin nb → Bool)
 
-/-- Report §6.1.1, §6.1.4 Step 3 (item 4) — on a single-atom (or constant) `P`, the phase flip
-`[X q]? ++ [Z q] ++ [X q]?` maps `|s⟩` to `phaseVal P s · |s⟩` in every branch. -/
-theorem phaseFlip_kraus (pp : Aff) (hlen : pp.lin.length ≤ 1)
+/-- Report §6.1.1, §6.1.4 Step 3 (Stage 9a item 4) — for `P` with distinct atoms, the phase
+flip (gather `P.lin` onto its first atom `q`, `X q` if `P.c`, `Z q`, then the reverse) maps
+`|s⟩` to `phaseVal P s · |s⟩` in every branch: after the gather and the `X`, `q` holds
+`P.eval s`; `Z` gives the sign; the reversed gates undo the permutation (`permRun_reverse`). -/
+theorem phaseFlip_kraus (pp : Aff) (hnd : pp.lin.Nodup)
     (hok : GatesOk n a (Oracle.phaseFlip pp)) (s : Reg n × Reg a) :
     krausOps n a nb (Oracle.phaseFlip pp) c *ᵥ basisVec s = phaseVal pp s • basisVec s := by
-  rcases hl : pp.lin with _ | ⟨q, _ | ⟨q', l⟩⟩
+  rcases hl : pp.lin with _ | ⟨q, l⟩
   · have hpf : Oracle.phaseFlip pp = [] := by unfold Oracle.phaseFlip; rw [hl]
     rw [hpf, krausOps_nil, Matrix.one_mulVec]
     simp [phaseVal, hl]
-  · have hpf : Oracle.phaseFlip pp = (if pp.c then [Gate.x q] else []) ++ [Gate.z q] ++
-        (if pp.c then [Gate.x q] else []) := by
+  · set P := Oracle.gather (q :: l) q ++ (if pp.c then [Gate.x q] else []) with hPdef
+    have hpf : Oracle.phaseFlip pp = P ++ [Gate.z q] ++ P.reverse := by
       unfold Oracle.phaseFlip
       rw [hl]
-      cases pp.c <;> simp [Oracle.gather]
+    have hP : ∀ g ∈ P, g.isPerm = true := by
+      intro g hg
+      rcases List.mem_append.mp hg with hg | hg
+      exacts [gather_isPerm _ _ g hg, polGates_isPerm _ _ g hg]
+    have hPr : ∀ g ∈ P.reverse, g.isPerm = true := fun g hg => hP g (List.mem_reverse.mp hg)
     have hq : q.inRange n a = true :=
       (hok (.z q) (by rw [hpf]; simp)).1 q (by simp [Gate.qubits])
-    rw [hpf, krausOps_append_mulVec, krausOps_append_mulVec, polX_kraus, krausOps_cons_mulVec,
-      krausOps_nil, Matrix.one_mulVec]
+    rw [hl] at hnd
+    rw [hpf, krausOps_append_mulVec, krausOps_append_mulVec, perm_kraus nb c hP,
+      krausOps_cons_mulVec, krausOps_nil, Matrix.one_mulVec]
     change krausOps n a nb _ c *ᵥ (gateU n a (.z q) *ᵥ _) = _
-    rw [z_basis, Matrix.mulVec_smul, polX_kraus, polFlip_polFlip, get_polFlip_self hq,
-      phaseVal, Aff.eval_split, hl]
-    simp [Aff.eval]
-  · rw [hl] at hlen
-    simp at hlen
+    rw [z_basis, Matrix.mulVec_smul, perm_kraus nb c hPr, permRun_reverse hP, hPdef,
+      get_permRun_gather_pol hnd List.mem_cons_self hq, phaseVal, Aff.eval_eq_xorL, hl]
+    simp
 
 end Phase
 
@@ -843,26 +831,29 @@ theorem kraus_mul_ancProj (M : Matrix (Reg n × Reg a) (Reg n × Reg a) ℂ) (P 
     by_cases h1 : i1 = j1 <;> by_cases h2 : i2 = fun _ => false <;> simp [h1, h2]
   · simp [hj]
 
-/-- Report §6.3.2, Lemma 6.3.2 — parametric over the Stage 5 synthesizer: for an AND/NOT/OR
-network `N` whose oracle `C` is synthesized and well formed, `C` restores its ancillae and
+/-- Report §6.3.2, Lemma 6.3.2 — parametric over the Stage 5 synthesizer: for every network
+`N` (AND/NOT/XOR, hence also OR and `if`; Stage 9a) whose oracle `C` is synthesized and well
+formed, `C` restores its ancillae and
 applies the phase oracle of `N`'s predicate, on any ancilla register `a ≥ C.nAnc` (the ancillae
 `≥ C.nAnc` are never touched; Stage 7a: the Grover circuit shares one register between the
 oracle and the larger MCZ of the diffusion). The statement is on density operators, not on
 basis states (§6.2.4: on basis states the phase cancels); Theorem 3.3a is not used inside the
-oracle (§6.3.2). Proof (Stage 6b-3, basis-vector route): the synthesizer's fold keeps `Inv`
+oracle (§6.3.2). Proof (Stage 6b-3 basis-vector route, Stage 9a for XOR: in-place `gather`
+CNOTs, `prepare_ok`): the synthesizer's fold keeps `Inv`
 (`fold_inv`), so the gate list is `cmpBlocks ++ phaseFlip ++ uncBlocks` of the AND records;
 in every branch `c` it maps `|x, 0…0⟩` to `(1/√2)^K · ε · (−1)^{P(x)} |x, 0…0⟩` (`chain_kraus`,
 `phaseFlip_kraus`; `ε = ±1` is the global sign of a constant `P`, whose phase flip has no
 gate), there are `K` classical bits, and `ancRestore_of_kraus` concludes. -/
-theorem lemma_6_3_2_of_le (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C)
-    (hN : N.xorFree = true) (hWF : C.WF) (a : ℕ) (ha : C.nAnc ≤ a) :
+theorem lemma_6_3_2_xor_of_le (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C)
+    (hWF : C.WF) (a : ℕ) (ha : C.nAnc ≤ a) :
     AncRestore C.nData a C (phaseOracle (N.pred C.nData)) := by
   obtain ⟨out, st, pp, hout, hst, hpp, hCeq⟩ := synthesizeOracle_ok hC
-  obtain ⟨recs, -, -, hcmp, hunc, hpq, -, hvals⟩ :=
-    fold_inv hN (Oracle.cone N out) C.nData N.nodes.size le_rfl st hst
+  obtain ⟨recs, -, -, hcmp, hunc, hrecs, hvals⟩ :=
+    fold_inv (Oracle.cone N out) C.nData N.nodes.size le_rfl st hst
+  have hperm := hrecs.isPerm
   have hgates : C.gates = cmpBlocks recs 0 ++ Oracle.phaseFlip pp ++ uncBlocks recs 0 := by
     have h1 := flatten_mapIdx_cmp recs 0
-    have h2 := flatten_mapIdx_unc recs 0
+    have h2 := flatten_mapIdx_unc hperm 0
     simp only [Nat.zero_add] at h1 h2
     rw [hCeq, hcmp, hunc, h1, h2]
   have hok := hWF.gatesOk.mono ha
@@ -877,8 +868,8 @@ theorem lemma_6_3_2_of_le (N : Network) (C : Circuit) (hC : synthesizeOracle N =
     · omega
   have hnb : C.nBits = recs.length := by
     rw [Circuit.nBits, hgates, Circuit.written, List.flatMap_append, List.flatMap_append,
-      ← Circuit.written, ← Circuit.written, ← Circuit.written, written_cmpBlocks,
-      written_phaseFlip, List.nil_append, List.nil_append, written_uncBlocks_length]
+      ← Circuit.written, ← Circuit.written, ← Circuit.written, written_cmpBlocks hperm,
+      written_phaseFlip, List.nil_append, List.nil_append, written_uncBlocks_length hperm]
   have gp := hvals out pp hpp
   -- the predicate is the value of the output on the atom state
   have hpred : ∀ x, N.pred C.nData x =
@@ -915,15 +906,29 @@ theorem lemma_6_3_2_of_le (N : Network) (C : Circuit) (hC : synthesizeOracle N =
   · apply kraus_mul_ancProj
     intro x
     rw [hgates, chain_kraus C.nBits c (Oracle.phaseFlip pp) (phaseVal pp)
-      (fun s => phaseFlip_kraus C.nBits c pp gp.1 hokp s) recs 0 _ hokc hpq
+      (fun s => phaseFlip_kraus C.nBits c pp gp.1 hokp s) recs 0 _ hokc hrecs
       (fun i _ => by simp [Qubit.get]), hphase, mul_assoc]
 
-/-- Report §6.3.2, Lemma 6.3.2 — parametric over the Stage 5 synthesizer, at the circuit's own
-ancilla register `a = C.nAnc` (the case `lemma_6_3_2_of_le` with `a = C.nAnc`). -/
-theorem lemma_6_3_2 (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C)
-    (hN : N.xorFree = true) (hWF : C.WF) :
+/-- Report §6.3.2, Lemma 6.3.2 for networks with XOR nodes (Stage 9a; SORRIES.md row
+`lemma_6_3_2_xor`): `lemma_6_3_2` without `N.xorFree`, at the circuit's own ancilla register. -/
+theorem lemma_6_3_2_xor (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C)
+    (hWF : C.WF) :
     AncRestore C.nData C.nAnc C (phaseOracle (N.pred C.nData)) :=
-  lemma_6_3_2_of_le N C hC hN hWF C.nAnc le_rfl
+  lemma_6_3_2_xor_of_le N C hC hWF C.nAnc le_rfl
+
+/-- Report §6.3.2, Lemma 6.3.2 at a register `a ≥ C.nAnc`, statement of Stage 7a (with the
+hypothesis `N.xorFree` of Stage 6a, now redundant): a corollary of `lemma_6_3_2_xor_of_le`. -/
+theorem lemma_6_3_2_of_le (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C)
+    (_hN : N.xorFree = true) (hWF : C.WF) (a : ℕ) (ha : C.nAnc ≤ a) :
+    AncRestore C.nData a C (phaseOracle (N.pred C.nData)) :=
+  lemma_6_3_2_xor_of_le N C hC hWF a ha
+
+/-- Report §6.3.2, Lemma 6.3.2 — statement of Stage 6a (AND/NOT/OR networks, `N.xorFree`), kept
+for the Stage 7/8 callers: a corollary of `lemma_6_3_2_xor`. -/
+theorem lemma_6_3_2 (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C)
+    (_hN : N.xorFree = true) (hWF : C.WF) :
+    AncRestore C.nData C.nAnc C (phaseOracle (N.pred C.nData)) :=
+  lemma_6_3_2_xor N C hC hWF
 
 /-- Report §6.3.2, Lemma 6.3.2 in the report's traced form:
 `Tr_anc (⟦C⟧ (ρ ⊗ |0…0⟩⟨0…0|)) = U_P ρ U_Pᴴ`. Proved from `lemma_6_3_2`. -/

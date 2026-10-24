@@ -29,10 +29,11 @@ open scoped MState Kronecker
 /-! ## Certificates (§5.2.4, adapted) -/
 
 /-- Report §5.2.4 (revised `OracleCert`, adapted: DECISIONS.md 2026-10-24, Stage 7a) — a
-certified oracle on `n` data qubits: an AND/NOT/OR network `N`, its synthesized circuit `C`
-(`synthesizeOracle N = .ok C`, well formed), and the restoration fact of Lemma 6.3.2 at every
-ancilla register `a ≥ C.nAnc`. The last field is filled by the lemma (`lemma_6_3_2_of_le`),
-never assumed. The grade is not a field: it is computed from the circuit (Stage 7a decision 1). -/
+certified oracle on `n` data qubits: a network `N` (AND/NOT/XOR, so also OR and `if`), its
+synthesized circuit `C` (`synthesizeOracle N = .ok C`, well formed), and the restoration fact of
+Lemma 6.3.2 at every ancilla register `a ≥ C.nAnc`. The last field is filled by the lemma
+(`lemma_6_3_2_xor_of_le`), never assumed. Stage 9a: the field `hXor : N.xorFree = true` is gone
+(Lemma 6.3.2 holds for XOR networks). The grade is not a field: it is computed from the circuit (Stage 7a decision 1). -/
 structure OracleCert (n : ℕ) where
   /-- The Boolean network of the predicate (§6.1.2). -/
   N : Network
@@ -40,11 +41,10 @@ structure OracleCert (n : ℕ) where
   C : Circuit
   hn : N.nInputs = n
   hC : synthesizeOracle N = .ok C
-  hXor : N.xorFree = true
   hWF : C.WF
   /-- Lemma 6.3.2 (filled by the proof, §6.3.2). -/
   restore : ∀ a, C.nAnc ≤ a → AncRestore C.nData a C (phaseOracle (N.pred C.nData)) :=
-    fun a ha => lemma_6_3_2_of_le N C hC hXor hWF a ha
+    fun a ha => lemma_6_3_2_xor_of_le N C hC hWF a ha
 
 /-- Report §5.2.4 — the predicate `P : Reg n → Bool` of a certified oracle. -/
 def OracleCert.P {n : ℕ} (O : OracleCert n) : Reg n → Bool := O.N.pred n

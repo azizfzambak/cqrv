@@ -5,9 +5,11 @@
 #                                v1.2.0, grade, δ, axioms; circuit hash = SHA3 of the IR literal
 #                                of Cert.lean (hashlib); .qasm / .qir re-parse to the literal;
 #                                second run byte-identical (JSON except kernel_check); the
-#                                committed examples/certs/grover_pred_037 agrees; negative tests
-#                                (XOR → lemma_6_3_2_xor, injected sorry → sorryAx, native_decide
-#                                → its auxiliary axiom, search_while → Stage 4 hint)
+#                                committed examples/certs/grover_pred_037 agrees; the XOR
+#                                predicate tests/certify/xor_pred.cqr is certified (Stage 9a);
+#                                negative tests (network failing C.WF → kernel check fails,
+#                                injected sorry → sorryAx, native_decide → its auxiliary axiom,
+#                                search_while → Stage 4 hint)
 #
 # Usage (after `lake build`, from anywhere):  scripts/check_certify.sh
 #   PYTHON=.venv/Scripts/python.exe scripts/check_certify.sh   # local Windows venv

@@ -17,7 +17,7 @@ The generated file imports `CQRV` and contains
 * `emitted_ok : groverCircuit net n r = .ok emitted` by `decide +kernel` — the hash link: the
   kernel recomputes the synthesizer on `net` and compares with the literal, so the circuit the
   theorem is about is the emitted one;
-* the oracle certificate (`synthesizeOracle net = .ok …`, `xorFree`, `WF`) and the diffusion
+* the oracle certificate (`synthesizeOracle net = .ok …`, `WF`) and the diffusion
   certificate of the MCZ on `n` qubits, every side condition by `decide +kernel`;
 * `delta_eq`, `grade_eq`, `nAnc_eq` (kernel evaluation of `groverDelta`, `Synthesis.grade`,
   `Circuit.nAnc`);
@@ -25,10 +25,10 @@ The generated file imports `CQRV` and contains
   of the theorem (§5.2.4, never decided);
 * `#print axioms cert` (parsed by `CQRV.Certify.Audit`).
 
-No `native_decide` is ever written (it adds `Lean.ofReduceBool`, which the audit rejects). For a
-network with XOR nodes Lemma 6.3.2 is not proved (`lemma_6_3_2_xor`, docs/SORRIES.md, planned):
-no oracle certificate exists, the statement of `cert` is the same and its proof is the tracked
-obligation `sorry`, so the audit reports `sorryAx` and the status names `lemma_6_3_2_xor`.
+No `native_decide` is ever written (it adds `Lean.ofReduceBool`, which the audit rejects). Since
+Stage 9a, Lemma 6.3.2 holds for networks with XOR nodes (`lemma_6_3_2_xor`), so every request
+gets the same proved certificate and the generator writes no `sorry` (Stage 8b wrote the tracked
+obligation `lemma_6_3_2_xor` for XOR networks).
 -/
 
 @[expose] public section
@@ -111,15 +111,6 @@ def CertRequest.ofInstance (name src : String) (gi : GroverInstance) (M : Nat) :
     delta := groverDelta gi.r gi.n M, grade := gi.circuit.grade, nAnc := gi.circuit.nAnc,
     predicateHash := CQRV.Certify.predicateHash src }
 
-/-- Report §6.1.2 — the network has an XOR node (`Network.xorFree` of `CQRV.Circuit` is the
-negation; that module depends on Physlib, which the CLI does not link). -/
-def hasXor (N : Network) : Bool := N.nodes.any fun | .xor _ _ => true | _ => false
-
-/-- Report §6.3.2, docs/SORRIES.md — the tracked obligations a certificate of this request
-contains (as `sorry`): `lemma_6_3_2_xor` for a network with XOR nodes, none otherwise. -/
-def CertRequest.obligations (q : CertRequest) : List String :=
-  if !hasXor q.net then [] else ["lemma_6_3_2_xor"]
-
 /-- The namespace of the generated declarations. -/
 def CertRequest.namespace (q : CertRequest) : String := s!"CQRV.Cert.«{q.name}»"
 
@@ -129,7 +120,7 @@ def CertRequest.theoremName (q : CertRequest) : String := s!"CQRV.Cert.{q.name}.
 /-- The predicate of the certificate statement. -/
 def CertRequest.predText (q : CertRequest) : String := s!"(Network.pred net {q.n})"
 
-/-- The statement of `cert` (shared by the proved and the obligation variant). -/
+/-- The statement of `cert`. -/
 def CertRequest.statement (q : CertRequest) : String :=
   let g := q.grade
   s!"theorem cert
@@ -174,8 +165,7 @@ theorem grade_eq : Synthesis.grade emitted = ⟨{g.w}, {g.d}, {g.t}, {g.a}⟩ :=
 
 theorem nAnc_eq : emitted.nAnc = {q.nAnc} := by decide +kernel
 "
-  let body :=
-    if !hasXor q.net then s!"
+  let body := s!"
 /-- The synthesized oracle of `net`. -/
 def oracleCircuit : Circuit :=
   match synthesizeOracle net with
@@ -188,7 +178,6 @@ def oracle : OracleCert {q.n} where
   C := oracleCircuit
   hn := rfl
   hC := except_eq_ok_payload (synthesizeOracle net) (by decide +kernel)
-  hXor := by decide +kernel
   hWF := by decide +kernel
 
 /-- The MCZ of the V1 diffusion on {q.n} qubits. -/
@@ -201,7 +190,7 @@ def mczCircuit : Circuit :=
 def mcz : DiffusionCert {q.n} where
   mcz := {lb}N := allNet {q.n}, C := mczCircuit, hn := rfl,
            hC := except_eq_ok_payload (synthesizeOracle (allNet {q.n})) (by decide +kernel),
-           hXor := by decide +kernel, hWF := by decide +kernel{rb}
+           hWF := by decide +kernel{rb}
   hN := rfl
 
 /-- Report §8.4.1, §8.4.4 — the certificate: the emitted circuit realizes the search spec of
@@ -209,13 +198,6 @@ def mcz : DiffusionCert {q.n} where
 on the solution count `hM_card`. -/
 {q.statement}
   grover_certificate oracle mcz (by decide) emitted_ok delta_eq grade_eq nAnc_eq hM_card
-"
-    else s!"
-/-- Report §8.4.1, §8.4.4 — the certificate statement. `net` has XOR nodes: Lemma 6.3.2 is not
-proved for them, so no oracle certificate exists and the proof is the tracked obligation
-`lemma_6_3_2_xor` (docs/SORRIES.md). -/
-{q.statement}
-  sorry -- tracked obligation: lemma_6_3_2_xor
 "
   header ++ body ++ s!"
 #print axioms cert

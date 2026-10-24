@@ -37,7 +37,6 @@ def grover037Oracle : OracleCert 8 where
   C := groverOracle
   hn := rfl
   hC := by rfl
-  hXor := by decide
   hWF := by decide
 
 theorem grover037Oracle_P : grover037Oracle.P = groverPred := funext fun _ => rfl
@@ -51,11 +50,11 @@ def mcz8Circuit : Circuit :=
 theorem mcz8Circuit_ok : synthesizeOracle (allNet 8) = .ok mcz8Circuit :=
   except_eq_ok_payload (synthesizeOracle (allNet 8)) (by decide +kernel)
 
-/-- Report §8.2 — the MCZ of `D₈` as a certified oracle of `P_all` (`WF` and `xorFree` by kernel
+/-- Report §8.2 — the MCZ of `D₈` as a certified oracle of `P_all` (`WF` by kernel
 evaluation). -/
 def mczCert8 : DiffusionCert 8 where
   mcz := { N := allNet 8, C := mcz8Circuit, hn := rfl, hC := mcz8Circuit_ok,
-           hXor := by decide +kernel, hWF := by decide +kernel }
+           hWF := by decide +kernel }
   hN := rfl
 
 /-- Report §8.2.1 — the synthesized Grover circuit of `grover_pred_037`, `r = 2`, V1. -/

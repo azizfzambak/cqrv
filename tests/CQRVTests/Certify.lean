@@ -131,7 +131,6 @@ def groverCert : String := (groverReq.map renderCert).getD ""
 /-- A two-input XOR network. -/
 def xorNet : Network := ⟨2, #[.input 0, .input 1, .xor 0 1], [2]⟩
 
-#guard groverReq.map (·.obligations) == some []
 #guard groverReq.map (·.theoremName) == some "CQRV.Cert.grover_pred_037.cert"
 #guard (groverCert.splitOn "theorem cert").length == 2
 #guard (groverCert.splitOn "native_decide").length == 1
@@ -139,14 +138,12 @@ def xorNet : Network := ⟨2, #[.input 0, .input 1, .xor 0 1], [2]⟩
 #guard (groverCert.splitOn "#print axioms cert").length == 2
 #guard (groverCert.splitOn "(7 / 128 : ℝ) ⟨15, 230, 72, 7⟩").length == 2
 #guard (groverCert.splitOn "theorem emitted_ok : groverCircuit net 8 2 = .ok emitted").length == 2
--- an XOR network carries the tracked obligation lemma_6_3_2_xor
-#guard hasXor xorNet
-#guard groverReq.all fun q => !hasXor q.net
+-- Stage 9a: an XOR network gets the same proved certificate as an AND/NOT/OR network (oracle
+-- certificate, no `sorry`, no `xorFree` side condition)
+#guard groverReq.all fun q => ((renderCert { q with net := xorNet }).splitOn "sorry").length == 1
 #guard groverReq.all fun q =>
-  ({ q with net := xorNet } : CertRequest).obligations == ["lemma_6_3_2_xor"]
-#guard groverReq.all fun q =>
-  ((renderCert { q with net := xorNet }).splitOn
-    "sorry -- tracked obligation: lemma_6_3_2_xor").length == 2
+  ((renderCert { q with net := xorNet }).splitOn "def oracle : OracleCert 8 where").length == 2
+#guard (groverCert.splitOn "hXor").length == 1
 
 /-! ## `symDiff` by structural insertion sort (kernel-evaluable, Stage 8b) -/
 

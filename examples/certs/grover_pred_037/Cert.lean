@@ -130,7 +130,6 @@ def oracle : OracleCert 8 where
   C := oracleCircuit
   hn := rfl
   hC := except_eq_ok_payload (synthesizeOracle net) (by decide +kernel)
-  hXor := by decide +kernel
   hWF := by decide +kernel
 
 /-- The MCZ of the V1 diffusion on 8 qubits. -/
@@ -143,7 +142,7 @@ def mczCircuit : Circuit :=
 def mcz : DiffusionCert 8 where
   mcz := {N := allNet 8, C := mczCircuit, hn := rfl,
            hC := except_eq_ok_payload (synthesizeOracle (allNet 8)) (by decide +kernel),
-           hXor := by decide +kernel, hWF := by decide +kernel}
+           hWF := by decide +kernel}
   hN := rfl
 
 /-- Report §8.4.1, §8.4.4 — the certificate: the emitted circuit realizes the search spec of

@@ -12,7 +12,8 @@ meta import CQRV.Synthesis.Basic
 
 `Circuit.WF` on the Stage 5 Grover oracle and on ill-formed circuits; the hand-written
 `groverNet` / `groverOracle` of the Grover instance against the DSL front end and the
-synthesizer; `#print axioms` for every proved theorem of Stage 6a, 6b-1, 6b-2 and 6b-3; the Grover
+synthesizer; `#print axioms` for every proved theorem of Stage 6a, 6b-1, 6b-2, 6b-3 and 9a
+(`lemma_6_3_2_xor`, `lemma_6_3_2` guarded by `#guard_msgs`); XOR / `if` networks; the Grover
 oracle as the shifted `Circuit.append` of its two pieces at the MBU cut; `mbu_branch_basis` on
 `|1,1,1⟩` in both branches.
 -/
@@ -115,21 +116,25 @@ example : (groverPiece₁.append groverPiece₂).WF :=
 
 def searchOrSrc : String := include_str "../../examples/search_or.cqr"
 
+/-- The two AND records of the Grover oracle (no `prepare` gate: single positive atoms). -/
+def groverRecs : List AndRec :=
+  [⟨[], .data 0, .data 3, ⟨[.data 0], false⟩, ⟨[.data 3], false⟩⟩,
+   ⟨[], .anc 0, .data 7, ⟨[.anc 0], false⟩, ⟨[.data 7], false⟩⟩]
+
 -- The Grover oracle is `cmpBlocks ++ phaseFlip ++ uncBlocks` of its two AND records.
 #guard groverOracle.gates ==
-  cmpBlocks [⟨.data 0, false, .data 3, false⟩, ⟨.anc 0, false, .data 7, false⟩] 0 ++
-    Oracle.phaseFlip ⟨[.anc 1], false⟩ ++
-    uncBlocks [⟨.data 0, false, .data 3, false⟩, ⟨.anc 0, false, .data 7, false⟩] 0
+  cmpBlocks groverRecs 0 ++ Oracle.phaseFlip ⟨[.anc 1], false⟩ ++ uncBlocks groverRecs 0
 
 -- `search_or` (`x0 ∨ x1 = ¬(¬x0 ∧ ¬x1)`): one AND record with both polarities negative, and a
 -- negated output (`X Z X` on its ancilla).
 #guard ((oracle searchOrSrc).toOption.map (·.gates)) ==
-  some (cmpBlocks [⟨.data 0, true, .data 1, true⟩] 0 ++ Oracle.phaseFlip ⟨[.anc 0], true⟩ ++
-    uncBlocks [⟨.data 0, true, .data 1, true⟩] 0)
+  some (cmpBlocks [⟨[.x (.data 0), .x (.data 1)], .data 0, .data 1, ⟨[.data 0], true⟩,
+      ⟨[.data 1], true⟩⟩] 0 ++ Oracle.phaseFlip ⟨[.anc 0], true⟩ ++
+    uncBlocks [⟨[.x (.data 0), .x (.data 1)], .data 0, .data 1, ⟨[.data 0], true⟩,
+      ⟨[.data 1], true⟩⟩] 0)
 
--- `prepare` on single atoms emits only the polarity gates (`prepare_single`).
-#guard Oracle.prepare ⟨[.data 2], true⟩ ⟨[.anc 0], false⟩ ==
-  .ok ((⟨.data 2, true, .anc 0, false⟩ : AndRec).pre, .data 2, .anc 0)
+-- `prepare` on single atoms emits only the polarity gates.
+#guard Oracle.prepare ⟨[.data 2], true⟩ ⟨[.anc 0], false⟩ == .ok ([.x (.data 2)], .data 2, .anc 0)
 
 -- The folding identities (`fold_eval`): `u ∧ ¬u = 0`, `u ∧ u = u`, `1 ∧ v = v`, `0 ∧ v = 0`.
 #guard Oracle.fold ⟨[.data 0], false⟩ ⟨[.data 0], true⟩ == some ⟨[], false⟩
@@ -141,6 +146,82 @@ def searchOrSrc : String := include_str "../../examples/search_or.cqr"
 -- `Aff.eval` on a basis state of `Reg 2 × Reg 1`: `x1 ⊕ 1` and the constant 1.
 #guard (Aff.mk [.data 1] true).eval ((![true, false], ![false]) : Reg 2 × Reg 1) == true
 #guard (Aff.mk [] true).eval ((![true, false], ![false]) : Reg 2 × Reg 1) == true
+
+/-! ## Stage 9a — XOR networks (`CQRV.Circuit.OracleCorrectXor`, `lemma_6_3_2_xor`) -/
+
+-- `prepare` with `pu ∈ v.lin` (u = x0 ⊕ x1, v = ¬(x0 ⊕ x2)): `Sv = x0 :: symDiff [x1] [x2]`,
+-- pivot `x1`; and with `pu ∉ v.lin` (u = ¬(x0 ⊕ x1), v = x2 ⊕ anc0).
+#guard Oracle.prepare ⟨[.data 0, .data 1], false⟩ ⟨[.data 0, .data 2], true⟩ ==
+  .ok ([.cnot (.data 1) (.data 0), .cnot (.data 0) (.data 1), .cnot (.data 2) (.data 1),
+    .x (.data 1)], .data 0, .data 1)
+#guard Oracle.prepare ⟨[.data 0, .data 1], true⟩ ⟨[.data 2, .anc 0], false⟩ ==
+  .ok ([.cnot (.data 1) (.data 0), .cnot (.anc 0) (.data 2), .x (.data 0)], .data 0, .data 2)
+
+-- `prepare_ok` on every basis state of `Reg 3 × Reg 0` (the symmetric-difference case): after
+-- `pre`, `x0` holds `x0 ⊕ x1` and `x1` holds `¬(x0 ⊕ x2)`; `preᴿ` undoes `pre`.
+def symPre : List Gate :=
+  [.cnot (.data 1) (.data 0), .cnot (.data 0) (.data 1), .cnot (.data 2) (.data 1), .x (.data 1)]
+
+example : ∀ s : Reg 3 × Reg 0,
+    (Qubit.data 0).get (permRun symPre s) = (Aff.mk [.data 0, .data 1] false).eval s ∧
+      (Qubit.data 1).get (permRun symPre s) = (Aff.mk [.data 0, .data 2] true).eval s ∧
+      permRun symPre.reverse (permRun symPre s) = s := by
+  decide
+
+-- `gather` on a basis state: the pivot gets the XOR of the set (`permRun_gather`).
+example : ∀ s : Reg 3 × Reg 0,
+    permRun (Oracle.gather [.data 1, .data 0, .data 2] (.data 1)) s =
+      (Qubit.data 1).set (xorL [.data 1, .data 0, .data 2] s) s := by
+  decide
+
+-- `symDiff` = XOR of the linear parts (`xorL_symDiff`).
+example : ∀ s : Reg 3 × Reg 1,
+    xorL (symDiff [.data 0, .data 1, .anc 0] [.data 1, .data 2]) s =
+      (xorL [.data 0, .data 1, .anc 0] s ^^ xorL [.data 1, .data 2] s) := by
+  decide
+
+/-- `if x0 then x1 ⊕ x3 else x2 ⊕ x1` as `toNetwork` builds it (Stage 3 mux
+`b ⊕ (c ∧ (a ⊕ b))`): an XOR chain, one AND, a three-atom output. -/
+def muxXorNet : Network :=
+  ⟨4, #[.input 0, .input 1, .input 2, .input 3, .xor 1 3, .xor 2 1, .xor 4 5, .and 0 6, .xor 5 7],
+    [8]⟩
+
+def muxXorSrc : String :=
+  "fn mux_xor(x: Vec Bool 4) -> Bool {
+" ++
+  "  if idx(x, 0) then (idx(x, 1) xor idx(x, 3)) else (idx(x, 2) xor idx(x, 1))
+}
+"
+
+-- the DSL front end produces `muxXorNet` and the same oracle
+#guard ((parse muxXorSrc >>= check >>= toNetwork).toOption.map fun N =>
+  (N.nInputs, N.nodes.toList, N.outputs)) ==
+    some (muxXorNet.nInputs, muxXorNet.nodes.toList, muxXorNet.outputs)
+
+/-- `(x0 ⊕ x1) ∧ ¬(x0 ⊕ x2)`: the AND of two XORs sharing their pivot (`pu ∈ v.lin`). -/
+def symNet : Network :=
+  ⟨3, #[.input 0, .input 1, .input 2, .xor 0 1, .xor 0 2, .not 4, .and 3 5], [6]⟩
+
+def muxXorOracle : Circuit :=
+  match synthesizeOracle muxXorNet with
+  | .ok c => c
+  | .error _ => default
+
+def symOracle : Circuit :=
+  match synthesizeOracle symNet with
+  | .ok c => c
+  | .error _ => default
+
+#guard (oracle muxXorSrc).toOption == some muxXorOracle
+#guard (Network.pred muxXorNet 4 = fun x => if x 0 then x 1 ^^ x 3 else x 2 ^^ x 1 : Bool)
+#guard symOracle.gates.take 4 == symPre
+
+-- Lemma 6.3.2 for both XOR networks (side conditions by `rfl` / `decide`).
+example : AncRestore 4 muxXorOracle.nAnc muxXorOracle (phaseOracle (muxXorNet.pred 4)) :=
+  lemma_6_3_2_xor muxXorNet muxXorOracle (by rfl) (by decide)
+
+example : AncRestore 3 symOracle.nAnc symOracle (phaseOracle (symNet.pred 3)) :=
+  lemma_6_3_2_xor symNet symOracle (by rfl) (by decide)
 
 /-! ## Axiom audit (CLAUDE.md rule 10) -/
 
@@ -181,8 +262,21 @@ def searchOrSrc : String := include_str "../../examples/search_or.cqr"
 #print axioms phaseFlip_kraus
 #print axioms Circuit.WF.gatesOk
 #print axioms kraus_mul_ancProj
-#print axioms lemma_6_3_2
 #print axioms lemma_6_3_2_traced
 #print axioms grover_pred_037_ancRestore
+-- Stage 9a (`CQRV.Circuit.OracleCorrectXor`, `OracleCorrect`): Lemma 6.3.2 with XOR nodes.
+#print axioms permRun_reverse
+#print axioms perm_kraus
+#print axioms permRun_gather
+#print axioms xorL_symDiff
+#print axioms prepare_ok
+
+/-- info: 'CQRV.lemma_6_3_2_xor' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms lemma_6_3_2_xor
+
+/-- info: 'CQRV.lemma_6_3_2' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms lemma_6_3_2
 
 end CQRV.Tests.Semantics

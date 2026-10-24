@@ -12,9 +12,12 @@ Runs the built `cqr` from the project root and checks
   * reproducibility: a second run gives byte-identical Cert.lean / .qir / .qasm and the same JSON
     except the timing field reference_configuration.kernel_check; the committed example
     examples/certs/grover_pred_037/ agrees with the run (JSON modulo the machine fields);
-  * negative tests (must not say "certified"): (a) the XOR predicate tests/certify/xor_pred.cqr
-    (--solutions 4) → exit 3, `certificate with tracked obligations: lemma_6_3_2_xor`, sorryAx
-    in the axioms; (b) the committed Cert.lean with the proof of `cert` replaced by `sorry` (temp
+  * the XOR predicate tests/certify/xor_pred.cqr (--solutions 4; Stage 9a, `lemma_6_3_2_xor`
+    proved): exit 0, `certified (conditional on: solution_count = 4)`, schema, hash link, axioms
+    exactly the standard three, no obligations;
+  * negative tests (must not say "certified"): (a) a network that fails `C.WF`: the committed
+    Cert.lean with the input node `.input 7` of `net` replaced by `.input 8` (a data qubit outside
+    the 8-qubit register; temp copy) → the kernel check fails (exit 1); (b) the committed Cert.lean with the proof of `cert` replaced by `sorry` (temp
     copy) → audit fails with sorryAx; (b') with one side condition by `native_decide` → audit
     fails with its auxiliary axiom (`nAnc_eq._native.native_decide.ax_1_1` in Lean 4.35;
     `Lean.ofReduceBool` in older versions); (c) examples/search_while.cqr --solutions 64 → the
@@ -191,21 +194,35 @@ def main():
         assert ex["reference_configuration"]["kernel_check"]["runs"] == 5
         print("ok:   committed examples/certs/grover_pred_037 agrees (JSON modulo machine fields)")
 
-        # (a) XOR predicate: Lemma 6.3.2 for XOR is the tracked obligation lemma_6_3_2_xor
+        # XOR predicate: certified since Stage 9a (Lemma 6.3.2 for XOR, `lemma_6_3_2_xor`)
         out = os.path.join(tmp, "xor")
         rc, so, se = certify(args.cqr, os.path.join("tests", "certify", "xor_pred.cqr"), out,
                              "--solutions", "4")
         last = so.rstrip("\n").split("\n")[-1]
-        assert rc == 3 and last == "certificate with tracked obligations: lemma_6_3_2_xor", \
-            (rc, so, se)
-        assert "certified (" not in so
-        xc, _ = check_dir(out, validator)
-        assert xc["status"] == "certificate with tracked obligations"
-        assert xc["obligations"] == ["lemma_6_3_2_xor"] and "sorryAx" in xc["axioms"]
-        print(f"ok:   (a) XOR predicate: `{last}` (exit 3; sorryAx in the axioms)")
+        assert rc == 0 and last == "certified (conditional on: solution_count = 4)", (rc, so, se)
+        xc, xtext = check_dir(out, validator)
+        assert xc["status"] == "certified" and xc["obligations"] == []
+        assert xc["axioms"] == STANDARD, xc["axioms"]
+        assert "sorry" not in xtext and ".xor " in xtext
+        print(f"ok:   XOR predicate xor_pred: `{last}` (exit 0; axioms exactly propext, "
+              "Classical.choice, Quot.sound; no obligations)")
+
+        base = read(os.path.join(EXAMPLE, "Cert.lean"))
+
+        # (a) a network that fails C.WF (input outside the register): the kernel check fails
+        inp = "    .input 0, .input 1, .input 2, .input 3, .input 4, .input 5, .input 6, .input 7,\n"
+        assert base.count(inp) == 1
+        d = os.path.join(tmp, "wf")
+        os.makedirs(d, exist_ok=True)
+        path = os.path.join(d, "Cert.lean")
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(base.replace(inp, inp.replace(".input 7", ".input 8")))
+        rc, so, se = run(["lake", "env", "lean", "--run",
+                          os.path.join("scripts", "CertifyTool.lean"), "audit", path, THEOREM])
+        assert rc == 1 and "certified (" not in so and ": pass" not in so, (rc, so, se)
+        print("ok:   (a) network failing C.WF (`.input 8` on 8 qubits): kernel check fails (exit 1)")
 
         # (b) injected sorry, (b') native_decide, in temp copies of the committed certificate
-        base = read(os.path.join(EXAMPLE, "Cert.lean"))
         proof = ("  grover_certificate oracle mcz (by decide) emitted_ok delta_eq grade_eq nAnc_eq "
                  "hM_card\n")
         nd = "theorem nAnc_eq : emitted.nAnc = 7 := by decide +kernel\n"
