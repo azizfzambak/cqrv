@@ -23,7 +23,8 @@ reviewer decisions 2 and 3).
 * `Certificate.build`: the record from the pipeline's data, with `proof`, `cpu`, `axioms`
   empty and `status = notYetAudited`; `cqr certify` (Stage 8b) fills them after the kernel check
   and the axiom audit (`CQRV.Certify.Audit`). Schema v1.1.0 (Stage 8b) adds `theorem`,
-  `obligations` and the machine fields of `reference_configuration`.
+  `obligations` and the machine fields of `reference_configuration`; v1.2.0 (Stage 8b review)
+  adds `trust_boundary.front_end` (`frontEndTrust`).
 -/
 
 @[expose] public section
@@ -197,8 +198,14 @@ structure Certificate where
   obligations : List String
   deriving Repr
 
+/-- Report §5.3.3, §9.5.1 — the front-end trust boundary (Stage 8b review): the certificate is
+about the network `net` of `Cert.lean`; the translation DSL → network (`toNetwork`) is not
+verified, and `predicate_hash` binds the source it was computed from. -/
+def frontEndTrust : String :=
+  "DSL → network (toNetwork) unverified; predicate_hash binds the source"
+
 /-- The schema version written to `schema_version` (semver). -/
-def schemaVersion : String := "1.1.0"
+def schemaVersion : String := "1.2.0"
 
 /-- Report §9.5.3 — the JSON envelope (`docs/certificate.schema.json`). -/
 def Certificate.toJson (c : Certificate) : Json :=
@@ -219,7 +226,8 @@ def Certificate.toJson (c : Certificate) : Json :=
        ("proof", match c.proofHash with | some h => str h | none => Json.null)]),
      ("trust_boundary", Json.mkObj [("emitted", str "QIR text"),
        ("profile", str "adaptive_profile"),
-       ("emitter", str "unverified; translation-validated by re-parse")]),
+       ("emitter", str "unverified; translation-validated by re-parse"),
+       ("front_end", str frontEndTrust)]),
      ("hardware_perturbation", Json.mkObj [("formula", str "δ_hw ≤ δ + G·p̄"),
        ("G", c.gateCounts.total), ("p_bar", str "profile parameter"),
        ("counts", Json.mkObj [("unitary", c.gateCounts.unitary),

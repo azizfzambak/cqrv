@@ -1,5 +1,6 @@
-"""Certificate JSON schema v1.1.0 (report §8.4.2, §8.4.4, §9.5.3; Stage 8a, reviewer
-decisions 2 and 3; Stage 8b: theorem, obligations, machine fields).
+"""Certificate JSON schema v1.2.0 (report §8.4.2, §8.4.4, §9.5.3; Stage 8a, reviewer
+decisions 2 and 3; Stage 8b: theorem, obligations, machine fields; Stage 8b review:
+trust_boundary.front_end).
 
 Builds the Stage 8a certificate of examples/grover_pred_037.cqr in Lean (scripts/CertifyTool.lean
 `sample`: no kernel check, no axiom audit) and checks that
@@ -58,6 +59,8 @@ def main():
     assert cert["instance"] == {"n": 8, "M": 32, "r": 2}, cert["instance"]
     assert cert["status"] == "not yet audited" and cert["axioms"] == []
     assert cert["hashes"]["proof"] is None
+    assert cert["trust_boundary"]["front_end"] == \
+        "DSL → network (toNetwork) unverified; predicate_hash binds the source"
     assert cert["theorem"] is None and cert["obligations"] == []
     assert cert["reference_configuration"]["kernel_check"] is None
     print("ok:   delta 7/128, grade (15, 230, 72, 7), status 'not yet audited'")
@@ -129,7 +132,8 @@ def main():
             mutated(lambda c: audited(c, "certificate with tracked obligations")),
         "not yet audited with theorem": mutated(lambda c: c.update(theorem="x")),
         "not yet audited with obligations": mutated(lambda c: c.update(obligations=["x"])),
-        "old schema version": mutated(lambda c: c.update(schema_version="1.0.0")),
+        "old schema version": mutated(lambda c: c.update(schema_version="1.1.0")),
+        "missing front_end": mutated(lambda c: c["trust_boundary"].pop("front_end")),
     })
     for label, c in bad.items():
         if validator.is_valid(c):

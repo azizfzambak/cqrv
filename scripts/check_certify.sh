@@ -2,7 +2,7 @@
 # Stage 8b checks — report §5.1.3, §8.4.1, §8.4.4, §9.5.1, §9.5.3 (`cqr certify`).
 #
 #   tests/diff/certify_check.py  cqr certify examples/grover_pred_037.cqr: status line, schema
-#                                v1.1.0, grade, δ, axioms; circuit hash = SHA3 of the IR literal
+#                                v1.2.0, grade, δ, axioms; circuit hash = SHA3 of the IR literal
 #                                of Cert.lean (hashlib); .qasm / .qir re-parse to the literal;
 #                                second run byte-identical (JSON except kernel_check); the
 #                                committed examples/certs/grover_pred_037 agrees; negative tests

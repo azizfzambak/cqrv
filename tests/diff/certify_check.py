@@ -3,7 +3,7 @@
 Runs the built `cqr` from the project root and checks
 
   * grover_pred_037: exit 0, status line `certified (conditional on: solution_count = 32)`,
-    certificate.json valid against docs/certificate.schema.json (v1.1.0), grade (15, 230, 72, 7),
+    certificate.json valid against docs/certificate.schema.json (v1.2.0), grade (15, 230, 72, 7),
     delta "7/128", axioms exactly propext, Classical.choice, Quot.sound, no obligations;
   * the hash link, independently of the CLI: the `emitted` IR literal of Cert.lean (the circuit
     the kernel-checked theorem is about) is parsed here, its canonical JSON hashed with hashlib
@@ -174,7 +174,7 @@ def main():
         assert cert["spec"]["delta"] == "7/128", cert["spec"]
         assert cert["axioms"] == STANDARD, cert["axioms"]
         assert cert["theorem"] == THEOREM
-        print("ok:   JSON valid (schema v1.1.0); grade (15, 230, 72, 7), delta 7/128, "
+        print("ok:   JSON valid (schema v1.2.0); grade (15, 230, 72, 7), delta 7/128, "
               "axioms exactly propext, Classical.choice, Quot.sound")
         print("ok:   circuit hash = SHA3 of the IR literal of Cert.lean (hashlib); "
               ".qasm / .qir re-parse to that literal; proof hash recomputed")
