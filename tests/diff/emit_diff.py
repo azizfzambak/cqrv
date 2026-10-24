@@ -13,8 +13,10 @@ For examples/grover_pred_037.cqr:
      `measurements:` block with 8 `mz` on the data qubits;
   4. the re-parsed QASM oracle is executed by the Stage 5 harness (statevector.run_ir, every
      measurement branch) on random complex superpositions: U_P|psi> (x) |0..0> in every branch;
-  5. `llvm-as` assembles every QIR text when it is on PATH (CI); otherwise the check is
-     skipped with a message.
+  5. every QIR text is parsed and verified by LLVM through llvmlite (pinned in
+     requirements.txt; mandatory, never skipped — Stage 8a review); in addition `llvm-as`
+     assembles it when it is on PATH (CI, where --require-llvm-as makes it mandatory too),
+     otherwise that second check is skipped with a message.
 
 Usage: python -I tests/diff/emit_diff.py --cqr <path to cqr> [--seed S] [--require-llvm-as]
 """
@@ -27,6 +29,8 @@ import subprocess
 import sys
 import tempfile
 
+import llvmlite
+import llvmlite.binding as llvm
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -100,6 +104,17 @@ def check_qir_shape(label, text):
           f"block of {N_DATA} mz")
 
 
+def llvm_verify(label, text):
+    """Mandatory: LLVM's parser and module verifier (llvmlite), every platform."""
+    try:
+        mod = llvm.parse_assembly(text)
+        mod.verify()
+    except RuntimeError as e:
+        raise AssertionError(f"LLVM rejects {label}: {e}")
+    print(f"ok:   {label} [qir] parsed and verified by LLVM "
+          f"{'.'.join(map(str, llvm.llvm_version_info))} (llvmlite {llvmlite.__version__})")
+
+
 def llvm_as(label, text, required):
     tool = shutil.which("llvm-as")
     if tool is None:
@@ -145,6 +160,7 @@ def main():
             if fmt == "qir":
                 if "oracle" not in label:
                     check_qir_shape(label, text)
+                llvm_verify(label, text)
                 llvm_as(label, text, args.require_llvm_as)
             elif "oracle" in label:
                 # the re-parsed QASM oracle, executed by the Stage 5 harness, every branch
@@ -160,6 +176,14 @@ def main():
         print(f"ok:   negative control rejected ({str(e).split(' — ')[-1]})")
     else:
         raise AssertionError("negative control: a changed gate was not detected")
+    # negative control for the LLVM check: a branch to an undefined block must be rejected
+    text = run(args.cqr, ["emit", SRC, "--format", "qir", "--oracle"])
+    try:
+        llvm_verify("negative control", text.replace("\nmeasurements:\n", "\n", 1))
+    except AssertionError:
+        print("ok:   negative control rejected by LLVM (undefined block `measurements`)")
+    else:
+        raise AssertionError("negative control: LLVM accepted a module with an undefined block")
     print("emit_diff: all checks passed")
 
 

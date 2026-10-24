@@ -75,14 +75,26 @@
       }
     },
     "hardware_perturbation": {
-      "description": "Report §3.3.3: δ_hw ≤ δ + G·p̄; G = gates of the IR acting on qubits (alloc/free excluded); p̄ is a parameter of the hardware profile.",
+      "description": "Report §3.3.3: δ_hw ≤ δ + G·p̄ (conservative: every noisy operation counts); G = unitary + mid_circuit_measurements + classically_controlled + terminal_measurements (alloc/free excluded; the sum is checked by tests/diff/cert_schema.py); p̄ is a parameter of the hardware profile.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["formula", "G", "p_bar"],
+      "required": ["formula", "G", "p_bar", "counts"],
       "properties": {
         "formula": {"const": "δ_hw ≤ δ + G·p̄"},
         "G": {"$ref": "#/$defs/nat"},
-        "p_bar": {"const": "profile parameter"}
+        "p_bar": {"const": "profile parameter"},
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["unitary", "mid_circuit_measurements", "classically_controlled",
+                       "terminal_measurements"],
+          "properties": {
+            "unitary": {"$ref": "#/$defs/nat"},
+            "mid_circuit_measurements": {"$ref": "#/$defs/nat"},
+            "classically_controlled": {"$ref": "#/$defs/nat"},
+            "terminal_measurements": {"$ref": "#/$defs/nat"}
+          }
+        }
       }
     },
     "reference_configuration": {

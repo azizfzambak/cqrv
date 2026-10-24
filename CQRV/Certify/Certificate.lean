@@ -126,6 +126,30 @@ def RefConfig.ofFiles (toolchain manifest : String) : Except String RefConfig :=
   return { lean := toolchain.trimAscii.toString, mathlib := ← rev "mathlib",
            physlib := ← rev "Physlib" }
 
+/-- Report §3.3.3 — the noisy operations of the emitted program, counted separately: unitary
+gates, mid-circuit measurements, classically controlled gates (the IR), and the terminal
+measurements the emitters add (one per data qubit). `alloc` / `free` are bookkeeping and not
+counted (DECISIONS.md 2026-10-25, Stage 8a review). -/
+structure GateCounts where
+  unitary : Nat
+  midCircuitMeasurements : Nat
+  classicallyControlled : Nat
+  terminalMeasurements : Nat
+  deriving Repr, DecidableEq
+
+/-- Report §3.3.3 — `G`: every noisy operation (conservative bound `δ_hw ≤ δ + G·p̄`). -/
+def GateCounts.total (g : GateCounts) : Nat :=
+  g.unitary + g.midCircuitMeasurements + g.classicallyControlled + g.terminalMeasurements
+
+/-- Report §3.3.3 — the operation counts of a circuit, with the terminal measurement of its
+data register. -/
+def gateCounts (C : Circuit) : GateCounts :=
+  let count (p : Gate → Bool) := (C.gates.filter p).length
+  { unitary := count fun | .measure _ _ | .ifBit _ _ | .alloc _ | .free _ => false | _ => true
+    midCircuitMeasurements := count fun | .measure _ _ => true | _ => false
+    classicallyControlled := count fun | .ifBit _ _ => true | _ => false
+    terminalMeasurements := C.nData }
+
 /-- Report §8.4.2, §8.4.4, §9.5.3 — the certificate record, schema v1.0.0. -/
 structure Certificate where
   pattern : String
@@ -144,8 +168,8 @@ structure Certificate where
   circuitHash : String
   /-- Stage 8b -/
   proofHash : Option String
-  /-- `G` of `δ_hw ≤ δ + G·p̄` (§3.3.3): gates of the IR -/
-  gateCount : Nat
+  /-- the noisy operations counted by `G` of `δ_hw ≤ δ + G·p̄` (§3.3.3) -/
+  gateCounts : GateCounts
   config : RefConfig
   /-- Stage 8b -/
   axioms : List String
@@ -154,11 +178,6 @@ structure Certificate where
 
 /-- The schema version written to `schema_version` (semver). -/
 def schemaVersion : String := "1.0.0"
-
-/-- Report §3.3.3 — `G`: the number of gates of the IR that act on qubits (every gate except
-`alloc` / `free`, which are bookkeeping; measurements and classically controlled gates count). -/
-def gateCount (C : Circuit) : Nat :=
-  (C.gates.filter fun | .alloc _ | .free _ => false | _ => true).length
 
 /-- Report §9.5.3 — the JSON envelope (`docs/certificate.schema.json`). -/
 def Certificate.toJson (c : Certificate) : Json :=
@@ -180,7 +199,11 @@ def Certificate.toJson (c : Certificate) : Json :=
        ("profile", str "adaptive_profile"),
        ("emitter", str "unverified; translation-validated by re-parse")]),
      ("hardware_perturbation", Json.mkObj [("formula", str "δ_hw ≤ δ + G·p̄"),
-       ("G", c.gateCount), ("p_bar", str "profile parameter")]),
+       ("G", c.gateCounts.total), ("p_bar", str "profile parameter"),
+       ("counts", Json.mkObj [("unitary", c.gateCounts.unitary),
+         ("mid_circuit_measurements", c.gateCounts.midCircuitMeasurements),
+         ("classically_controlled", c.gateCounts.classicallyControlled),
+         ("terminal_measurements", c.gateCounts.terminalMeasurements)])]),
      ("reference_configuration", Json.mkObj [("lean", str c.config.lean),
        ("mathlib", str c.config.mathlib), ("physlib", str c.config.physlib),
        ("cpu", match c.config.cpu with | some s => str s | none => Json.null)]),
@@ -201,7 +224,7 @@ def Certificate.build (src : String) (sig : SigmaIn) (entry : LibEntry) (facts :
   if sig.solutionCount != some M then throw s!"solution count of the signature ≠ M = {M}"
   if C.nData != n then throw s!"the circuit has {C.nData} data qubits, n = {n}"
   if g != C.grade then throw "the grade is not the measured grade of the circuit"
-  let (hP, hC, G) := (Certify.predicateHash src, Certify.circuitHash C, Certify.gateCount C)
+  let (hP, hC, G) := (Certify.predicateHash src, Certify.circuitHash C, Certify.gateCounts C)
   return {
     pattern := entry.name, n, M, r, epsilon := 0, delta := δ, grade := g
     hypotheses :=
@@ -211,7 +234,7 @@ def Certificate.build (src : String) (sig : SigmaIn) (entry : LibEntry) (facts :
       [s!"iterations r = {r} (parameter of grover_parametric_lemma; δ is exact for this r)"]
     restoration := restorationText
     predicateHash := hP, circuitHash := hC, proofHash := none
-    gateCount := G, config := cfg, axioms := [], status := .notYetAudited }
+    gateCounts := G, config := cfg, axioms := [], status := .notYetAudited }
 
 /-! ## The matched Grover instance (shared by `cqr emit` and the certificate) -/
 

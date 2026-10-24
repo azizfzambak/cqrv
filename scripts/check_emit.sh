@@ -5,8 +5,9 @@
 #   tests/diff/cert_schema.py  sample certificate (Lean) against docs/certificate.schema.json
 #   tests/diff/emit_diff.py    QIR / QASM of grover_pred_037 re-parse to exactly the Lean IR;
 #                              the re-parsed QASM oracle is simulated in every branch;
-#                              llvm-as assembles the QIR (skipped with a message when absent,
-#                              mandatory with REQUIRE_LLVM_AS=1, as in CI)
+#                              LLVM parses and verifies the QIR via llvmlite (mandatory);
+#                              llvm-as assembles it as a second check (skipped with a message
+#                              when absent, mandatory with REQUIRE_LLVM_AS=1, as in CI)
 #
 # Usage (after `lake build`):  scripts/check_emit.sh
 #   PYTHON=.venv/Scripts/python.exe scripts/check_emit.sh   # local Windows venv

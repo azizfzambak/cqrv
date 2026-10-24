@@ -65,9 +65,21 @@ def main():
     circ = json.loads(p.stdout)["circuit"]
     canon = json.dumps(circ, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     assert cert["hashes"]["circuit"] == sha3(canon.encode("utf-8")), "circuit hash"
-    G = sum(1 for g in circ["gates"] if g["op"] not in ("alloc", "free"))
-    assert cert["hardware_perturbation"]["G"] == G, (cert["hardware_perturbation"], G)
-    print(f"ok:   predicate and circuit hashes agree with hashlib; G = {G}")
+    gates = circ["gates"]
+    counts = {
+        "unitary": sum(1 for g in gates
+                       if g["op"] not in ("alloc", "free", "measure") and "if" not in g),
+        "mid_circuit_measurements": sum(1 for g in gates if g["op"] == "measure"),
+        "classically_controlled": sum(1 for g in gates if "if" in g),
+        "terminal_measurements": circ["n_data"],
+    }
+    hp = cert["hardware_perturbation"]
+    assert hp["counts"] == counts, (hp["counts"], counts)
+    assert hp["G"] == sum(counts.values()), hp
+    print(f"ok:   predicate and circuit hashes agree with hashlib; G = {hp['G']} = "
+          f"{counts['unitary']} unitary + {counts['mid_circuit_measurements']} mid-circuit "
+          f"measurements + {counts['classically_controlled']} classically controlled + "
+          f"{counts['terminal_measurements']} terminal measurements")
 
     def mutated(f):
         c = copy.deepcopy(cert)
@@ -81,6 +93,8 @@ def main():
         "extra field": mutated(lambda c: c.update(note="x")),
         "audited status without proof hash": mutated(lambda c: c.update(status="certificate with tracked obligations")),
         "short hash": mutated(lambda c: c["hashes"].update(circuit="abc")),
+        "missing counts": mutated(lambda c: c["hardware_perturbation"].pop("counts")),
+        "incomplete counts": mutated(lambda c: c["hardware_perturbation"]["counts"].pop("terminal_measurements")),
     }
     for label, c in bad.items():
         if validator.is_valid(c):

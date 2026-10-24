@@ -50,6 +50,10 @@ def sample : Except String Certificate := certificateOf groverSrc cfg
   | .ok c => c.delta == 7 / 128 && c.grade == ⟨15, 230, 72, 7⟩ && c.status == .notYetAudited &&
       c.n == 8 && c.M == 32 && c.r == 2 && c.proofHash.isNone && c.axioms.isEmpty
   | .error _ => false
+-- Stage 8a review: G counts every noisy operation, terminal measurements included
+#guard match sample with
+  | .ok c => c.gateCounts == ⟨328, 18, 36, 8⟩ && c.gateCounts.total == 390
+  | .error _ => false
 -- LF normalization: the hash does not depend on the platform's line endings
 #guard predicateHash groverSrc == predicateHash (groverSrc.replace "\n" "\r\n")
 

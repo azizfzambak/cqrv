@@ -29,8 +29,9 @@ is test-only: nothing here is part of the trusted pipeline.
   the status "not yet audited" and both hashes, and rejects mutated envelopes. `reparse_qir.py`
   and `reparse_qasm.py` read the output of `cqr emit` back into the IR JSON format;
   `emit_diff.py` requires exact equality with the Lean IR (first differing gate reported),
-  simulates the re-parsed QASM oracle in every branch, and runs `llvm-as` on the QIR when it is
-  on PATH (skipped with a message otherwise; mandatory in CI). Driver: `scripts/check_emit.sh`.
+  simulates the re-parsed QASM oracle in every branch, has LLVM parse and verify every QIR
+  text through `llvmlite` (mandatory, Stage 8a review), and runs `llvm-as` on it as a second
+  check when it is on PATH (skipped with a message otherwise; mandatory in CI). Driver: `scripts/check_emit.sh`.
 
 Run from the repository root:
 
