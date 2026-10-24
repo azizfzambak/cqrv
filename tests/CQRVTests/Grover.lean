@@ -4,12 +4,14 @@ import CQRV.Grover.Basic
 meta import CQRV.Grover.Basic
 
 /-!
-# Tests for `CQRV.Grover` (report §8.2–8.4, Figure 8.1; Stage 7a)
+# Tests for `CQRV.Grover` (report §8.2–8.4, Figure 8.1; Stages 7a, 7b)
 
 * The computed grade of the synthesized Grover circuit of `grover_pred_037` (`r = 2`, V1) is
   `(15, 230, 72, 7)` (Stage 7a decision 1: the certificate's grade is this computed value).
 * `#print axioms` for every proved theorem of Stage 7a: only `propext`, `Classical.choice`,
-  `Quot.sound`. The open statements and everything built on them show `sorryAx` (SORRIES.md).
+  `Quot.sound`.
+* Stage 7b: the Figure 8.1 statements, the parametric lemma and the `grover_pred_037` instance
+  are sorry-free; their axioms are pinned with `#guard_msgs`.
 -/
 
 namespace CQRV.Tests.Grover
@@ -60,14 +62,49 @@ example (n : ℕ) : ((List.range n).map Node.input).toArray = (Array.range n).ma
 #print axioms grover037_grade
 #print axioms grover037_sin_sq
 
-/-! ## Open statements (Stage 7b/7c): these show `sorryAx` -/
+/-! ## Figure 8.1, proved in Stage 7b: pinned to the standard three axioms
 
+`#guard_msgs` fails the test build if any of these acquires `sorryAx` or another axiom
+(§9.5.1). The plane facts and the measurement lemmas are printed below. -/
+
+/-- info: 'CQRV.Grover.reflection_geometry' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
 #print axioms reflection_geometry
+
+/-- info: 'CQRV.Grover.iteration_induction' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
 #print axioms iteration_induction
+
+/-- info: 'CQRV.Grover.terminal_measurement' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
 #print axioms terminal_measurement
+
+/-- info: 'CQRV.Grover.grover_realizes' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
 #print axioms grover_realizes
--- `sorryAx` only through `grover_realizes`, the realization conjunct:
+
+/-- info: 'CQRV.Grover.grover_parametric_lemma' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
 #print axioms grover_parametric_lemma
+
+/-- info: 'CQRV.Grover.grover_pred_037_certified_statement' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
 #print axioms grover_pred_037_certified_statement
+
+-- Item 1 (plane facts, §8.3.2) and item 4 (pure state, basis POVM, §8.2.3).
+#print axioms GroverParams.ketS_eq
+#print axioms GroverParams.psiGood_dot_self
+#print axioms GroverParams.psiBad_dot_self
+#print axioms GroverParams.psiGood_dot_psiBad
+#print axioms GroverParams.sin_θ_eq
+#print axioms GroverParams.cos_θ_eq
+#print axioms GroverParams.θ_mem
+#print axioms GroverParams.ketS_dot_psiGood
+#print axioms GroverParams.ketS_dot_psiBad
+#print axioms GroverParams.phaseOracle_psiGood
+#print axioms GroverParams.phaseOracle_psiBad
+#print axioms diffU_mulVec
+#print axioms uConj_ancZero_m
+#print axioms basisPOVM_measure
 
 end CQRV.Tests.Grover

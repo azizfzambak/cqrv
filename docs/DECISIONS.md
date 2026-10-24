@@ -421,3 +421,17 @@ Decision:
 Why: needed to implement the task; the task leaves these open.
 Rejected: (1) a general "more ancillae" lemma for `AncRestore` (needs a reindexing `Reg (a + k) ≃ Reg a × Reg k` under the partial trace; the generalized proof is a 5-line change); (2) a field for the MCZ in `GroverParams` (the task fixes its fields); proving WF of every synthesized oracle (outside Stage 7a); (4) `native_decide` (adds `Lean.ofReduceBool`, forbidden by the §9.5.1 axiom discipline).
 Report §: 5.2.4, 6.3.2, 6.2.4, 8.2, 8.3.2, 8.3.4, 8.4.1, 9.5.1.
+
+## 2026-10-24 — Stage 7b interpretations not fixed by the task (Stage 7b)
+Decision:
+(1) Placement. The plane facts (item 1), `uConj_ancZero_m` and `basisPOVM_measure` (item 4) are in `CQRV/Grover/Lemma.lean`, between the definitions and the Figure 8.1 statements: `GroverParams`, `psiGood`, `psiBad`, `θ` are defined there, so a separate `Geometry.lean` would have to move them. The four 7a statements are unchanged (only their `sorry` replaced).
+(2) "`‖ψ_g‖ = 1`" is stated as `star ψ_g ⬝ᵥ ψ_g = 1` (`psiGood_dot_self`; likewise `psiBad_dot_self : … = 1 ∨ ψ_b = 0`, `psiGood_dot_psiBad`): the Mathlib norm on `Reg n → ℂ` is the sup norm, not the Hilbert norm.
+(3) Item 4 "lift to `◃ ancZero`": stated at the matrix level, `(U ◃ ancZero n).m = vecMulVec v (star v)` with `v = U *ᵥ |0…0⟩` (`uConj_ancZero_m`); no `Ket` is built (its normalization would be an extra obligation the probability computation does not need). `basisPOVM_measure`: `Pr[y] = Re ρ_yy`, so the success probability is `∑_{P x} |v x|²` with `v = sin φ ψ_g + cos φ ψ_b`. The 3-line trace form of `POVM.measure` is reproved there instead of importing `CQRV.Realizability.Composition` (the Theorem 3.3a file; not used by the Grover proof, §6.3.2).
+(4) `diffU_mulVec` (`U_s v = 2⟨s|v⟩ s − v`) is computed from the definition `diffU n = 2|s⟩⟨s| − I`, which `diffusion_reflection` identifies with `H^{⊗n}(2|0⟩⟨0| − I)H^{⊗n}`; `U_P ψ_g = −ψ_g`, `U_P ψ_b = ψ_b` are rewritten through `oracle_reflection`.
+(5) Edge case `M = 2ⁿ`, no hypothesis `M < 2ⁿ`: pointwise case split on `P x`; a bad `x` forces `M < 2ⁿ`, hence `√(2ⁿ − M) ≠ 0` (`sqrtB_ne_of_bad`); `∑ ψ_b = √(2ⁿ − M)` holds for `√(2ⁿ − M) = 0` too (`b² b⁻¹ = b` in a field), and `psiBad_dot_self` splits on `√(2ⁿ − M) = 0`.
+(6) The docstring of `grover_realizes` said Theorem 3.3a "enters once" at the terminal measurement; corrected to the task's reading: there is one terminal measurement and Theorem 3.3a is not used.
+(7) `tests/CQRVTests/Grover.lean` pins the axioms of the four Figure 8.1 theorems, `grover_parametric_lemma` and `grover_pred_037_certified_statement` with `#guard_msgs` (`[propext, Classical.choice, Quot.sound]`), so a reintroduced `sorryAx` fails the test build.
+(8) The task's "Also" row (`synthesizeOracle_WF`, planned) was already added by the Stage 7a review commit (8c35fcf); unchanged.
+Why: needed to implement the task; the task leaves these open.
+Rejected: (1) moving the `GroverParams` definitions to a new file; (2) the `EuclideanSpace` norm (needs a `WithLp` transfer for every vector identity); (3) constructing `Ket`s for `G^r|s⟩`; importing `Composition` for `measure_eq_re_trace`; (5) a hypothesis `M < 2ⁿ`.
+Report §: 8.2.3, 8.3.2, 8.3.4, 6.3.2, 2.1.2, 9.5.1.

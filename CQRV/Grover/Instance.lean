@@ -94,7 +94,7 @@ theorem grover037_sin_sq (hM : (Finset.univ.filter fun x => groverPred x = true)
   norm_num
 
 /-- Report §8.4.1, §8.2.3 — **the `grover_pred_037` instance of the Grover parametric lemma**
-(statement level: it inherits the open sorries of `grover_realizes`, see SORRIES.md): given the
+(sorry-free since Stage 7b; `#print axioms`: `propext`, `Classical.choice`, `Quot.sound`): given the
 solution count `M = 32` as a hypothesis, the synthesized circuit (`r = 2`, V1) realizes the
 search spec with `δ = 7/128` exactly within its computed grade `(15, 230, 72, 7)`, and restores
 its 7 ancillae applying `G² H^{⊗8}`. -/
