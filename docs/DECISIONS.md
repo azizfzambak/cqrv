@@ -390,3 +390,15 @@ Decision:
 Why: needed to implement the task; the task leaves these open.
 Rejected: (1) importing `CQRV.Circuit.Semantics` into the synthesizer; (5) an exact rational bound for r⋆ now (no proof is required in this stage).
 Report §: 8.2, 3.2.4, 6.1.3, 6.1.4, 6.2.4, 9.1.1.
+
+## 2026-10-24 — Headline grade is V1, measured (15, 230, 72, 7) (Stage 5b review, reviewer decision; supersedes the Stage 5 review entry "Headline grade is the measured grade")
+Decision: the certified Grover grade for grover_pred_037 is the measured grade of `groverCircuit` with the V1 diffusion at r⋆ = 2: (w, d, t, a) = (15, 230, 72, 7). The report's (10, 74, 72, 2) (Table 3.3, Chapter 8) and diffusion (10, 16, 28, 2) (Table 3.3, §6.1.4 Table 3) are errata for report v3 (see the Stage 5b erratum entry). The principle of the superseded entry stays: the certified grade is always the circuit's measured grade.
+Why: V1 is covered by Lemma 6.3.2 (xor-free AND chain) plus the H/X wrappers; no new restoration proof is needed.
+Rejected: a = 2 via a relative-phase MCZ: it needs its own restoration proof; deferred, rejected for the MVP. V2 (Bennett MCZ, a_max = 3): no restoration proof, and +24 T per diffusion (52 vs 28).
+Report §: 3.1.4 (Table 3.3), 6.1.4 (Table 3), 8, 8.2, 9.5.1.
+
+## 2026-10-24 — r⋆ in `Float` only chooses r; the certified δ is exact (Stage 5b review, reviewer decision)
+Decision: `rStar` (Float) only selects the iteration count r; nothing certified depends on the floating-point value. The certified failure probability is exact: sin((2r+1)θ) = sin θ · U_{2r}(cos θ), so sin²((2r+1)θ) is a polynomial in sin²θ = M/N with rational coefficients. For r = 2: sin²(5θ) = s(5 − 20s + 16s²)² with s = sin²θ. For n = 8, M = 32 (s = 1/8): sin²(5θ) = (1/8)(11/4)² = 121/128, so δ = 1 − 121/128 = 7/128. The harness value 0.9453125 = 121/128 agrees.
+Why: Stage 5b interpretation (5) left the exactness of r⋆ open; the certificate (Stage 7/8) states δ, not r⋆.
+Rejected: certifying a Float-derived quantity.
+Report §: 3.2.4, 8, 8.2, 9.5.1.
