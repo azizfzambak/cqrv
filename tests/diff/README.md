@@ -32,6 +32,15 @@ is test-only: nothing here is part of the trusted pipeline.
   simulates the re-parsed QASM oracle in every branch, has LLVM parse and verify every QIR
   text through `llvmlite` (mandatory, Stage 8a review), and runs `llvm-as` on it as a second
   check when it is on PATH (skipped with a message otherwise; mandatory in CI). Driver: `scripts/check_emit.sh`.
+- Stage 8b: `certify_check.py` runs `cqr certify examples/grover_pred_037.cqr` twice: status
+  line `certified (conditional on: solution_count = 32)`, schema v1.1.0, grade, δ, axioms; the
+  `emitted` IR literal of `Cert.lean` is parsed here and its canonical JSON hashed with hashlib
+  (= `hashes.circuit`), the `.qasm` / `.qir` files re-parse to that literal, `hashes.proof` is
+  recomputed; the second run is byte-identical except `kernel_check`; the committed
+  `examples/certs/grover_pred_037/` agrees. Negative tests: XOR predicate
+  (`tests/certify/xor_pred.cqr`) → `lemma_6_3_2_xor`, injected `sorry` → `sorryAx`,
+  `native_decide` → its auxiliary axiom, `search_while` → Stage 4 hint. Driver:
+  `scripts/check_certify.sh` (CI).
 
 Run from the repository root:
 

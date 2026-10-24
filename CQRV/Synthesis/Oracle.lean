@@ -41,10 +41,18 @@ structure Aff where
   c : Bool
   deriving Repr, DecidableEq, Inhabited
 
-/-- Symmetric difference of two atom sets, sorted. -/
+/-- Insert `x` before the first `y` with `le x y` (structural recursion: the kernel evaluates
+it; `List.mergeSort` is well-founded and blocks `decide +kernel`, DECISIONS.md 2026-10-25,
+Stage 8b). -/
+def insertBy {α : Type} (le : α → α → Bool) (x : α) : List α → List α
+  | [] => [x]
+  | y :: ys => if le x y then x :: y :: ys else y :: insertBy le x ys
+
+/-- Symmetric difference of two atom sets, sorted (stable insertion sort; the same list as the
+former `mergeSort`). -/
 def symDiff (a b : List Qubit) : List Qubit :=
-  ((a.filter (!b.contains ·)) ++ (b.filter (!a.contains ·))).mergeSort
-    (fun p q => p.key.1 < q.key.1 || (p.key.1 == q.key.1 && p.key.2 ≤ q.key.2))
+  ((a.filter (!b.contains ·)) ++ (b.filter (!a.contains ·))).foldr
+    (insertBy fun p q => p.key.1 < q.key.1 || (p.key.1 == q.key.1 && p.key.2 ≤ q.key.2)) []
 
 namespace Oracle
 

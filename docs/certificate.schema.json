@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "CQRV certificate envelope, schema v1.0.0",
-  "description": "Report §8.4.2, §8.4.4, §9.5.1, §9.5.3; DECISIONS.md 2026-10-24 (Stage 8a, reviewer decision 3). Written by CQRV.Certify.Certificate.toJson. Stage 8a writes proof = null, cpu = null, axioms = [] and status = \"not yet audited\"; any other status requires the Stage 8b fields.",
+  "title": "CQRV certificate envelope, schema v1.1.0",
+  "description": "Report §8.4.2, §8.4.4, §9.5.1, §9.5.3; DECISIONS.md 2026-10-24 (Stage 8a, reviewer decision 3). Written by CQRV.Certify.Certificate.toJson. v1.1.0 (DECISIONS.md 2026-10-25, Stage 8b) adds theorem, obligations and the machine fields of reference_configuration. \"not yet audited\" (no kernel check): proof, cpu, theorem, kernel_check null, axioms and obligations empty. \"certified\": kernel check passed and the axiom audit passed (sorry-free, standard axioms or the trust-boundary table), no obligations. \"certificate with tracked obligations\": kernel check passed, audit failed; obligations names each one.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "pattern", "instance", "spec", "grade", "hypotheses",
                "restoration", "hashes", "trust_boundary", "hardware_perturbation",
-               "reference_configuration", "axioms", "status"],
+               "reference_configuration", "theorem", "axioms", "obligations", "status"],
   "$defs": {
     "sha3": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "nat": {"type": "integer", "minimum": 0},
@@ -17,7 +17,7 @@
     }
   },
   "properties": {
-    "schema_version": {"type": "string", "const": "1.0.0"},
+    "schema_version": {"type": "string", "const": "1.1.0"},
     "pattern": {"type": "string", "minLength": 1},
     "instance": {
       "type": "object",
@@ -100,29 +100,65 @@
     "reference_configuration": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["lean", "mathlib", "physlib", "cpu"],
+      "required": ["lean", "mathlib", "physlib", "cpu", "logical_cpus", "clock", "lean_threads",
+                   "kernel_check"],
       "properties": {
         "lean": {"type": "string", "pattern": "^leanprover/lean4:"},
         "mathlib": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
         "physlib": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-        "cpu": {"type": ["string", "null"]}
+        "cpu": {"type": ["string", "null"]},
+        "logical_cpus": {"oneOf": [{"$ref": "#/$defs/nat"}, {"type": "null"}]},
+        "clock": {"type": ["string", "null"]},
+        "lean_threads": {"type": ["string", "null"]},
+        "kernel_check": {
+          "description": "Report §9.5.1: wall_ms = wall time of `lake env lean Cert.lean` (process start, imports, elaboration, kernel); kernel_ms = `type checking` of the Lean profiler; statistic says how runs were aggregated (scripts/bench_kernel.sh: median of 5, first run excluded). Timing fields: they differ between runs.",
+          "oneOf": [
+            {"type": "null"},
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["wall_ms", "kernel_ms", "runs", "statistic"],
+              "properties": {
+                "wall_ms": {"$ref": "#/$defs/nat"},
+                "kernel_ms": {"oneOf": [{"$ref": "#/$defs/nat"}, {"type": "null"}]},
+                "runs": {"type": "integer", "minimum": 1},
+                "statistic": {"type": "string", "minLength": 1}
+              }
+            }
+          ]
+        }
       }
     },
+    "theorem": {"type": ["string", "null"]},
     "axioms": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "obligations": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
     "status": {"enum": ["not yet audited", "certified", "certificate with tracked obligations"]}
   },
   "if": {"properties": {"status": {"const": "not yet audited"}}},
   "then": {
     "properties": {
       "hashes": {"properties": {"proof": {"type": "null"}}},
-      "axioms": {"maxItems": 0}
+      "theorem": {"type": "null"},
+      "axioms": {"maxItems": 0},
+      "obligations": {"maxItems": 0},
+      "reference_configuration": {"properties": {"kernel_check": {"type": "null"}}}
     }
   },
   "else": {
     "properties": {
       "hashes": {"properties": {"proof": {"$ref": "#/$defs/sha3"}}},
-      "reference_configuration": {"properties": {"cpu": {"type": "string"}}},
+      "theorem": {"type": "string", "minLength": 1},
+      "reference_configuration": {"properties": {"cpu": {"type": "string"},
+                                                 "kernel_check": {"type": "object"}}},
       "axioms": {"minItems": 1}
-    }
+    },
+    "if": {"properties": {"status": {"const": "certified"}}},
+    "then": {
+      "properties": {
+        "obligations": {"maxItems": 0},
+        "axioms": {"not": {"contains": {"const": "sorryAx"}}}
+      }
+    },
+    "else": {"properties": {"obligations": {"minItems": 1}}}
   }
 }

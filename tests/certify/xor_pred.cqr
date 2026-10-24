@@ -1,0 +1,3 @@
+fn xor_pred(x: Vec Bool 4) -> Bool {
+  (idx(x, 0) xor idx(x, 1)) and idx(x, 2)
+}

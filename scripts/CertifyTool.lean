@@ -1,7 +1,7 @@
 import CQRV.Certify.Basic
 
 /-!
-# Test helper for the Stage 8a checks (report §8.4.2, §9.5.3)
+# Test helper for the Stage 8a / 8b checks (report §8.4.2, §9.5.1, §9.5.3)
 
 Run with `lake env lean --run scripts/CertifyTool.lean <command>` (after `lake build`); used by
 `tests/diff/sha3_diff.py` and `tests/diff/cert_schema.py` (driver `scripts/check_emit.sh`).
@@ -11,6 +11,11 @@ Run with `lake env lean --run scripts/CertifyTool.lean <command>` (after `lake b
 * `sample <file.cqr>`: print the Stage 8a certificate JSON of a source file (compact, keys
   sorted): no kernel check, no axiom audit, `status` "not yet audited"; the reference
   configuration is read from `lean-toolchain` and `lake-manifest.json`.
+* `audit <Cert.lean> <theorem>` (Stage 8b): kernel-check a certificate file (`lake env lean`) and
+  audit the axioms of its `#print axioms <theorem>` line (`CQRV.Certify.checkAndAudit`); exit 0
+  if the audit passes, 3 if it fails (the offending axioms are printed), 1 if Lean fails. Used by
+  `scripts/print_axioms.sh` (blocking) and by the injected-`sorry` test of
+  `scripts/check_certify.sh`.
 -/
 
 open CQRV.Certify
@@ -44,4 +49,15 @@ def main (args : List String) : IO UInt32 := do
     match certificateOf (← IO.FS.readFile file) cfg with
     | .ok c => IO.println c.toJson.compress; return 0
     | .error e => IO.eprintln e; return 1
-  | _ => IO.eprintln "usage: CertifyTool (sha3 | sample <file.cqr>)"; return 2
+  | ["audit", file, thm] =>
+    match ← checkAndAudit file thm with
+    | .error e => IO.eprintln s!"audit {file}: {e}"; return 1
+    | .ok o =>
+      IO.println s!"{thm}: {", ".intercalate o.axioms}"
+      match o.result with
+      | .pass => IO.println s!"axiom audit: {file}: pass"; return 0
+      | .fail bad =>
+        IO.println s!"axiom audit: {file}: FAILED ({", ".intercalate bad})"
+        return 3
+  | _ => IO.eprintln "usage: CertifyTool (sha3 | sample <file.cqr> | audit <Cert.lean> <theorem>)"
+         return 2

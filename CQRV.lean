@@ -13,6 +13,7 @@ import CQRV.Matching.Basic
 import CQRV.Circuit.Basic
 import CQRV.Synthesis.Basic
 import CQRV.Certify.Basic
+import CQRV.Certify.Specialize
 import CQRV.Emit.Basic
 import CQRV.Grover.Basic
 

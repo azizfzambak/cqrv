@@ -43,7 +43,7 @@ jobs:
       - name: CLI smoke (cqr check / extract / match / synthesize on examples/)
         run: scripts/cli_smoke.sh
 
-      - name: Axiom printout (CQRV.Certify)
+      - name: Axiom audit (blocking, Stage 8b; CQRV.Certify named theorems + committed example certificate)
         run: scripts/print_axioms.sh
 
       - uses: actions/setup-python@v5
@@ -72,6 +72,9 @@ jobs:
 
       - name: SHA3, certificate schema, QIR / QASM re-parse (Stage 8a; llvm-as mandatory)
         run: REQUIRE_LLVM_AS=1 scripts/check_emit.sh
+
+      - name: cqr certify (Stage 8b; kernel check, audit, schema, hash link, reproducibility, negative tests)
+        run: scripts/check_certify.sh
 
   candidate:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

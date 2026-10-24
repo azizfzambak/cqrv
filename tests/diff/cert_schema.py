@@ -1,5 +1,5 @@
-"""Certificate JSON schema v1.0.0 (report §8.4.2, §8.4.4, §9.5.3; Stage 8a, reviewer
-decisions 2 and 3).
+"""Certificate JSON schema v1.1.0 (report §8.4.2, §8.4.4, §9.5.3; Stage 8a, reviewer
+decisions 2 and 3; Stage 8b: theorem, obligations, machine fields).
 
 Builds the Stage 8a certificate of examples/grover_pred_037.cqr in Lean (scripts/CertifyTool.lean
 `sample`: no kernel check, no axiom audit) and checks that
@@ -10,7 +10,11 @@ Builds the Stage 8a certificate of examples/grover_pred_037.cqr in Lean (scripts
     SHA3-256 of the compact sorted-key JSON of the circuit of `cqr synthesize --grover
     --iterations 2 --json` (hashlib as the test oracle);
   * mutated envelopes (wrong status, float delta, missing field, extra field, a status other
-    than "not yet audited" without the Stage 8b fields) are rejected.
+    than "not yet audited" without the Stage 8b fields) are rejected;
+  * Stage 8b status rules: a filled-in "certified" envelope validates; "certified" with an
+    obligation or with sorryAx, "certificate with tracked obligations" without obligations, and
+    "not yet audited" with a theorem or a kernel_check are rejected. (The certificates written by
+    `cqr certify` are checked by tests/diff/certify_check.py.)
 
 Usage: python -I tests/diff/cert_schema.py --cqr <path to cqr>   (after `lake build`)
 """
@@ -54,6 +58,8 @@ def main():
     assert cert["instance"] == {"n": 8, "M": 32, "r": 2}, cert["instance"]
     assert cert["status"] == "not yet audited" and cert["axioms"] == []
     assert cert["hashes"]["proof"] is None
+    assert cert["theorem"] is None and cert["obligations"] == []
+    assert cert["reference_configuration"]["kernel_check"] is None
     print("ok:   delta 7/128, grade (15, 230, 72, 7), status 'not yet audited'")
 
     with open(os.path.join(ROOT, SRC), "rb") as f:
@@ -96,6 +102,35 @@ def main():
         "missing counts": mutated(lambda c: c["hardware_perturbation"].pop("counts")),
         "incomplete counts": mutated(lambda c: c["hardware_perturbation"]["counts"].pop("terminal_measurements")),
     }
+    def audited(c, status="certified"):
+        c.update(status=status, theorem="CQRV.Cert.grover_pred_037.cert",
+                 axioms=["propext", "Classical.choice", "Quot.sound"])
+        c["hashes"]["proof"] = "0" * 64
+        c["reference_configuration"].update(
+            cpu="test cpu", kernel_check={"wall_ms": 1, "kernel_ms": 1, "runs": 1,
+                                          "statistic": "single run"})
+
+    certified = mutated(audited)
+    validator.validate(certified)
+    with_obl = mutated(lambda c: (audited(c, "certificate with tracked obligations"),
+                                  c.update(obligations=["lemma_6_3_2_xor"],
+                                           axioms=["propext", "sorryAx"])))
+    validator.validate(with_obl)
+    print("ok:   filled-in 'certified' and 'certificate with tracked obligations' envelopes validate")
+    bad.update({
+        "certified with an obligation":
+            mutated(lambda c: (audited(c), c.update(obligations=["lemma_6_3_2_xor"]))),
+        "certified with sorryAx":
+            mutated(lambda c: (audited(c), c.update(axioms=["propext", "sorryAx"]))),
+        "certified without theorem": mutated(lambda c: (audited(c), c.update(theorem=None))),
+        "certified without kernel_check":
+            mutated(lambda c: (audited(c), c["reference_configuration"].update(kernel_check=None))),
+        "tracked obligations without obligations":
+            mutated(lambda c: audited(c, "certificate with tracked obligations")),
+        "not yet audited with theorem": mutated(lambda c: c.update(theorem="x")),
+        "not yet audited with obligations": mutated(lambda c: c.update(obligations=["x"])),
+        "old schema version": mutated(lambda c: c.update(schema_version="1.0.0")),
+    })
     for label, c in bad.items():
         if validator.is_valid(c):
             raise AssertionError(f"schema accepts a bad envelope: {label}")

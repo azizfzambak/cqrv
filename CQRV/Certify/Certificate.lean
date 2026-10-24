@@ -20,8 +20,10 @@ reviewer decisions 2 and 3).
 * Hashes (decision 2): `predicateHash` (DSL source with line endings normalized to LF),
   `circuitHash` (`Circuit.toJson`, compact; `Json` objects keep their keys sorted),
   `proofHash` (the certificate `.lean` file of Stage 8b with the pinned configuration).
-* `Certificate.build`: the record from the pipeline's data; Stage 8a leaves `proof`, `cpu`,
-  `axioms` empty and `status = notYetAudited` (kernel check and axiom audit are Stage 8b).
+* `Certificate.build`: the record from the pipeline's data, with `proof`, `cpu`, `axioms`
+  empty and `status = notYetAudited`; `cqr certify` (Stage 8b) fills them after the kernel check
+  and the axiom audit (`CQRV.Certify.Audit`). Schema v1.1.0 (Stage 8b) adds `theorem`,
+  `obligations` and the machine fields of `reference_configuration`.
 -/
 
 @[expose] public section
@@ -105,13 +107,28 @@ def Status.name : Status → String
   | .certified => "certified"
   | .withObligations => "certificate with tracked obligations"
 
-/-- Report §9.5.1 — the reference configuration: toolchain, dependency revisions, CPU
-(`cpu` is filled in Stage 8b). -/
+/-- Report §9.5.1 — the measured time of the kernel check of a certificate file (Stage 8b,
+decision 6): wall time of `lake env lean` (process start, imports, elaboration, kernel) and the
+kernel's own time (`type checking` of the Lean profiler), over `runs` runs. -/
+structure KernelTiming where
+  wallMs : Nat
+  kernelMs : Option Nat
+  runs : Nat
+  statistic : String
+  deriving Repr, Inhabited
+
+/-- Report §9.5.1 — the reference configuration: toolchain, dependency revisions, and (Stage 8b)
+the machine — CPU model, logical CPUs, clock, `LEAN_NUM_THREADS` — and the measured kernel-check
+time. -/
 structure RefConfig where
   lean : String
   mathlib : String
   physlib : String
   cpu : Option String := none
+  logicalCpus : Option Nat := none
+  clock : Option String := none
+  leanThreads : Option String := none
+  kernelCheck : Option KernelTiming := none
   deriving Repr, Inhabited
 
 /-- The reference configuration from the text of `lean-toolchain` and `lake-manifest.json`
@@ -171,18 +188,23 @@ structure Certificate where
   /-- the noisy operations counted by `G` of `δ_hw ≤ δ + G·p̄` (§3.3.3) -/
   gateCounts : GateCounts
   config : RefConfig
-  /-- Stage 8b -/
+  /-- Stage 8b: the axioms of the certificate theorem (`#print axioms`) -/
   axioms : List String
   status : Status
+  /-- Stage 8b: the fully qualified name of the kernel-checked theorem -/
+  theoremName : Option String
+  /-- Stage 8b: the tracked obligations (`status = withObligations`) -/
+  obligations : List String
   deriving Repr
 
 /-- The schema version written to `schema_version` (semver). -/
-def schemaVersion : String := "1.0.0"
+def schemaVersion : String := "1.1.0"
 
 /-- Report §9.5.3 — the JSON envelope (`docs/certificate.schema.json`). -/
 def Certificate.toJson (c : Certificate) : Json :=
   let str (s : String) : Json := Json.str s
   let ratStr (q : Rat) : Json := Json.str (toString q)
+  let optStr : Option String → Json := fun | some s => str s | none => Json.null
   Json.mkObj
     [("schema_version", str schemaVersion),
      ("pattern", str c.pattern),
@@ -206,8 +228,17 @@ def Certificate.toJson (c : Certificate) : Json :=
          ("terminal_measurements", c.gateCounts.terminalMeasurements)])]),
      ("reference_configuration", Json.mkObj [("lean", str c.config.lean),
        ("mathlib", str c.config.mathlib), ("physlib", str c.config.physlib),
-       ("cpu", match c.config.cpu with | some s => str s | none => Json.null)]),
+       ("cpu", optStr c.config.cpu),
+       ("logical_cpus", match c.config.logicalCpus with | some k => k | none => Json.null),
+       ("clock", optStr c.config.clock), ("lean_threads", optStr c.config.leanThreads),
+       ("kernel_check", match c.config.kernelCheck with
+         | some k => Json.mkObj [("wall_ms", k.wallMs),
+             ("kernel_ms", match k.kernelMs with | some m => m | none => Json.null),
+             ("runs", k.runs), ("statistic", str k.statistic)]
+         | none => Json.null)]),
+     ("theorem", optStr c.theoremName),
      ("axioms", Json.arr (c.axioms.map str).toArray),
+     ("obligations", Json.arr (c.obligations.map str).toArray),
      ("status", str c.status.name)]
 
 /-- Report §6.2.4, §6.3.2 — the restoration conjunct as stated in the certificate. -/
@@ -234,7 +265,8 @@ def Certificate.build (src : String) (sig : SigmaIn) (entry : LibEntry) (facts :
       [s!"iterations r = {r} (parameter of grover_parametric_lemma; δ is exact for this r)"]
     restoration := restorationText
     predicateHash := hP, circuitHash := hC, proofHash := none
-    gateCounts := G, config := cfg, axioms := [], status := .notYetAudited }
+    gateCounts := G, config := cfg, axioms := [], status := .notYetAudited, theoremName := none,
+    obligations := [] }
 
 /-! ## The matched Grover instance (shared by `cqr emit` and the certificate) -/
 

@@ -1,6 +1,7 @@
 module
 
 import CQRV.Certify.Basic
+import CQRV.Certify.Specialize
 import CQRV.Emit.Basic
 meta import CQRV.Certify.Basic
 meta import CQRV.Emit.Basic
@@ -12,6 +13,11 @@ SHA3-256 on the reviewer's vectors (the 200-string differential against hashlib 
 `tests/diff/sha3_diff.py`), the exact δ, the sample certificate of grover_pred_037 (no kernel
 check: `status` "not yet audited"; the schema check is `tests/diff/cert_schema.py`) and the shape
 of the emitted QIR / QASM (the re-parse is `tests/diff/emit_diff.py`).
+
+Stage 8b (report §5.1.3, §8.4.1, §9.5.1, §9.5.3): `auditAxioms`, the parsers of Lean's
+`#print axioms` and profiler output, the shape of the generated `Cert.lean`, the axioms of the
+lemmas a certificate instantiates (pinned with `#guard_msgs`). The kernel check itself and the
+negative tests are `tests/diff/certify_check.py` (driver `scripts/check_certify.sh`).
 -/
 
 namespace CQRV.Tests.Certify
@@ -78,5 +84,84 @@ def terminalBlock : String :=
 #guard (List.range 8).all fun i =>
   (terminalBlock.splitOn s!"mz__body(ptr inttoptr (i64 {i} to ptr)").length == 2
 #guard (emitQASM "grover_pred_037" groverC).endsWith "out = measure x;\n"
+
+/-! ## Axiom audit (Stage 8b, decision 3) -/
+
+#guard auditAxioms ["propext", "Classical.choice", "Quot.sound"] == .pass
+#guard auditAxioms [] == .pass
+#guard auditAxioms ["propext", "sorryAx", "Quot.sound"] == .fail ["sorryAx"]
+#guard auditAxioms ["Lean.ofReduceBool"] == .fail ["Lean.ofReduceBool"]
+#guard auditAxioms ["propext", "nAnc_eq._native.native_decide.ax_1_1"] ==
+  .fail ["nAnc_eq._native.native_decide.ax_1_1"]
+-- the trust-boundary table is empty today
+#guard trustBoundary.isEmpty
+
+/-! ## Parsers of the Lean output (decision 2) -/
+
+#guard parseAxioms "T.cert" "'T.cert' depends on axioms: [propext, Classical.choice, Quot.sound]\n"
+  == some ["propext", "Classical.choice", "Quot.sound"]
+-- long lists are wrapped by Lean's formatter
+#guard parseAxioms "T.cert" "x\n'T.cert' depends on axioms: [propext,\n Classical.choice,\r\n sorryAx]\ny"
+  == some ["propext", "Classical.choice", "sorryAx"]
+#guard parseAxioms "T.cert" "'T.cert' does not depend on any axioms\n" == some []
+#guard parseAxioms "T.cert" "'U.cert' depends on axioms: [propext]" == none
+#guard parseAxioms "T.cert" "" == none
+#guard parseAxioms "T.cert"
+  "'T.cert' depends on axioms: [propext]\n'T.cert' depends on axioms: [propext]" == none
+#guard parseProfilerMs "7.65s" == some 7650
+#guard parseProfilerMs "163ms" == some 163
+#guard parseProfilerMs "0.0683ms" == some 0
+#guard parseProfilerMs "12μs" == some 0
+#guard parseKernelMs "type checking took 7.03s\ncumulative profiling times:\n\ttype checking 7.65s\n"
+  == some 7650
+
+/-! ## The generated certificate (task 1) -/
+
+/-- The certificate request of grover_pred_037 (`r = r⋆ = 2`, `M = 32`). -/
+def groverReq : Option CertRequest :=
+  match parse groverSrc >>= check with
+  | .ok tp =>
+    match groverInstance tp (extract tp) none with
+    | .ok gi => some (CertRequest.ofInstance tp.name groverSrc gi 32)
+    | .error _ => none
+  | .error _ => none
+
+def groverCert : String := (groverReq.map renderCert).getD ""
+
+/-- A two-input XOR network. -/
+def xorNet : Network := ⟨2, #[.input 0, .input 1, .xor 0 1], [2]⟩
+
+#guard groverReq.map (·.obligations) == some []
+#guard groverReq.map (·.theoremName) == some "CQRV.Cert.grover_pred_037.cert"
+#guard (groverCert.splitOn "theorem cert").length == 2
+#guard (groverCert.splitOn "native_decide").length == 1
+#guard (groverCert.splitOn "sorry").length == 1
+#guard (groverCert.splitOn "#print axioms cert").length == 2
+#guard (groverCert.splitOn "(7 / 128 : ℝ) ⟨15, 230, 72, 7⟩").length == 2
+#guard (groverCert.splitOn "theorem emitted_ok : groverCircuit net 8 2 = .ok emitted").length == 2
+-- an XOR network carries the tracked obligation lemma_6_3_2_xor
+#guard hasXor xorNet
+#guard groverReq.all fun q => !hasXor q.net
+#guard groverReq.all fun q =>
+  ({ q with net := xorNet } : CertRequest).obligations == ["lemma_6_3_2_xor"]
+#guard groverReq.all fun q =>
+  ((renderCert { q with net := xorNet }).splitOn
+    "sorry -- tracked obligation: lemma_6_3_2_xor").length == 2
+
+/-! ## `symDiff` by structural insertion sort (kernel-evaluable, Stage 8b) -/
+
+#guard symDiff [.anc 2, .data 1, .data 0] [.data 1, .anc 0] == [.data 0, .anc 0, .anc 2]
+#guard symDiff [] [.anc 1, .data 3, .anc 0] == [.data 3, .anc 0, .anc 1]
+example : symDiff [.anc 1, .data 0] [.data 2] = [.data 0, .data 2, .anc 1] := by decide +kernel
+
+/-! ## Axioms of the lemmas a certificate instantiates (§9.5.1) -/
+
+/-- info: 'CQRV.Certify.sin_sq_odd_mul' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms sin_sq_odd_mul
+
+/-- info: 'CQRV.Certify.grover_certificate' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms grover_certificate
 
 end CQRV.Tests.Certify

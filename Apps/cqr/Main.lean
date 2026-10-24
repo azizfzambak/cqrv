@@ -38,6 +38,15 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   terminal measurement of the data register. `--oracle` emits the phase oracle alone (for the
   differential test of the re-parsed program). Failures: diagnostic JSON, exit 1; no `r` and no
   M: message, exit 2. The emitters are unverified (§5.3); `tests/diff/` re-parses their output.
+* `cqr certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k]` — report §5.1.3,
+  §8.4.1, §8.4.4, §9.5.1 (Stage 8b): match (must be Grover; otherwise the Table 4 hint, exit 1),
+  synthesize, write `<dir>/Cert.lean` (default `certs/<name>/`; the specialization of the Grover
+  parametric lemma), kernel-check it with `lake env lean` (run from the project root), audit the
+  axioms of `#print axioms cert`, write `certificate.json`, `<name>.qir`, `<name>.qasm` from the
+  same circuit and print the status line: `certified (conditional on: solution_count = M)`
+  (exit 0) only if the kernel check and the audit pass; otherwise `certificate with tracked
+  obligations: <list>` (exit 3). Kernel-check failure: message, exit 1, no JSON. `--bench k`:
+  `k + 1` kernel checks, the median of the last `k` is recorded (scripts/bench_kernel.sh).
 -/
 
 open CQRV CQRV.DSL CQRV.Matching CQRV.Synthesis CQRV.Certify CQRV.Emit
@@ -52,7 +61,8 @@ def usage : String :=
     "  synthesize <file> [--amax k] [--json] [--layers]\n" ++
     "  synthesize --diffusion n [--amax k] [--json] [--layers]\n" ++
     "  synthesize <file> --grover [--iterations r] [--solutions M] [--json] [--layers]\n" ++
-    String.join ((subcommands.drop 4).map fun (c, _) => s!"  {c}\n")
+    "  certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k]\n" ++
+    "  emit <file> --format qir|qasm [--iterations r] [--solutions M] [--oracle]\n"
 
 /-- Report §4.2.2 — parse and surface-check a source file; also returns the position of the
 entry `fn` (the last one), used by the `--solutions` diagnostic. -/
@@ -91,6 +101,21 @@ def runExtract (path : String) (solutions : Option Nat) : IO UInt32 := do
   | .error d => IO.println d.toJson.compress; return 1
   | .ok sig => IO.println sig.toJson.pretty; return 0
 
+/-- Report §4.3.2 — print the outcome of a failed match (Table 4 repair hint, as JSON or with
+`text` as text); exit code 1. -/
+def printNoMatch (cmd : String) (t : Term) (r : LibResult) (text : Bool) : IO UInt32 := do
+  match r with
+  | .noMatch _ _ _ _ dist =>
+    let hs := renderHints t r
+    if text then IO.print (hintsText hs dist)
+    else
+      match hs with
+      | h :: _ => IO.println (h.toJson dist hs.length).compress
+      | [] => IO.println "{}"
+  | .empty => IO.eprintln s!"cqr {cmd}: the pattern library is empty"
+  | .matched .. => pure ()
+  return 1
+
 /-- `cqr match <file> [--solutions M] [--text]` — report §4.2.4 (Algorithm 2), §4.3.2. -/
 def runMatch (path : String) (solutions : Option Nat) (text : Bool) : IO UInt32 := do
   match ← signature path solutions with
@@ -99,15 +124,7 @@ def runMatch (path : String) (solutions : Option Nat) (text : Bool) : IO UInt32 
     let t := sig.toTerm.normalize
     match matchLibrary library t with
     | .matched e σ ds => IO.println (matchJson e σ ds).pretty; return 0
-    | r@(.noMatch _ _ _ _ dist) =>
-      let hs := renderHints t r
-      if text then IO.print (hintsText hs dist)
-      else
-        match hs with
-        | h :: _ => IO.println (h.toJson dist hs.length).compress
-        | [] => IO.println "{}"
-      return 1
-    | .empty => IO.eprintln "cqr match: the pattern library is empty"; return 1
+    | r => printNoMatch "match" t r text
 
 /-- Parse `[--solutions M] [--text]` in any order. -/
 def matchFlags : List String → Option (Option Nat × Bool)
@@ -257,6 +274,127 @@ def runEmit (path : String) (fmt : EmitFormat) (iters solutions : Option Nat) (o
       IO.print (match fmt with | .qir => emitQIR name C | .qasm => emitQASM name C)
       return 0
 
+/-- Parse `[--solutions M] [--iterations r] [--out dir] [--bench k]` in any order. -/
+def certifyFlags :
+    List String → Option (Option Nat × Option Nat × Option String × Option Nat)
+  | [] => some (none, none, none, none)
+  | "--solutions" :: m :: rest => do
+    let m ← m.toNat?
+    let (_, r, o, b) ← certifyFlags rest
+    return (some m, r, o, b)
+  | "--iterations" :: r :: rest => do
+    let r ← r.toNat?
+    let (m, _, o, b) ← certifyFlags rest
+    return (m, some r, o, b)
+  | "--out" :: o :: rest => do
+    let (m, r, _, b) ← certifyFlags rest
+    return (m, r, some o, b)
+  | "--bench" :: k :: rest => do
+    let k ← k.toNat?
+    guard (k ≥ 1)
+    let (m, r, o, _) ← certifyFlags rest
+    return (m, r, o, some k)
+  | _ => none
+
+/-- The median of a non-empty list (the lower middle element for an even length). -/
+def median (xs : List Nat) : Nat :=
+  let s := xs.mergeSort
+  s.getD ((s.length - 1) / 2) 0
+
+/-- Report §9.5.1 — the tracked obligations of a failed audit: `sorryAx` is explained by the
+obligations the generator wrote (`lemma_6_3_2_xor`), otherwise it is named itself; every other
+offending axiom is named. -/
+def obligationsOf (q : CertRequest) (bad : List String) : List String :=
+  let sorries := if bad.contains "sorryAx" then
+      (if q.obligations.isEmpty then ["sorryAx"] else q.obligations)
+    else []
+  sorries ++ bad.filter (· != "sorryAx")
+
+/-- Milliseconds as seconds with two decimals. -/
+def secs (ms : Nat) : String :=
+  let c := (ms + 5) / 10
+  s!"{c / 100}.{if c % 100 < 10 then "0" else ""}{c % 100} s"
+
+/-- `cqr certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k]` — report
+§5.1.3, §8.4.1, §8.4.4, §9.5.1 (Stage 8b): check → extract → match → synthesize (`r = r⋆`
+unless given) → generate `Cert.lean` → kernel check (`lake env lean`) → axiom audit → write
+`certificate.json`, `<name>.qir`, `<name>.qasm` (from the same circuit) → status line.
+`--bench k` repeats the kernel check `k + 1` times and records the median of the last `k`. -/
+def runCertify (path : String) (solutions iters : Option Nat) (out : Option String)
+    (bench : Option Nat) : IO UInt32 := do
+  let src ← IO.FS.readFile path
+  match ← frontEnd path, ← signature path solutions with
+  | .error d, _ | _, .error d => IO.println d.toJson.compress; return 1
+  | .ok (tp, _), .ok sig =>
+    let t := sig.toTerm.normalize
+    match matchLibrary library t with
+    | .matched .. => pure ()
+    | r => return (← printNoMatch "certify" t r false)
+    let gi ← match groverInstance tp sig iters with
+      | .ok gi => pure gi
+      | .error (.diagnostic d) => IO.println d.toJson.compress; return 1
+      | .error (.usage msg) => IO.eprintln s!"cqr certify: {msg}"; return 2
+    let some M := gi.M
+      | IO.eprintln "cqr certify: the certificate needs the solution count M (--solutions M)"
+        return 2
+    let cfg ← match RefConfig.ofFiles (← IO.FS.readFile "lean-toolchain")
+        (← IO.FS.readFile "lake-manifest.json") with
+      | .ok c => pure c
+      | .error e => IO.eprintln s!"cqr certify: {e}"; return 2
+    let q := CertRequest.ofInstance tp.name src gi M
+    let text := renderCert q
+    let dir := (out.getD s!"certs/{tp.name}").dropEndWhile (fun c => c == '/' || c == '\\')
+    let file (n : String) : String := s!"{dir}/{n}"
+    IO.FS.createDirAll dir.toString
+    let certPath := file "Cert.lean"
+    IO.FS.writeFile certPath text
+    -- kernel check and audit (decisions 2, 3); with --bench, k + 1 runs, the first discarded
+    let mut outcomes : Array AuditOutcome := #[]
+    for _ in [0:(bench.map (· + 1)).getD 1] do
+      match ← checkAndAudit certPath q.theoremName with
+      | .ok o => outcomes := outcomes.push o
+      | .error e => IO.eprintln s!"cqr certify: {certPath}: {e}"; return 1
+    let some last := outcomes.back? | return 1
+    let timed := if bench.isSome then outcomes.toList.drop 1 else outcomes.toList
+    let kernels := timed.filterMap (·.check.kernelMs)
+    let timing : KernelTiming :=
+      { wallMs := median (timed.map (·.check.wallMs)),
+        kernelMs := if kernels.length == timed.length then some (median kernels) else none,
+        runs := timed.length,
+        statistic := match bench with
+          | some k => s!"median of {k} (first run excluded)"
+          | none => "single run" }
+    let (status, obligations) := match last.result with
+      | .pass => (Status.certified, [])
+      | .fail bad => (Status.withObligations, obligationsOf q bad)
+    let (cpu, cpus, clock) ← detectMachine
+    let cfg := { cfg with cpu := some (cpu.getD "unknown"), logicalCpus := cpus, clock,
+                          leanThreads := ← IO.getEnv "LEAN_NUM_THREADS", kernelCheck := timing }
+    let base ← match Certificate.build src sig gi.entry gi.facts gi.circuit gi.circuit.grade gi.r
+        gi.n M q.delta cfg with
+      | .ok c => pure c
+      | .error e => IO.eprintln s!"cqr certify: {e}"; return 1
+    let cert := { base with
+      proofHash := some (proofHash text cfg.lean cfg.mathlib cfg.physlib), axioms := last.axioms,
+      status, theoremName := some q.theoremName, obligations }
+    -- compact, keys sorted (canonical, as `circuit_hash` and `CertifyTool sample`)
+    IO.FS.writeFile (file "certificate.json") (cert.toJson.compress ++ "\n")
+    IO.FS.writeFile (file s!"{tp.name}.qir") (emitQIR tp.name gi.circuit)
+    IO.FS.writeFile (file s!"{tp.name}.qasm") (emitQASM tp.name gi.circuit)
+    let kms := match timing.kernelMs with | some k => s!", {secs k} kernel" | none => ""
+    IO.println s!"kernel check: {certPath} (exit 0, {secs timing.wallMs} wall{kms}; \
+      {timing.statistic})"
+    IO.println s!"axioms: {", ".intercalate last.axioms}"
+    IO.println s!"wrote: {file "certificate.json"}, {file s!"{tp.name}.qir"}, \
+      {file s!"{tp.name}.qasm"}"
+    match status with
+    | .certified =>
+      IO.println s!"certified (conditional on: solution_count = {M})"
+      return 0
+    | _ =>
+      IO.println s!"certificate with tracked obligations: {", ".intercalate obligations}"
+      return 3
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["check", file] => runCheck file
@@ -281,6 +419,10 @@ def main (args : List String) : IO UInt32 := do
     match synthFlags flags with
     | some (k, j, l) => runSynthesize file k j l
     | none => IO.eprint usage; return 2
+  | "certify" :: file :: flags =>
+    match certifyFlags flags with
+    | some (m, r, o, b) => runCertify file m r o b
+    | none => IO.eprint usage; return 2
   | "emit" :: file :: flags =>
     match emitFlags flags with
     | some (some f, r, m, o) => runEmit file f r m o
@@ -288,7 +430,7 @@ def main (args : List String) : IO UInt32 := do
   | cmd :: _ =>
     match subcommands.lookup cmd with
     | some stage =>
-      if stage ≤ 5 || cmd == "emit" then IO.eprint usage; return 2
+      if stage ≤ 5 || cmd == "emit" || cmd == "certify" then IO.eprint usage; return 2
       IO.eprintln s!"cqr {cmd}: not implemented (Stage {stage})"
       return 2
     | none =>
