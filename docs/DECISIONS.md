@@ -435,3 +435,9 @@ Decision:
 Why: needed to implement the task; the task leaves these open.
 Rejected: (1) moving the `GroverParams` definitions to a new file; (2) the `EuclideanSpace` norm (needs a `WithLp` transfer for every vector identity); (3) constructing `Ket`s for `G^r|s⟩`; importing `Composition` for `measure_eq_re_trace`; (5) a hypothesis `M < 2ⁿ`.
 Report §: 8.2.3, 8.3.2, 8.3.4, 6.3.2, 2.1.2, 9.5.1.
+
+## 2026-10-24 — Theorem 3.3a at the terminal measurement: wording (Stage 7b review, reviewer decision)
+Decision: §6.3.2 invokes Theorem 3.3a once, at the terminal measurement. In this formalization the terminal measurement is the decoding POVM of Definition 2.2 inside `RealizesExact` (`basisPOVM` in `grover_realizes`), so no separate composition step (`measured_composition`) is needed. The doc-comment of `grover_realizes` says so. This supersedes Stage 7b interpretation (6) ("Theorem 3.3a is not used"): the task text's "not used" was imprecise; what is not used is the composition lemma, not the role Theorem 3.3a plays in §6.3.2. All four Stage 7b interpretations were accepted.
+Why: reviewer decision; the earlier wording contradicted the report.
+Rejected: "Theorem 3.3a is not used" (contradicts §6.3.2); stating the terminal measurement as a `measuredComp` step (adds a composition with no content).
+Report §: 6.3.2, 2.1.2.

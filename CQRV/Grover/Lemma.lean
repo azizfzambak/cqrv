@@ -453,8 +453,9 @@ synthesized circuit `(0, 1 − sin²((2r+1)θ))`-realizes the search spec under 
 within its own measured grade (decision 1). The grade part is `le_rfl`; for the probability
 part (Stage 7b item 5), `grover_ancRestore` (traced, `AncRestore.traced`) reduces the channel
 output on the unique input `encode ()` to `G^r H^{⊗n} |0⟩⟨0| (G^r H^{⊗n})ᴴ` (the replacement
-channel ignores its input), then `terminal_measurement`. There is a single, terminal
-measurement, so Theorem 3.3a is not used (§6.3.2). -/
+channel ignores its input), then `terminal_measurement`. §6.3.2 invokes Theorem 3.3a once, at
+the terminal measurement; in this formalization the terminal measurement is the decoding POVM
+of Definition 2.2 inside `RealizesExact`, so no separate composition step is needed. -/
 theorem grover_realizes (gp : GroverParams) (D : DiffusionCert gp.n) (r : ℕ) {C : Circuit}
     (hC : groverCircuit gp.oracle.N gp.n r = .ok C) :
     RealizesExact (SearchSpec gp.oracle.P) (basisPOVM gp.n) (groverChannel gp.n C)
