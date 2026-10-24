@@ -62,6 +62,9 @@ jobs:
       - name: Synthesized circuits byte-identical to the golden file (Stage 6b-3, decision 1)
         run: scripts/check_oracle_json.sh
 
+      - name: Diffusion and Grover circuit (Stage 5b, every branch; success probability)
+        run: scripts/diff_grover.sh
+
   candidate:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

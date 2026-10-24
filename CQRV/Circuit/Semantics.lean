@@ -36,11 +36,6 @@ abbrev Reg (k : ℕ) := Fin k → Bool
 
 namespace Gate
 
-/-- The classical bits a gate writes (`measure q → j` writes `j`). -/
-def writes : Gate → List Nat
-  | .measure _ j => [j]
-  | _ => []
-
 /-- Report §6.2.2, §9.1.1 — classical-bit discipline of one gate, given the bits `W` written
 before it and the number `m` of classical bits: a measurement writes a fresh bit `j < m`; an
 `ifBit j g` reads a bit already written and controls a Clifford gate. -/
@@ -61,12 +56,6 @@ end Gate
 
 namespace Circuit
 
-/-- The classical bits written by a gate list, in program order. -/
-def written (gs : List Gate) : List Nat := gs.flatMap Gate.writes
-
-/-- Report §9.1.1 — the number of classical bits: one per `measure`. -/
-def nBits (C : Circuit) : Nat := (written C.gates).length
-
 /-- Classical-bit discipline of a gate list, the bits `W` being written before it. -/
 def bitsOkFrom (m : Nat) : List Nat → List Gate → Bool
   | _, [] => true
@@ -86,12 +75,6 @@ written by exactly one `measure` before any `ifBit` reads it. All semantic theor
 def WF (C : Circuit) : Prop := C.wf = true
 
 instance (C : Circuit) : Decidable C.WF := inferInstanceAs (Decidable (C.wf = true))
-
-/-- Report §6.2.2, §9.1.1 — sequential composition with shifted classical bits: the gates of
-`C₁`, then those of `C₂` with every classical bit shifted up by `C₁.nBits`, so the bits of the
-two pieces never clash (DECISIONS.md, Stage 6b-1 review, (A)). The register is `C₁`'s. -/
-def append (C₁ C₂ : Circuit) : Circuit :=
-  ⟨C₁.nData, C₁.gates ++ C₂.gates.map (Gate.shiftBits C₁.nBits)⟩
 
 end Circuit
 

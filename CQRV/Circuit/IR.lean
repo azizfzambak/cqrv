@@ -90,6 +90,11 @@ def shiftBits (k : Nat) : Gate → Gate
   | .ifBit j g => .ifBit (j + k) g
   | g => g
 
+/-- The classical bits a gate writes (`measure q → j` writes `j`). -/
+def writes : Gate → List Nat
+  | .measure _ j => [j]
+  | _ => []
+
 /-- Readable form, as in the §6.1.4 / §6.2.2 listings (used by the layer dump). -/
 def render : Gate → String
   | .h q => s!"H {q.render}"
@@ -109,6 +114,19 @@ def render : Gate → String
 end Gate
 
 namespace Circuit
+
+/-- The classical bits written by a gate list, in program order. -/
+def written (gs : List Gate) : List Nat := gs.flatMap Gate.writes
+
+/-- Report §9.1.1 — the number of classical bits: one per `measure`. -/
+def nBits (C : Circuit) : Nat := (written C.gates).length
+
+/-- Report §6.2.2, §9.1.1 — sequential composition with shifted classical bits: the gates of
+`C₁`, then those of `C₂` with every classical bit shifted up by `C₁.nBits`, so the bits of the
+two pieces never clash (DECISIONS.md, Stage 6b-1 review, (A); moved here from
+`CQRV.Circuit.Semantics` in Stage 5b). The register is `C₁`'s. -/
+def append (C₁ C₂ : Circuit) : Circuit :=
+  ⟨C₁.nData, C₁.gates ++ C₂.gates.map (Gate.shiftBits C₁.nBits)⟩
 
 /-- Ancilla indices used by the circuit (one more than the largest). -/
 def nAnc (c : Circuit) : Nat :=

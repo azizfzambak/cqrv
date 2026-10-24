@@ -157,6 +157,71 @@ def run_ir(circ, data_state):
     return branches
 
 
+def _embed(circ, data_state):
+    n_data, n_anc = circ["n_data"], circ["n_anc"]
+    sv = StateVector(n_data + n_anc)
+    full = np.zeros(2 ** sv.n, dtype=complex)
+    full[:: 2**n_anc] = data_state  # data qubits are the most significant ones
+    sv.amp = full
+    return sv
+
+
+def _step(k, g, bits, sv):
+    """One non-measurement gate of `run_ir` (same checks), in place."""
+    op = g["op"]
+    if op in ("alloc", "free"):
+        p1 = sv.prob_one(g["q"][0])
+        if p1 > ZERO_EPS * max(sv.norm2(), PROB_EPS):
+            raise RestorationError(
+                f"gate {k} ({op} q{g['q'][0]}): qubit is not |0> in branch {bits} "
+                f"(P(1) = {p1 / sv.norm2():.3g})")
+    elif "if" in g:
+        if g["if"] not in bits:
+            raise ValueError(f"gate {k}: bit c{g['if']} read before measurement")
+        if bits[g["if"]] == 1:
+            apply_unitary(sv, g)
+    else:
+        apply_unitary(sv, g)
+
+
+def iter_ir_branches(circ, data_state):
+    """Stage 5b: the branches of `run_ir`, enumerated depth first (a generator; memory is one
+    state per pending measurement instead of one per branch). Same checks as `run_ir`."""
+    gates = circ["gates"]
+
+    def go(k, bits, sv):
+        while k < len(gates):
+            g = gates[k]
+            if g["op"] == "measure":
+                for b in (0, 1):
+                    s2 = sv.copy().project(g["q"][0], b)
+                    if s2.norm2() > PROB_EPS:
+                        yield from go(k + 1, {**bits, g["c"]: b}, s2)
+                return
+            _step(k, g, bits, sv)
+            k += 1
+        yield bits, sv
+
+    yield from go(0, {}, _embed(circ, data_state))
+
+
+def run_ir_sampled(circ, data_state, rng):
+    """Stage 5b: one branch of `run_ir`, each measurement outcome drawn with its Born
+    probability and the state renormalized. Returns `(bits, state)` (norm 1)."""
+    sv, bits = _embed(circ, data_state), {}
+    sv.amp = sv.amp / np.sqrt(sv.norm2())
+    for k, g in enumerate(circ["gates"]):
+        if g["op"] == "measure":
+            p1 = sv.prob_one(g["q"][0])
+            b = int(rng.random() < p1)
+            sv.project(g["q"][0], b)
+            sv.amp = sv.amp / np.sqrt(sv.norm2())
+            bits = {**bits, g["c"]: b}
+        else:
+            _step(k, g, bits, sv)
+    return bits, sv
+
+
 def check_phase_oracle(circ, pred, rng, trials=1):
     """Report §6.2.4: for a random complex superposition |psi> on the data register, every
     branch must end in U_P|psi> (x) |0...0>_anc up to a global phase of that branch, with

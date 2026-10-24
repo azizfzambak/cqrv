@@ -16,6 +16,11 @@ is test-only: nothing here is part of the trusted pipeline.
   byte-identical to `oracle_json_golden.txt` (proof-only synthesizer changes must not change
   the circuit). Driver: `scripts/check_oracle_json.sh` (CI); `--write` regenerates the golden
   file.
+- Stage 5b: `grover_diff.py` checks the diffusion `cqr synthesize --diffusion n` (n = 1..10, V1,
+  and Bennett budgets, V2) and one Grover iteration of `grover_pred_037` = `U_s U_P` in every
+  measurement branch (depth-first enumeration, `statevector.iter_ir_branches`), and the full
+  Grover circuit at r* = 2 on one sampled branch (`statevector.run_ir_sampled`): success
+  probability = sin²(5θ), sin²θ = 32/256, to 1e-9. Driver: `scripts/diff_grover.sh` (CI).
 
 Run from the repository root:
 

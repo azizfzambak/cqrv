@@ -22,6 +22,14 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   §6.1.3). Prints `{name, schedule, and_complexity, grade: {w, d, t, a}}` (exit 0); `--json`
   adds the IR (`circuit`, the flat format of `tests/diff/`) and prints one line; `--layers`
   appends the layer dump of the depth scheduler. Failures: diagnostic JSON, exit 1.
+* `cqr synthesize --diffusion n [--amax k] [--json] [--layers]` — the Grover diffusion on `n`
+  data qubits (report §8.2; Stage 5b): V1 (straight-line MCZ) without `--amax`, V2 (Bennett
+  MCZ) with it. Prints `{name, n, schedule, grade}`; `--json`/`--layers` as above.
+* `cqr synthesize <file> --grover [--iterations r] [--solutions M] [--json] [--layers]` — the
+  Grover circuit `H^{⊗n}` then `r` iterations of oracle ⊕ diffusion V1 (report §3.2.4, §8).
+  Default `r = r⋆ = ⌊π/(4θ)⌋`, `sin²θ = M/2ⁿ` (M from ℰ or `--solutions`). Prints the grades of
+  the oracle, the diffusion, one iteration (measured, and the ⊕ of the two measured parts) and
+  the full circuit, and `r_star`; `--json` adds `circuit` and `iteration_circuit` (one line).
 -/
 
 open CQRV CQRV.DSL CQRV.Matching CQRV.Synthesis
@@ -34,6 +42,8 @@ def usage : String :=
   "usage: cqr <command> [args]\n\ncommands:\n" ++
     "  check <file>\n  extract <file> [--solutions M]\n  match <file> [--solutions M] [--text]\n" ++
     "  synthesize <file> [--amax k] [--json] [--layers]\n" ++
+    "  synthesize --diffusion n [--amax k] [--json] [--layers]\n" ++
+    "  synthesize <file> --grover [--iterations r] [--solutions M] [--json] [--layers]\n" ++
     String.join ((subcommands.drop 4).map fun (c, _) => s!"  {c}\n")
 
 /-- Report §4.2.2 — parse and surface-check a source file; also returns the position of the
@@ -101,30 +111,26 @@ def matchFlags : List String → Option (Option Nat × Bool)
     return (some k, t)
   | _ => none
 
-/-- Report §6.1.3–6.1.4 — the oracle circuit of a typed program under ancilla budget `aMax`:
-straight-line when the budget covers every AND (or no budget is given); otherwise a Bennett
-pebbling, which decision 3 allows only for AND chains. Returns the schedule name. -/
+/-- Report §6.1.3–6.1.4 — the oracle circuit of a typed program under ancilla budget `aMax`
+(`synthesizeWithBudget`: straight-line, or a Bennett pebbling of an AND chain). Returns the
+schedule name and ĉ∧ of the network. -/
 def synthesizeWith (tp : TypedProgram) (aMax : Option Nat) :
     Except Diagnostic (String × Nat × Circuit) := do
   let N ← toNetwork tp
-  let full ← synthesizeOracle N
-  let fail {α : Type} (code : Code) (msg : String) : Except Diagnostic α :=
-    throw (Diagnostic.at .synthesis code ⟨1, 1⟩ msg)
-  match aMax with
-  | some k =>
-    if k ≥ full.peakAncilla then return ("straight-line", N.andCount, full)
-    let some lits := Bennett.chainOf N
-      | fail .unsupportedNetwork s!"--amax {k} is below the {full.peakAncilla} ancillae of the \
-          straight-line schedule; Bennett pebbling is implemented only for AND chains \
-          (report §6.1.3, Stage 5 decision 3)"
-    match pebbleChain (lits.length - 1) k with
-    | .ok ms => return (s!"bennett(amax={k})", N.andCount, Bennett.chainCircuit N.nInputs lits ms)
-    | .error e => fail .infeasibleBudget e
-  | none => return ("straight-line", N.andCount, full)
+  let (sched, c) ← synthesizeWithBudget N aMax
+  return (sched, N.andCount, c)
 
 /-- Report §3.1.1 — a grade as JSON `{w, d, t, a}`. -/
 def gradeJson (g : Grade) : Lean.Json :=
   Lean.Json.mkObj [("w", g.w), ("d", g.d), ("t", g.t), ("a", g.a)]
+
+/-- Print a result object: one compressed line with the IR fields `extra` under `--json`,
+pretty otherwise; then the layer dump of `c` under `--layers`. -/
+def printResult (base extra : List (String × Lean.Json)) (c : Circuit) (json layers : Bool) :
+    IO Unit := do
+  if json then IO.println (Lean.Json.mkObj (base ++ extra)).compress
+  else IO.println (Lean.Json.mkObj base).pretty
+  if layers then IO.println c.layerDump
 
 /-- `cqr synthesize <file> [--amax k] [--json] [--layers]` — report §6.1.4, §6.3.1 (Eq. 5). -/
 def runSynthesize (path : String) (aMax : Option Nat) (json layers : Bool) : IO UInt32 := do
@@ -136,10 +142,63 @@ def runSynthesize (path : String) (aMax : Option Nat) (json layers : Bool) : IO 
     | .ok (sched, cand, c) =>
       let base := [("name", Lean.toJson tp.name), ("schedule", Lean.toJson sched),
                    ("and_complexity", Lean.toJson cand), ("grade", gradeJson c.grade)]
-      if json then IO.println (Lean.Json.mkObj (base ++ [("circuit", c.toJson)])).compress
-      else IO.println (Lean.Json.mkObj base).pretty
-      if layers then IO.println c.layerDump
+      printResult base [("circuit", c.toJson)] c json layers
       return 0
+
+/-- `cqr synthesize --diffusion n [--amax k] [--json] [--layers]` — report §8.2, Stage 5b. -/
+def runDiffusion (n : Nat) (aMax : Option Nat) (json layers : Bool) : IO UInt32 := do
+  match diffusionWith n aMax with
+  | .error d => IO.println d.toJson.compress; return 1
+  | .ok (sched, c) =>
+    let base := [("name", Lean.toJson "diffusion"), ("n", Lean.toJson n),
+                 ("schedule", Lean.toJson s!"mcz {sched}"), ("grade", gradeJson c.grade)]
+    printResult base [("circuit", c.toJson)] c json layers
+    return 0
+
+/-- `cqr synthesize <file> --grover [--iterations r] [--solutions M] [--json] [--layers]` —
+report §3.2.4, §8 (Stage 5b): oracle ⊕ diffusion V1, `r` (default r⋆) iterations. -/
+def runGrover (path : String) (iters solutions : Option Nat) (json layers : Bool) :
+    IO UInt32 := do
+  match ← frontEnd path, ← signature path solutions with
+  | .error d, _ | _, .error d => IO.println d.toJson.compress; return 1
+  | .ok (tp, _), .ok sig =>
+    let n := sig.arity
+    let rs := sig.solutionCount.bind (rStar n)
+    let some r := iters <|> rs
+      | IO.eprintln s!"cqr synthesize --grover: give --iterations r, or a solution count M \
+          with 1 ≤ M ≤ 2^{n} (from ℰ or --solutions M) to compute r⋆"
+        return 2
+    let res : Except Diagnostic (Circuit × Circuit × Circuit × Circuit) := do
+      let N ← toNetwork tp
+      return (← synthesizeOracle N, ← diffusion n none, ← groverIteration N n,
+        ← groverCircuit N n r)
+    match res with
+    | .error d => IO.println d.toJson.compress; return 1
+    | .ok (o, d, it, g) =>
+      let base := [("name", Lean.toJson tp.name), ("n", Lean.toJson n),
+        ("solutions", Lean.toJson sig.solutionCount), ("r_star", Lean.toJson rs),
+        ("iterations", Lean.toJson r),
+        ("grades", Lean.Json.mkObj [("oracle", gradeJson o.grade),
+          ("diffusion", gradeJson d.grade), ("iteration", gradeJson it.grade),
+          ("oracle_plus_diffusion", gradeJson (o.grade + d.grade)),
+          ("circuit", gradeJson g.grade)])]
+      printResult base [("circuit", g.toJson), ("iteration_circuit", it.toJson)] g json layers
+      return 0
+
+/-- Parse `[--iterations r] [--solutions M] [--json] [--layers]` (after `--grover`). -/
+def groverFlags : List String → Option (Option Nat × Option Nat × Bool × Bool)
+  | [] => some (none, none, false, false)
+  | "--json" :: rest => (groverFlags rest).map fun (r, m, _, l) => (r, m, true, l)
+  | "--layers" :: rest => (groverFlags rest).map fun (r, m, j, _) => (r, m, j, true)
+  | "--iterations" :: r :: rest => do
+    let r ← r.toNat?
+    let (_, m, j, l) ← groverFlags rest
+    return (some r, m, j, l)
+  | "--solutions" :: m :: rest => do
+    let m ← m.toNat?
+    let (r, _, j, l) ← groverFlags rest
+    return (r, some m, j, l)
+  | _ => none
 
 /-- Parse `[--amax k] [--json] [--layers]` in any order. -/
 def synthFlags : List String → Option (Option Nat × Bool × Bool)
@@ -163,6 +222,14 @@ def main (args : List String) : IO UInt32 := do
   | "match" :: file :: flags =>
     match matchFlags flags with
     | some (m, t) => runMatch file m t
+    | none => IO.eprint usage; return 2
+  | "synthesize" :: "--diffusion" :: n :: flags =>
+    match n.toNat?, synthFlags flags with
+    | some n, some (k, j, l) => runDiffusion n k j l
+    | _, _ => IO.eprint usage; return 2
+  | "synthesize" :: file :: "--grover" :: flags =>
+    match groverFlags flags with
+    | some (r, m, j, l) => runGrover file r m j l
     | none => IO.eprint usage; return 2
   | "synthesize" :: file :: flags =>
     match synthFlags flags with

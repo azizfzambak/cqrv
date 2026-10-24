@@ -358,3 +358,35 @@ Decision:
 Why: needed to implement the task; the task leaves these open.
 Rejected: (3) carrying register ranges in `Inv` (the fold does not know the final `nAnc`); (5) a separate theorem for constant predicates.
 Report §: 6.1.1, 6.1.2, 6.1.4, 6.2.2, 6.2.4, 6.3.2, 9.1.1.
+
+## 2026-10-24 — Diffusion = H X · oracle(P_all) · X H; V2 measured only; ancilla reuse (Stage 5b, reviewer decisions 1–3)
+Decision: (1) V1, the primary construction: `diffusion n none = H^{⊗n} ; X^{⊗n} ; synthesizeOracle(allNet n) ; X^{⊗n} ; H^{⊗n}` (`CQRV/Synthesis/Diffusion.lean`), using `2|0⟩⟨0| − I = −X^{⊗n} · MCZ · X^{⊗n}` with MCZ the phase oracle of `P_all(y) = y₀ ∧ … ∧ y_{n−1}` (`allNet n`: an AND chain of n − 1 nodes, xor-free). It equals `U_s = 2|s⟩⟨s| − I` up to the global phase −1, irrelevant for the channel; its correctness is Lemma 6.3.2 plus the H/X wrappers, no new restoration proof (none written in this stage). (2) V2: `diffusion n (some k)` replaces the MCZ by the Stage 5 Bennett pebbling of the chain under `a_max = k` (grade and harness only; not used for the headline unless the reviewer decides so). (3) Ancilla reuse: the diffusion allocates from `anc[0]`, so the oracle's restored ancillae are reused (§3.1.4); the iteration's `a` is `max(a_oracle, a_diffusion)`, as under ⊕. `groverIteration P n = (synthesizeOracle P).append (diffusion n)` (shifted append of 6b-1); `groverCircuit P n r = ⟨n, H^{⊗n}⟩` followed by `r` appends of the iteration; no final measurement in the IR.
+Why: reviewer decisions 1–3 of the Stage 5b task.
+Rejected: a relative-phase / dirty-ancilla MCZ with a = 2 (needs its own restoration proof; not attempted).
+Report §: 8.2, 3.1.4 (Table 3.3), 6.1.4 (Table 3), 3.2.4.
+
+## 2026-10-24 — Report erratum candidates: measured diffusion and Grover grades (Stage 5b)
+Decision: measured with the decision-4 scheduler (regression values in `tests/CQRVTests/Diffusion.lean`, `scripts/cli_smoke.sh`), not adjusted:
+
+| Object | Report claims | Measured (w, d, t, a) |
+|---|---|---|
+| Diffusion D₈ (V1) | (10, 16, 28, 2 reused) | (15, 89, 28, 7) |
+| Diffusion D₈ (V2, a_max = 3) | — | (11, 157, 52, 3) |
+| One iteration (oracle ⊕ D₈, V1) | (10, 37, 36, 2) | measured (15, 116, 36, 7); ⊕ of the measured parts (10, 27, 8, 2) ⊕ (15, 89, 28, 7) = (15, 116, 36, 7) |
+| Full Grover, r⋆ = 2 (V1) | (10, 74, 72, 2) | (15, 230, 72, 7) |
+| Success probability | sin²(5θ) ≈ 0.945 | 0.945312500000 (= sin²(5θ), sin²θ = 32/256; \|diff\| 7.8e−16) |
+
+The t column agrees with the report everywhere (28 = 4n − 4 for D₈; 36; 72). Erratum candidates: (i) a = 2 for D₈: the V1 MCZ holds n − 1 = 7 ancillae (one per AND), and with 2 clean ancillae a 7-node chain is infeasible under decision 3 (p pebbles reach node 2^p − 1; a_max = 3 is the minimum, `diffusion 8 (some 2)` is `infeasible_budget`). The report's "(16, 28, 2 reused)" combines the T-count of the straight-line chain with an ancilla count no clean-ancilla AND chain reaches; it presumably refers to the relative-phase decomposition it names, which is not implemented. (ii) d = 16 for D₈: each TempLogicalAND compute phase needs ≥ 11 layers on its target (Stage 5 erratum), so a chain of 7 cannot fit in 16; measured 89 = 12n − 7 (for 2 ≤ n ≤ 10). (iii) w = 10: measured w = n + a = 15 for the iteration and the full circuit. (iv) Consequently Table 3.3 / Chapter 8 (10, 74, 72, 2) becomes (15, 230, 72, 7) for V1. Composition: the measured iteration equals oracle ⊕ diffusion exactly (no layer overlap across that boundary: the MCZ starts on x[0], which the oracle's last MBU uses). The full circuit does not equal `H^{⊗n} ⊕ 2·iteration` = (15, 233, 72, 7) in d: the scheduler overlaps 3 layers across the H^{⊗n}/iteration and iteration/iteration boundaries (d = 230 < 233); ⊕ is an upper bound here, as it should be. V2 for comparison: n = 8, a_max = 4 gives (12, 118, 40, 4).
+Report §: 3.1.4 (Table 3.3), 6.1.4 (Table 3), 8, 3.3.
+
+## 2026-10-24 — Stage 5b interpretations not fixed by the task (Stage 5b)
+Decision:
+(1) `Gate.writes`, `Circuit.written`, `Circuit.nBits` and `Circuit.append` moved unchanged (same names and namespaces) from `CQRV/Circuit/Semantics.lean` to `CQRV/Circuit/IR.lean`, so that the synthesizer can use the shifted append without importing Physlib (the `cqr` executable would otherwise link Mathlib/Physlib). Proofs are unchanged and build.
+(2) The `--amax` logic of `cqr synthesize` moved from `Apps/cqr/Main.lean` into `synthesizeWithBudget : Network → Option Nat → Except Diagnostic (String × Circuit)` (`Diffusion.lean`), shared by the CLI and V2; same behaviour and messages (`oracle_json` byte identity and `cli_smoke` pass).
+(3) `allNet 1` has no AND: the MCZ is `Z x[0]`; `diffusion 0` is rejected (`unsupported_network`).
+(4) CLI: `cqr synthesize --diffusion n [--amax k] [--json] [--layers]` prints `{name, n, schedule, grade}`; `cqr synthesize <file> --grover [--iterations r] [--solutions M] [--json] [--layers]` uses V1 only (no `--amax`), prints the grades of oracle, diffusion, iteration, `oracle_plus_diffusion` (⊕ of the measured parts) and the full circuit, and `r_star`; `--json` adds `circuit` and `iteration_circuit`. Without `--iterations` and without M (from ℰ or `--solutions`, 1 ≤ M ≤ 2ⁿ) it exits 2 with a message (no diagnostic code fits).
+(5) `rStar n M = ⌊π/(4θ)⌋`, `θ = asin √(M/2ⁿ)`, in `Float`: an engineering value for the CLI; a certificate will need an exact statement (Stage 7/8).
+(6) Harness: branches enumerated depth first (`statevector.iter_ir_branches`, same checks as `run_ir`; memory per pending measurement, not per branch); (a) covers V1 for n = 1..10 and V2 for (n, a_max) ∈ {(4, 2), (5, 3), (8, 3), (8, 4)}, one random state each, plus a negative control (D₃ without its last H must be rejected); (c) samples outcomes with their Born probabilities (`run_ir_sampled`) and also checks that the ancillae end in |0…0⟩. Runtime ~105 s locally.
+Why: needed to implement the task; the task leaves these open.
+Rejected: (1) importing `CQRV.Circuit.Semantics` into the synthesizer; (5) an exact rational bound for r⋆ now (no proof is required in this stage).
+Report §: 8.2, 3.2.4, 6.1.3, 6.1.4, 6.2.4, 9.1.1.

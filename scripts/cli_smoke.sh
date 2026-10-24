@@ -120,5 +120,28 @@ out="$("${cqr[@]}" synthesize examples/search_while.cqr | tr -d '')"; rc=$?
 expect_exit "synthesize search_while" 1 "$out" "$rc"
 expect_has "search_while synthesize code" '"code":"unbounded_loop"' "$out"
 
+# Stage 5b — diffusion and Grover circuit (report §8.2, §3.2.4; DECISIONS.md 2026-10-24): the
+# measured grades (Table 3.3 claims (10, 16, 28, 2) for D₈ and (10, 74, 72, 2) for r⋆ = 2).
+out="$("${cqr[@]}" synthesize --diffusion 8 | tr -d '\r')"; rc=$?
+expect_exit "synthesize --diffusion 8" 0 "$out" "$rc"
+expect_has "diffusion 8 V1 grade" '"grade": {"w": 15, "t": 28, "d": 89, "a": 7}' "$out"
+out="$("${cqr[@]}" synthesize --diffusion 8 --amax 3 | tr -d '\r')"; rc=$?
+expect_exit "synthesize --diffusion 8 --amax 3" 0 "$out" "$rc"
+expect_has "diffusion 8 V2 grade" '"grade": {"w": 11, "t": 52, "d": 157, "a": 3}' "$out"
+out="$("${cqr[@]}" synthesize --diffusion 8 --amax 2 | tr -d '\r')"; rc=$?
+expect_exit "synthesize --diffusion 8 --amax 2 (infeasible)" 1 "$out" "$rc"
+expect_has "diffusion 8 --amax 2 code" '"code":"infeasible_budget"' "$out"
+out="$("${cqr[@]}" synthesize examples/grover_pred_037.cqr --grover | tr -d '\r')"; rc=$?
+expect_exit "synthesize grover_pred_037 --grover" 0 "$out" "$rc"
+expect_has "grover r_star" '"r_star": 2' "$out"
+expect_has "grover iteration grade" '"iteration": {"w": 15, "t": 36, "d": 116, "a": 7}' "$out"
+expect_has "grover oracle ⊕ diffusion" '"oracle_plus_diffusion": {"w": 15, "t": 36, "d": 116, "a": 7}' "$out"
+expect_has "grover circuit grade" '"circuit": {"w": 15, "t": 72, "d": 230, "a": 7}' "$out"
+out="$("${cqr[@]}" synthesize examples/grover_pred_037.cqr --grover --iterations 1 | tr -d '\r')"; rc=$?
+expect_exit "synthesize grover_pred_037 --grover --iterations 1" 0 "$out" "$rc"
+expect_has "grover --iterations 1" '"iterations": 1' "$out"
+"${cqr[@]}" synthesize examples/search_or.cqr --grover >/dev/null 2>&1; rc=$?
+expect_exit "synthesize search_or --grover (M unknown, no --iterations)" 2 "" "$rc"
+
 [ "$fail" -eq 0 ] && echo "cli_smoke: all checks passed" || echo "cli_smoke: FAILED"
 exit "$fail"
