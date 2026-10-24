@@ -468,3 +468,9 @@ Decision: (5) The hardware gate count is split: `hardware_perturbation.counts` =
 Why: reviewer decisions on Stage 8a. CI has never run, so the only QIR verification that has actually run must not be skippable.
 Rejected: (5) G without the terminal measurements (they are noisy operations too); (6) a skippable local LLVM check.
 Report §: 3.3.3, 5.3.3, 8.4.3.
+
+## 2026-10-25 — Python test dependencies: full pinned set (reviewer decision)
+Decision: `tests/diff/requirements.lock` is the `pip freeze` of a venv after `pip install -r tests/diff/requirements.txt` (8 packages: the direct pins numpy, jsonschema, llvmlite and the transitive attrs, jsonschema-specifications, referencing, rpds-py, typing_extensions). CI installs from it with `pip install --no-deps -r tests/diff/requirements.lock`, then `pip check`, so an unpinned transitive dependency cannot enter silently (an incomplete lock fails `pip check` or the import). `requirements.txt` keeps the direct pins; the lock is regenerated whenever it changes. Whether CI is run (push to a private remote) is a reviewer decision before Stage 9.
+Why: reviewer answer to Stage 8a review question (1); dependency drift row of the risk register.
+Rejected: pinning only the direct dependencies (transitive versions drift between runs); a hash-pinned lock (`--require-hashes`): wheel hashes differ per platform (Windows locally, ubuntu in CI).
+Report §: Table 9.5, 9.5.1.

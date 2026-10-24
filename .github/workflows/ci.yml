@@ -50,8 +50,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Python harness requirements
-        run: pip install -r tests/diff/requirements.txt
+      - name: Install Python harness requirements (full pinned set, Table 9.5)
+        run: |
+          pip install --no-deps -r tests/diff/requirements.lock
+          pip check
 
       - name: Simulator self-test
         run: python -I tests/diff/statevector.py --selftest

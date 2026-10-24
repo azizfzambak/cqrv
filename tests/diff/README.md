@@ -36,7 +36,7 @@ is test-only: nothing here is part of the trusted pipeline.
 Run from the repository root:
 
 ```bash
-pip install -r tests/diff/requirements.txt
+pip install --no-deps -r tests/diff/requirements.lock   # full pinned set (CI); direct pins: requirements.txt
 python -I tests/diff/statevector.py --selftest
 lake build && scripts/diff_oracles.sh      # PYTHON=.venv/Scripts/python.exe on Windows
 ```
