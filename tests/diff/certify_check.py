@@ -15,6 +15,10 @@ Runs the built `cqr` from the project root and checks
   * the XOR predicate tests/certify/xor_pred.cqr (--solutions 4; Stage 9a, `lemma_6_3_2_xor`
     proved): exit 0, `certified (conditional on: solution_count = 4)`, schema, hash link, axioms
     exactly the standard three, no obligations;
+  * the `if` predicate tests/certify/if_pred.cqr (`(if x0 then x1 else x2 ⊕ x3) ∧ x4 ∧ x5`;
+    Stage 9a review): M = 8 recounted here by brute force over the 64 inputs, then
+    --solutions 8 → exit 0, `certified (conditional on: solution_count = 8)`, r = 2, delta 7/128,
+    axioms exactly the standard three, no obligations;
   * negative tests (must not say "certified"): (a) a network that fails `C.WF`: the committed
     Cert.lean with the input node `.input 7` of `net` replaced by `.input 8` (a data qubit outside
     the 8-qubit register; temp copy) → the kernel check fails (exit 1); (b) the committed Cert.lean with the proof of `cert` replaced by `sorry` (temp
@@ -206,6 +210,24 @@ def main():
         assert "sorry" not in xtext and ".xor " in xtext
         print(f"ok:   XOR predicate xor_pred: `{last}` (exit 0; axioms exactly propext, "
               "Classical.choice, Quot.sound; no obligations)")
+
+        # `if` predicate: the mux `b ⊕ (c ∧ (a ⊕ b))` of toNetwork (Stage 9a review)
+        m = sum(1 for v in range(64)
+                if ((v >> 1 & 1) if v & 1 else ((v >> 2 & 1) ^ (v >> 3 & 1))) and v >> 4 & 1
+                and v >> 5 & 1)
+        assert m == 8, m
+        out = os.path.join(tmp, "if")
+        rc, so, se = certify(args.cqr, os.path.join("tests", "certify", "if_pred.cqr"), out,
+                             "--solutions", str(m))
+        last = so.rstrip("\n").split("\n")[-1]
+        assert rc == 0 and last == "certified (conditional on: solution_count = 8)", (rc, so, se)
+        ic, itext = check_dir(out, validator)
+        assert ic["status"] == "certified" and ic["obligations"] == []
+        assert ic["axioms"] == STANDARD, ic["axioms"]
+        assert ic["spec"]["delta"] == "7/128" and "r = 2." in itext, (ic["spec"], itext[:400])
+        assert "sorry" not in itext and ".xor " in itext
+        print(f"ok:   if predicate if_pred (M = 8 by brute force): `{last}` (exit 0; r = 2, "
+              "delta 7/128; axioms exactly propext, Classical.choice, Quot.sound)")
 
         base = read(os.path.join(EXAMPLE, "Cert.lean"))
 

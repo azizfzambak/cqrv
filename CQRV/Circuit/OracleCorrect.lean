@@ -916,15 +916,17 @@ theorem lemma_6_3_2_xor (N : Network) (C : Circuit) (hC : synthesizeOracle N = .
     AncRestore C.nData C.nAnc C (phaseOracle (N.pred C.nData)) :=
   lemma_6_3_2_xor_of_le N C hC hWF C.nAnc le_rfl
 
-/-- Report §6.3.2, Lemma 6.3.2 at a register `a ≥ C.nAnc`, statement of Stage 7a (with the
-hypothesis `N.xorFree` of Stage 6a, now redundant): a corollary of `lemma_6_3_2_xor_of_le`. -/
+/-- Report §6.3.2, Lemma 6.3.2 at a register `a ≥ C.nAnc` — superseded by
+`lemma_6_3_2_xor_of_le` (Stage 9a). Kept for compatibility with its Stage 7a statement: the
+hypothesis `N.xorFree` of Stage 6a is unused; a corollary of `lemma_6_3_2_xor_of_le`. -/
 theorem lemma_6_3_2_of_le (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C)
     (_hN : N.xorFree = true) (hWF : C.WF) (a : ℕ) (ha : C.nAnc ≤ a) :
     AncRestore C.nData a C (phaseOracle (N.pred C.nData)) :=
   lemma_6_3_2_xor_of_le N C hC hWF a ha
 
-/-- Report §6.3.2, Lemma 6.3.2 — statement of Stage 6a (AND/NOT/OR networks, `N.xorFree`), kept
-for the Stage 7/8 callers: a corollary of `lemma_6_3_2_xor`. -/
+/-- Report §6.3.2, Lemma 6.3.2 — superseded by `lemma_6_3_2_xor` (Stage 9a). Kept for
+compatibility with its Stage 6a statement (AND/NOT/OR networks; the hypothesis `N.xorFree` is
+unused): a corollary of `lemma_6_3_2_xor`. -/
 theorem lemma_6_3_2 (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C)
     (_hN : N.xorFree = true) (hWF : C.WF) :
     AncRestore C.nData C.nAnc C (phaseOracle (N.pred C.nData)) :=

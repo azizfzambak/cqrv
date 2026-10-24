@@ -6,7 +6,8 @@
 #                                of Cert.lean (hashlib); .qasm / .qir re-parse to the literal;
 #                                second run byte-identical (JSON except kernel_check); the
 #                                committed examples/certs/grover_pred_037 agrees; the XOR
-#                                predicate tests/certify/xor_pred.cqr is certified (Stage 9a);
+#                                predicate tests/certify/xor_pred.cqr and the `if` predicate
+#                                tests/certify/if_pred.cqr are certified (Stage 9a, 9a review);
 #                                negative tests (network failing C.WF → kernel check fails,
 #                                injected sorry → sorryAx, native_decide → its auxiliary axiom,
 #                                search_while → Stage 4 hint)

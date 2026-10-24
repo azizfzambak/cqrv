@@ -199,4 +199,26 @@ def row (aMax : Nat) : Bool × Nat × Nat × Nat :=
 #guard ((typed groverSrc >>= toNetwork).map Bennett.chainOf).toOption == some (some [0, 3, 7])
 #guard ((typed orSrc >>= toNetwork).map Bennett.chainOf).toOption == some none
 
+/-! ## Stage 9a review — `Network.WF` on the corpus -/
+
+def xorPredSrc : String := include_str "../../tests/certify/xor_pred.cqr"
+def ifPredSrc : String := include_str "../../tests/certify/if_pred.cqr"
+
+/-- `toNetwork` of a source; `none` when the front end rejects it or there is no network. -/
+def netOf (src : String) : Option Network := (parse src >>= check >>= toNetwork).toOption
+
+-- Every corpus file with a network (examples/, tests/certify/, the inline programs above)
+-- gives a well-formed network; search_while (unbounded loop) and allocate_tree (rejected by the
+-- checker) have none.
+#guard [groverSrc, orSrc, chainSrc, xorPredSrc, ifPredSrc, forSrc, ifSrc, callSrc, vecIfSrc,
+    letSrc].all fun src => (netOf src).any (·.wf)
+#guard (netOf whileSrc).isNone && (netOf treeSrc).isNone
+-- Each clause of `Network.wf` rejects: an input outside `nInputs` (the synthesizer would emit
+-- `Z x[5]`), a forward operand, an output outside the nodes.
+#guard !(Network.mk 0 #[.input 5] [0]).wf
+#guard !(Network.mk 2 #[.input 0, .input 1, .and 0 3, .xor 0 1] [2]).wf
+#guard !(Network.mk 1 #[.input 0] [1]).wf
+#guard (Network.mk 2 #[.input 0, .input 1, .and 0 1] [2]).wf
+example : (Network.mk 2 #[.input 0, .input 1, .xor 0 1, .not 2] [3]).WF := by decide
+
 end CQRV.Tests.Synthesis

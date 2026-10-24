@@ -64,6 +64,26 @@ def Network.eval (N : Network) (x : Nat → Bool) : List Bool :=
   let vs := N.values x
   N.outputs.map (vs.getD · false)
 
+/-- Report §6.1.2, §6.3.2 — a well-formed network (decidable check; Stage 9a review): every
+`input k` has `k < nInputs`, every operand index is smaller than its node's index (topological
+order), and every output index is a node. The side condition of the planned
+`synthesizeOracle_WF` (docs/SORRIES.md); without it the synthesizer can emit a data qubit
+outside the register (`⟨0, #[.input 5], [0]⟩` ↦ `Z x[5]`). -/
+def Network.wf (N : Network) : Bool :=
+  (List.range N.nodes.size).all (fun k =>
+    match N.nodes[k]? with
+    | some (.input i) => decide (i < N.nInputs)
+    | some (.const _) => true
+    | some (.not i) => decide (i < k)
+    | some (.and i j) | some (.xor i j) => decide (i < k) && decide (j < k)
+    | none => true) &&
+  N.outputs.all (· < N.nodes.size)
+
+/-- Report §6.1.2, §6.3.2 — `Network.wf` as a proposition (as `Circuit.WF`). -/
+def Network.WF (N : Network) : Prop := N.wf = true
+
+instance (N : Network) : Decidable N.WF := inferInstanceAs (Decidable (N.wf = true))
+
 namespace ToNetwork
 
 /-- What a name denotes while building: the bits of a value, or a `for` index fixed by
