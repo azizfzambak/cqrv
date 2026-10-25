@@ -59,6 +59,8 @@ inputs.
 
 Post-M2 note (2026-10-25): measured_composition (Theorem 3.3a, general ε) closed in c691700.
 
+Post-M2 note (2026-10-25): Theorem 3.3a (general ε, `measured_composition`) and Theorem 3.3b (`coherent_composition`, abstract `distD`, Stage 10b) closed; no `sorry` left in the repository.
+
 | Obligation | Report § | Status |
 |---|---|---|
 | `measured_composition` (Theorem 3.3a, general ε; `CQRV/Realizability/Composition.lean:146`) | §2.3.2 | open (`sorry`, tracked); not used by either certificate |
