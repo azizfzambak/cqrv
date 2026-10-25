@@ -1,13 +1,20 @@
 {"status": "certified (conditional on: solution_count = 32)",
  "source": "examples/grover_pred_037.cqr",
  "rows":
- [{"verification": "exhaustively validated",
-   "stage": "1. DSL Input",
-   "resources": "n = 8 input bits; 2^8 = 256 inputs compared, 0 disagree",
-   "output": "Typed AST `grover_pred_037` + Boolean network (toNetwork)",
+ [{"verification": "declared trust boundary",
+   "stage": "1a. DSL Input: parser, surface checker",
+   "resources": "—",
+   "output": "Typed AST `grover_pred_037`",
    "note":
-   "what is validated: the typed AST → network translation, `evalProgram` (reference evaluator) vs `Network.pred (toNetwork …)` on every input; both are unverified Lean code and the check is not kernel-checked; the parser and surface checker are shared by both sides (the source is bound by predicate_hash); declared as trust_boundary.front_end = \"DSL → network: exhaustively validated (2^8 inputs) by the unverified evaluator; not kernel-checked\"",
+   "parser and surface checker: declared trust boundary (shared by both sides of the comparison in 1b, so 1b cannot detect their errors); the source text is bound by predicate_hash only",
    "input": "examples/grover_pred_037.cqr (predicate_hash d5f128217996…)"},
+  {"verification": "exhaustively validated",
+   "stage": "1b. DSL Input: typed AST → network",
+   "resources": "n = 8 input bits; 2^8 = 256 inputs compared, 0 disagree",
+   "output": "Boolean network (toNetwork)",
+   "note":
+   "typed AST → network: exhaustively validated (2^8 inputs), `evalProgram` (reference evaluator) vs `Network.pred (toNetwork …)` on every input; both are unverified Lean code and the check is not kernel-checked; declared as trust_boundary.front_end = \"DSL → network: exhaustively validated (2^8 inputs) by the unverified evaluator; not kernel-checked\"",
+   "input": "Typed AST `grover_pred_037`"},
   {"verification": "unverified",
    "stage": "2. Spec Extraction",
    "resources": "ĉ∧ = 2 (upper bound), AND-depth 2, ancilla budget 2",
@@ -48,7 +55,7 @@
   {"verification": "kernel-checked",
    "stage": "7. Certificate Gen",
    "resources":
-   "kernel 7.20 s, wall 17.08 s (median of 5 (first run excluded)); axioms: propext, Classical.choice, Quot.sound",
+   "kernel 7.23 s, wall 17.10 s (median of 5 (first run excluded)); axioms: propext, Classical.choice, Quot.sound",
    "output":
    "examples/certs/grover_pred_037/Cert.lean, certificate.json (theorem CQRV.Cert.grover_pred_037.cert)",
    "note":

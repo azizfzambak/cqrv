@@ -13,7 +13,10 @@ the verification status one of `kernel-checked`, `exhaustively validated`, `decl
 boundary`, `unverified`, and **measured** resources only (never the report's targets). Every
 number is computed from the run's own objects: the signature, the network, the synthesized
 circuits, the kernel-check timing and the audit. Each row also carries a note saying what the
-status covers; the Markdown file lists the notes under the table.
+status covers; the Markdown file lists the notes under the table. Stage 1 has two rows (Stage 9b
+review, item 4): 1a the parser and surface checker (declared trust boundary, shared by both sides
+of the front-end comparison) and 1b the typed AST → network translation (exhaustively validated
+on 2ⁿ inputs; declared trust boundary for n > 16).
 -/
 
 @[expose] public section
@@ -90,7 +93,8 @@ def msText (ms : Nat) : String :=
   let c := (ms + 5) / 10
   s!"{c / 100}.{if c % 100 < 10 then "0" else ""}{c % 100} s"
 
-/-- Report §8.5.2 — the eight rows of Table 8.5.2 for a run, measured values only. -/
+/-- Report §8.5.2 — the rows of Table 8.5.2 for a run, stage 1 split into 1a / 1b (Stage 9b
+review, item 4), measured values only. -/
 def RunData.rows (d : RunData) : List ReportRow :=
   let G := gateCounts d.circuit
   let andNodes := d.net.andCount
@@ -98,18 +102,24 @@ def RunData.rows (d : RunData) : List ReportRow :=
   let feRow : Verification × String × String := match d.frontEnd with
     | .validated n =>
       (.exhaustivelyValidated, s!"n = {n} input bits; 2^{n} = {2 ^ n} inputs compared, 0 disagree",
-       s!"what is validated: the typed AST → network translation, `evalProgram` (reference \
+       s!"typed AST → network: exhaustively validated (2^{n} inputs), `evalProgram` (reference \
         evaluator) vs `Network.pred (toNetwork …)` on every input; both are unverified Lean \
-        code and the check is not kernel-checked; the parser and surface checker are shared by \
-        both sides (the source is bound by predicate_hash); declared as \
+        code and the check is not kernel-checked; declared as \
         trust_boundary.front_end = \"{frontEndValidatedText n}\"")
     | .tooLarge n =>
       (.declaredTrustBoundary, s!"n = {n} input bits (> {frontEndLimit}: not enumerated)",
        s!"trust_boundary.front_end = \"{frontEndTrust}\"")
     | _ => (.unverified, "—", "no validation outcome")
   let kms := match d.timing.kernelMs with | some k => s!"kernel {msText k}, " | none => ""
-  [ { stage := "1. DSL Input", input := s!"{d.source} (predicate_hash {d.predicateHash.take 12}…)",
-      output := s!"Typed AST `{d.name}` + Boolean network (toNetwork)",
+  [ { stage := "1a. DSL Input: parser, surface checker",
+      input := s!"{d.source} (predicate_hash {d.predicateHash.take 12}…)",
+      output := s!"Typed AST `{d.name}`",
+      verification := .declaredTrustBoundary, resources := "—",
+      note := "parser and surface checker: declared trust boundary (shared by both sides of the \
+        comparison in 1b, so 1b cannot detect their errors); the source text is bound by \
+        predicate_hash only" },
+    { stage := "1b. DSL Input: typed AST → network", input := s!"Typed AST `{d.name}`",
+      output := "Boolean network (toNetwork)",
       verification := feRow.1, resources := feRow.2.1, note := feRow.2.2 },
     { stage := "2. Spec Extraction", input := "Typed AST",
       output := s!"Ground signature σ_in: {d.sig.problemClass.name}, n = {d.sig.arity}, M = {m}, \

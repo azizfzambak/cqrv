@@ -1,13 +1,20 @@
 {"status": "certified (conditional on: solution_count = 30)",
  "source": "examples/simple_alu_x0_1.cqr",
  "rows":
- [{"verification": "exhaustively validated",
-   "stage": "1. DSL Input",
-   "resources": "n = 6 input bits; 2^6 = 64 inputs compared, 0 disagree",
-   "output": "Typed AST `simple_alu_x0_1` + Boolean network (toNetwork)",
+ [{"verification": "declared trust boundary",
+   "stage": "1a. DSL Input: parser, surface checker",
+   "resources": "—",
+   "output": "Typed AST `simple_alu_x0_1`",
    "note":
-   "what is validated: the typed AST → network translation, `evalProgram` (reference evaluator) vs `Network.pred (toNetwork …)` on every input; both are unverified Lean code and the check is not kernel-checked; the parser and surface checker are shared by both sides (the source is bound by predicate_hash); declared as trust_boundary.front_end = \"DSL → network: exhaustively validated (2^6 inputs) by the unverified evaluator; not kernel-checked\"",
+   "parser and surface checker: declared trust boundary (shared by both sides of the comparison in 1b, so 1b cannot detect their errors); the source text is bound by predicate_hash only",
    "input": "examples/simple_alu_x0_1.cqr (predicate_hash 07acc1e757ce…)"},
+  {"verification": "exhaustively validated",
+   "stage": "1b. DSL Input: typed AST → network",
+   "resources": "n = 6 input bits; 2^6 = 64 inputs compared, 0 disagree",
+   "output": "Boolean network (toNetwork)",
+   "note":
+   "typed AST → network: exhaustively validated (2^6 inputs), `evalProgram` (reference evaluator) vs `Network.pred (toNetwork …)` on every input; both are unverified Lean code and the check is not kernel-checked; declared as trust_boundary.front_end = \"DSL → network: exhaustively validated (2^6 inputs) by the unverified evaluator; not kernel-checked\"",
+   "input": "Typed AST `simple_alu_x0_1`"},
   {"verification": "unverified",
    "stage": "2. Spec Extraction",
    "resources": "ĉ∧ = 10 (upper bound), AND-depth 4, ancilla budget 10",
@@ -49,7 +56,7 @@
   {"verification": "kernel-checked",
    "stage": "7. Certificate Gen",
    "resources":
-   "kernel 6.34 s, wall 16.15 s (median of 5 (first run excluded)); axioms: propext, Classical.choice, Quot.sound",
+   "kernel 6.37 s, wall 16.25 s (median of 5 (first run excluded)); axioms: propext, Classical.choice, Quot.sound",
    "output":
    "examples/certs/simple_alu_x0_1/Cert.lean, certificate.json (theorem CQRV.Cert.simple_alu_x0_1.cert)",
    "note":

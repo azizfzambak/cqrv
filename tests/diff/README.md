@@ -51,7 +51,8 @@ is test-only: nothing here is part of the trusted pipeline.
   measurement branch, success probability = 1215/2048 = 1 − δ exactly. Driver:
   `scripts/diff_benchmark.sh` (CI, ~4 min). `certify_check.py` now also certifies
   `simple_alu_x0_1`, checks schema v1.3.0 (`front_end` after the exhaustive validation) and the
-  committed run reports of both examples.
+  committed run reports of both examples (stage 1 as rows 1a parser / surface checker and 1b typed
+  AST → network since the Stage 9b review).
 
 Run from the repository root:
 

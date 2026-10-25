@@ -42,7 +42,10 @@ AncRestore n a emitted (groverOp (Network.pred net n) ^ r * hadamardU n)`, under
 | predicate_hash | `d5f12821…819417e` | `07acc1e7…8e26c75` |
 | circuit_hash | `f1331e55…db5f3705` | `93b239e4…99b2edbd` |
 | proof_hash | `98299444…ce2cdd5f` | `cffe796d…a089b3f5` |
-| Kernel check (median of 5) | 7.20 s kernel, 17.08 s wall | 6.34 s kernel, 16.15 s wall |
+| Kernel check (median of 5) | 7.23 s kernel, 17.10 s wall | 6.37 s kernel, 16.25 s wall |
+
+M/N = 30/64 ≈ 1/2, so Grover gives almost no advantage on this instance (r⋆ = 1); it was chosen
+to exercise XOR and if end to end, not as a speed-up demonstration.
 
 Machine: 13th Gen Intel Core i9-13900H, 20 logical CPUs, 2600 MHz (max), `LEAN_NUM_THREADS=4`,
 Windows 11. Wall time includes process start and the `import CQRV` load (≈ 3.5 s). Full hashes are
@@ -70,7 +73,9 @@ exhaustive validation, §4).
   by the unverified evaluator; not kernel-checked" for n ≤ 16 (both certificates), else the Stage 8b
   wording. The theorem is about `net`; `evalProgram` and `Network.pred (toNetwork …)` agree on every
   input, but both are unverified, and the parser / surface checker are shared by both sides (the
-  source is bound by `predicate_hash`).
+  source is bound by `predicate_hash`). The run reports therefore split stage 1 (Stage 9b review):
+  1a "parser and surface checker: declared trust boundary (shared by both sides of the
+  comparison)" and 1b "typed AST → network: exhaustively validated (2^n inputs)".
 * **Emitter** (`trust_boundary.emitter`): QIR / OpenQASM 3 text unverified; translation-validated
   by re-parse to the IR literal (`check_emit.sh`, `certify_check.py`; llvmlite verification).
 * Also outside the kernel: ℰ and the matcher (the theorem restates the instance), the
@@ -89,12 +94,12 @@ exhaustive validation, §4).
 | 7 | §4.1.4 / §4.3.3: F₁ for both the arity and the iteration bound | F₁ arity, F₃ iteration bound, G₁… for lgg variables | 2026-10-23 "Metavariable names in φ_Grover" |
 | 8 | Table 3.3 / §6.1.4: diffusion D₈ (10, 16, 28, 2) | (15, 89, 28, 7) (V1, 7 clean ancillae) | 2026-10-24 "measured diffusion and Grover grades" |
 | 9 | Table 3.3 / Chapter 8: Grover slice (10, 74, 72, 2) | (15, 230, 72, 7) (t agrees) | same; 2026-10-24 "Headline grade is V1" |
-| 10 | §8.5.2 / §9.5.1: kernel check 0.3 s | 7.20 s kernel / 17.08 s wall (8b: 7.43 s) | 2026-10-25 "kernel-time erratum candidate" |
+| 10 | §8.5.2 / §9.5.1: kernel check 0.3 s | 7.23 s kernel / 17.10 s wall (8b: 7.43 s; 9b: 7.20 s) | 2026-10-25 "kernel-time erratum candidate" |
 | 11 | §6.3.2 / §8.5.3: Theorem 3.3a "applies at the terminal measurement" | realized by the decoding POVM of `RealizesExact`; no composition step | 2026-10-24 "Theorem 3.3a at the terminal measurement: wording" |
 | 12 | (plan, 9a) `synthesizeOracle_WF` without hypothesis | false (`⟨0, #[.input 5], [0]⟩`); needs `N.WF` | 2026-10-25 "Stage 9a interpretations" (7), 9a review (2) |
 | 13 | (9b) §8.5.1 signature `delta_bound = 1/8 # M/N` | M/N = sin²θ; certified δ = 7/128 | 2026-10-25 "Stage 9b interpretations and findings" (6)(i) |
 | 14 | (9b) §8.5.1 Stage 8, §5.3.4: "the verified emitter" | unverified emitter, declared trust boundary (as §8.5.3 says) | same, (6)(ii) |
-| 15 | (9b) §9.5.1 0.3 s for the second predicate | 6.34 s kernel / 16.15 s wall | same, (6)(iii) |
+| 15 | (9b) §9.5.1 0.3 s for the second predicate | 6.37 s kernel / 16.25 s wall (9b: 6.34 s) | same, (6)(iii) |
 
 Also found in 9b (implementation, not report): the certificate generator overflowed `maxRecDepth`
 on a 33-node network (elaborator evaluated the synthesizer); fixed by `okPayload` (DECISIONS.md

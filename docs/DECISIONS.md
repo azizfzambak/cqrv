@@ -555,3 +555,9 @@ Decision:
 Why: needed to implement the task; the task leaves these open.
 Rejected: (3) raising `maxRecDepth` in generated files (hides the elaborator evaluation, cost grows with the network); (4) counting n/a steps as PASS.
 Report §: 5.3.3, 5.3.4, 6.3.2, 8.5.1, 8.5.2, 9.5.1, Table 9.5.
+
+## 2026-10-25 — Stage 9b review: ALU instance note, run-report row 1 split
+Decision: (1) `docs/M2_REPORT.md` §2 states that M/N = 30/64 ≈ 1/2 gives almost no Grover advantage (r⋆ = 1) and that `simple_alu_x0_1` was chosen to exercise XOR and `if` end to end, not as a speed-up demonstration. (4) Row 1 of the run report (`RunData.rows`, `CQRV/Certify/RunReport.lean`) is split: "1a. DSL Input: parser, surface checker" — declared trust boundary (shared by both sides of the comparison, so the validation cannot detect their errors; the source is bound by predicate_hash only); "1b. DSL Input: typed AST → network" — exhaustively validated (2^n inputs) for n ≤ 16, else declared trust boundary. The report now has 9 rows; `certify_check.py` checks both statuses. Both run reports were regenerated with `scripts/bench_kernel.sh` (5 runs), which re-measures the kernel check: grover_pred_037 7.23 s kernel / 17.10 s wall (was 7.20 / 17.08), simple_alu_x0_1 6.37 s / 16.25 s (was 6.34 / 16.15); only `kernel_check` changed in the two `certificate.json`; Cert.lean, QIR/QASM and all hashes are unchanged. M2_REPORT.md cites the new values (errata rows 10, 15 keep the 9b values in parentheses). Reviewer items (2), (3), (5) accepted without change.
+Why: Stage 9b review; the validation compares two functions of the same typed AST, so calling the parser "exhaustively validated" overstated it.
+Rejected: patching the old run reports by hand (they must be the output of the run whose kernel time certificate.json records).
+Report §: 8.5.2, 5.3.3.

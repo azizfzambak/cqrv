@@ -19,7 +19,8 @@ Runs the built `cqr` from the project root and checks
     833/2048, grade (16, 145, 60, 10), front end validated on 2^6 inputs; the committed
     examples/certs/simple_alu_x0_1/ agrees with the run;
   * the committed run reports (run_report.md / run_report.json, Stage 9b decision 4) of both
-    examples: 8 rows in the order of Table 8.5.2, each verification one of the four words, the
+    examples: 9 rows in the order of Table 8.5.2 (stage 1 as 1a parser / surface checker and 1b
+    typed AST → network, Stage 9b review), each verification one of the four words, the
     measured grade, delta, kernel time and axioms equal to those of the committed
     certificate.json;
   * the XOR predicate tests/certify/xor_pred.cqr (--solutions 4; Stage 9a, `lemma_6_3_2_xor`
@@ -64,7 +65,8 @@ NAME = "grover_pred_037"
 THEOREM = "CQRV.Cert.grover_pred_037.cert"
 STANDARD = ["propext", "Classical.choice", "Quot.sound"]
 MACHINE = ("cpu", "logical_cpus", "clock", "lean_threads", "kernel_check")
-STAGES = ["1. DSL Input", "2. Spec Extraction", "3. Pattern Matching", "4. QPLP Instant.",
+STAGES = ["1a. DSL Input: parser, surface checker", "1b. DSL Input: typed AST → network",
+          "2. Spec Extraction", "3. Pattern Matching", "4. QPLP Instant.",
           "5. Oracle Synthesis", "6. Ancilla Restore", "7. Certificate Gen", "8. QIR Export"]
 VERIFICATION = {"kernel-checked", "exhaustively validated", "declared trust boundary",
                 "unverified"}
@@ -98,11 +100,13 @@ def check_report(d, cert):
         (res7, kc)
     assert ", ".join(cert["axioms"]) in res7
     assert f"G = {cert['hardware_perturbation']['G']} " in rows["8. QIR Export"]["resources"]
-    assert rows["1. DSL Input"]["verification"] == "exhaustively validated"
-    assert cert["trust_boundary"]["front_end"] in rows["1. DSL Input"]["note"]
-    assert [r["verification"] for r in rep["rows"][3:7]] == ["kernel-checked"] * 4
+    assert rows[STAGES[0]]["verification"] == "declared trust boundary"
+    assert "shared by both sides of the comparison" in rows[STAGES[0]]["note"]
+    assert rows[STAGES[1]]["verification"] == "exhaustively validated"
+    assert cert["trust_boundary"]["front_end"] in rows[STAGES[1]]["note"]
+    assert [r["verification"] for r in rep["rows"][4:8]] == ["kernel-checked"] * 4
     assert rows["8. QIR Export"]["verification"] == "declared trust boundary"
-    assert md.count("\n| ") == 9 and all(st in md for st in STAGES), "run_report.md table"
+    assert md.count("\n| ") == 10 and all(st in md for st in STAGES), "run_report.md table"
     return rep
 
 
@@ -281,7 +285,8 @@ def main():
               "inputs); committed examples/certs/simple_alu_x0_1 agrees")
         for d, c in ((EXAMPLE, ex), (exa, ea)):
             check_report(d, c)
-        print("ok:   committed run reports (both examples): 8 rows of Table 8.5.2, statuses, "
+        print("ok:   committed run reports (both examples): 9 rows of Table 8.5.2 (1a / 1b), "
+              "statuses, "
               "measured grade / delta / kernel time / axioms / G = certificate.json")
 
         # XOR predicate: certified since Stage 9a (Lemma 6.3.2 for XOR, `lemma_6_3_2_xor`)
