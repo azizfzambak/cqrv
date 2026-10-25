@@ -57,9 +57,7 @@ inputs.
 
 ## 3. Remaining tracked obligations (`docs/SORRIES.md`)
 
-Post-M2 note (2026-10-25): measured_composition (Theorem 3.3a, general ε) closed in c691700.
-
-Post-M2 note (2026-10-25): Theorem 3.3a (general ε, `measured_composition`) and Theorem 3.3b (`coherent_composition`, abstract `distD`, Stage 10b) closed; no `sorry` left in the repository.
+Post-M2 note (2026-10-25): measured_composition (Theorem 3.3a, general ε) closed in c691700; coherent_composition (Theorem 3.3b) closed in f49b39d; no sorry remains.
 
 | Obligation | Report § | Status |
 |---|---|---|
