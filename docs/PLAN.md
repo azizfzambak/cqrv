@@ -1,3 +1,5 @@
+Historical plan; for measured values see docs/DECISIONS.md and docs/M2_REPORT.md.
+
 # CQRV — Claude Code ile yürütme planı
 
 Bu plan, raporu (`cqrv_report_revised_v2.docx`) Claude Code ile adım adım yazılıma çevirmek için

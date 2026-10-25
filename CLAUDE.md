@@ -1,10 +1,10 @@
 # CQRV — Certified Quantum Realization: project conventions
 
 This repository implements the technical report *Applying Certified Quantum Realization:
-A Practical Implementation Guide* (`docs/cqrv_report_revised_v2.docx`; the revision
-package `docs/revision_package.docx` records the design decisions that differ from the
-proposal). The report is the specification. When code and report disagree, stop and
-report the disagreement; do not silently pick one.
+A Practical Implementation Guide* (`docs/cqrv_report_revised_v3.docx`: tracked changes over
+v2, with an errata appendix; the revision package `docs/revision_package.docx` records the
+design decisions that differ from the proposal). The report is the specification. When code
+and report disagree, stop and report the disagreement; do not silently pick one.
 
 ## What this project is
 

@@ -54,6 +54,11 @@ gate (Table 3.5: "native"); no Kyiv T-budget number is invented. Depth budget ~2
 example : (⟨10, 74, 72, 2⟩ : Grade) ≤ ⟨127, 200, 72, 127⟩ :=
   fits_iff.mp (by decide)
 
+-- Report v3, erratum 10: the measured MVP grade (15, 230, 72, 7) does NOT fit Kyiv —
+-- depth 230 exceeds the ~200-layer budget. The Table 3.3 checks above stay as the report's
+-- arithmetic; this records the measured value against the same budget.
+#guard fits ⟨15, 230, 72, 7⟩ ⟨127, 200, 72, 127⟩ = false
+
 /-! ## §3.3.3 — ρNISQ with t_gate = 500 ns
 
 Depth 74 × 500 ns = 37 000 ns ≤ 100 000 ns (T1 ≈ 100 μs), for any T-gate duration `tT`. -/
