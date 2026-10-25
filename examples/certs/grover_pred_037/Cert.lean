@@ -119,29 +119,23 @@ theorem grade_eq : Synthesis.grade emitted = ⟨15, 230, 72, 7⟩ := by decide +
 theorem nAnc_eq : emitted.nAnc = 7 := by decide +kernel
 
 /-- The synthesized oracle of `net`. -/
-def oracleCircuit : Circuit :=
-  match synthesizeOracle net with
-  | .ok c => c
-  | .error _ => default
+def oracleCircuit : Circuit := okPayload (synthesizeOracle net)
 
 /-- The oracle certificate (§5.2.4): Lemma 6.3.2 fills its restoration field. -/
 def oracle : OracleCert 8 where
   N := net
   C := oracleCircuit
   hn := rfl
-  hC := except_eq_ok_payload (synthesizeOracle net) (by decide +kernel)
+  hC := except_eq_ok_okPayload (synthesizeOracle net) (by decide +kernel)
   hWF := by decide +kernel
 
 /-- The MCZ of the V1 diffusion on 8 qubits. -/
-def mczCircuit : Circuit :=
-  match synthesizeOracle (allNet 8) with
-  | .ok c => c
-  | .error _ => default
+def mczCircuit : Circuit := okPayload (synthesizeOracle (allNet 8))
 
 /-- The diffusion certificate `DiffusionCert 8` (§8.2). -/
 def mcz : DiffusionCert 8 where
   mcz := {N := allNet 8, C := mczCircuit, hn := rfl,
-           hC := except_eq_ok_payload (synthesizeOracle (allNet 8)) (by decide +kernel),
+           hC := except_eq_ok_okPayload (synthesizeOracle (allNet 8)) (by decide +kernel),
            hWF := by decide +kernel}
   hN := rfl
 

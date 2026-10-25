@@ -97,6 +97,23 @@ theorem except_ok_of_check {ε α : Type} [DecidableEq α] (e : Except ε α) (c
   | ok c' => rw [of_decide_eq_true h]
   | error _ => exact absurd h Bool.false_ne_true
 
+/-- The `.ok` payload of an `Except` value (`default` on `.error`). Generated certificates name
+the synthesized oracle and MCZ as `okPayload (synthesizeOracle …)` (Stage 9b): with one shared
+function the elaborator unifies the field `C` with `except_eq_ok_okPayload`'s statement
+syntactically, instead of reducing two different auxiliary matchers, which evaluates the
+synthesizer in the elaborator and exceeded `maxRecDepth` on `simple_alu_x0_1`. -/
+def okPayload {ε α : Type} [Inhabited α] : Except ε α → α
+  | .ok c => c
+  | .error _ => default
+
+/-- An `Except` value known to be `.ok` is `.ok` of its `okPayload` (as `except_eq_ok_payload`,
+with the payload as a named function). -/
+theorem except_eq_ok_okPayload {ε α : Type} [Inhabited α] (e : Except ε α) (h : e.isOk = true) :
+    e = .ok (okPayload e) := by
+  cases e with
+  | ok c => rfl
+  | error _ => simp [Except.isOk, Except.toBool] at h
+
 /-- Report §5.1.3, §8.4.1, §8.4.4 — **the certificate lemma**: `grover_parametric_lemma` at an
 oracle certificate `O` and diffusion certificate `D`, with the solution count `hM_card` as a
 hypothesis (§5.2.4) and δ, grade, ancilla count as equations the generated certificate

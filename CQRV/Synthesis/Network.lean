@@ -64,6 +64,13 @@ def Network.eval (N : Network) (x : Nat → Bool) : List Bool :=
   let vs := N.values x
   N.outputs.map (vs.getD · false)
 
+/-- Report §6.3.2 — the predicate `P : Reg n → Bool` of a one-output network (`Reg n = Fin n →
+Bool`): the first output bit, input bit `k` being `x[k]` (`false` beyond `n`). Moved unchanged
+from `CQRV/Circuit/Restoration.lean` (Stage 9b) so that the CLI's front-end validation can use it
+without linking Physlib. -/
+def Network.pred (N : Network) (n : Nat) (x : Fin n → Bool) : Bool :=
+  (N.eval fun k => if h : k < n then x ⟨k, h⟩ else false).headD false
+
 /-- Report §6.1.2, §6.3.2 — a well-formed network (decidable check; Stage 9a review): every
 `input k` has `k < nInputs`, every operand index is smaller than its node's index (topological
 order), and every output index is a node. The side condition of the planned

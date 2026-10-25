@@ -38,11 +38,6 @@ open CQRV.Synthesis
 
 namespace Synthesis.Network
 
-/-- Report §6.3.2 — the predicate `P : Reg n → Bool` of a one-output network: the first output
-bit, input bit `k` being `x[k]` (`false` beyond `n`). -/
-def pred (N : Network) (n : ℕ) (x : Reg n) : Bool :=
-  (N.eval fun k => if h : k < n then x ⟨k, h⟩ else false).headD false
-
 /-- Report §6.3.2 — an AND/NOT/OR network (OR is built by De Morgan from AND and NOT): no XOR
 node. Lemma 6.3.2 is stated for these networks (Stage 6 task 6). -/
 def xorFree (N : Network) : Bool :=

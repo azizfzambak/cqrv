@@ -2,6 +2,7 @@ module
 
 public import Lean.Data.Json
 public import CQRV.Certify.SHA3
+public import CQRV.Certify.FrontEnd
 public import CQRV.DSL.Basic
 public import CQRV.Matching.Basic
 public import CQRV.Synthesis.Basic
@@ -24,7 +25,8 @@ reviewer decisions 2 and 3).
   empty and `status = notYetAudited`; `cqr certify` (Stage 8b) fills them after the kernel check
   and the axiom audit (`CQRV.Certify.Audit`). Schema v1.1.0 (Stage 8b) adds `theorem`,
   `obligations` and the machine fields of `reference_configuration`; v1.2.0 (Stage 8b review)
-  adds `trust_boundary.front_end` (`frontEndTrust`).
+  adds `trust_boundary.front_end` (`frontEndTrust`); v1.3.0 (Stage 9b, decision 1) lets it be
+  the exhaustive-validation wording (`frontEndValidatedText n`, `CQRV.Certify.FrontEnd`).
 -/
 
 @[expose] public section
@@ -196,16 +198,12 @@ structure Certificate where
   theoremName : Option String
   /-- Stage 8b: the tracked obligations (`status = withObligations`) -/
   obligations : List String
+  /-- Stage 9b: the declared front-end boundary (`FrontEndCheck.trustText`) -/
+  frontEnd : String
   deriving Repr
 
-/-- Report §5.3.3, §9.5.1 — the front-end trust boundary (Stage 8b review): the certificate is
-about the network `net` of `Cert.lean`; the translation DSL → network (`toNetwork`) is not
-verified, and `predicate_hash` binds the source it was computed from. -/
-def frontEndTrust : String :=
-  "DSL → network (toNetwork) unverified; predicate_hash binds the source"
-
 /-- The schema version written to `schema_version` (semver). -/
-def schemaVersion : String := "1.2.0"
+def schemaVersion : String := "1.3.0"
 
 /-- Report §9.5.3 — the JSON envelope (`docs/certificate.schema.json`). -/
 def Certificate.toJson (c : Certificate) : Json :=
@@ -227,7 +225,7 @@ def Certificate.toJson (c : Certificate) : Json :=
      ("trust_boundary", Json.mkObj [("emitted", str "QIR text"),
        ("profile", str "adaptive_profile"),
        ("emitter", str "unverified; translation-validated by re-parse"),
-       ("front_end", str frontEndTrust)]),
+       ("front_end", str c.frontEnd)]),
      ("hardware_perturbation", Json.mkObj [("formula", str "δ_hw ≤ δ + G·p̄"),
        ("G", c.gateCounts.total), ("p_bar", str "profile parameter"),
        ("counts", Json.mkObj [("unitary", c.gateCounts.unitary),
@@ -255,9 +253,10 @@ def restorationText : String := "AncRestore: all ancillae |0…0⟩ on density o
 /-- Report §8.4.2 — the certificate of a matched Grover instance from (source text, extracted
 signature, match, circuit, grade, `r`, `n`, `M`, exact `δ`). Checks that the data agree: the
 signature's arity and solution count are `n` and `M`, the circuit has `n` data qubits, and the
-grade is the circuit's measured grade (DECISIONS.md, Stage 5b review). -/
+grade is the circuit's measured grade (DECISIONS.md, Stage 5b review). `frontEnd` is the
+declared front-end boundary (`FrontEndCheck.trustText` of the Stage 9b validation). -/
 def Certificate.build (src : String) (sig : SigmaIn) (entry : LibEntry) (facts : List Discharged)
-    (C : Circuit) (g : Grade) (r n M : Nat) (δ : Rat) (cfg : RefConfig) :
+    (C : Circuit) (g : Grade) (r n M : Nat) (δ : Rat) (cfg : RefConfig) (frontEnd : String) :
     Except String Certificate := do
   if sig.arity != n then throw s!"arity {sig.arity} of the signature ≠ n = {n}"
   if sig.solutionCount != some M then throw s!"solution count of the signature ≠ M = {M}"
@@ -274,7 +273,7 @@ def Certificate.build (src : String) (sig : SigmaIn) (entry : LibEntry) (facts :
     restoration := restorationText
     predicateHash := hP, circuitHash := hC, proofHash := none
     gateCounts := G, config := cfg, axioms := [], status := .notYetAudited, theoremName := none,
-    obligations := [] }
+    obligations := [], frontEnd }
 
 /-! ## The matched Grover instance (shared by `cqr emit` and the certificate) -/
 
@@ -320,7 +319,8 @@ def groverInstance (tp : TypedProgram) (sig : SigmaIn) (iters : Option Nat) :
                                circuit := C }
 
 /-- Report §8.4.2 — the Stage 8a certificate of a source text (no kernel check, no audit):
-front end, ℰ, match, synthesis at `r` (default `r⋆`), exact `δ`. -/
+front end, ℰ, match, synthesis at `r` (default `r⋆`), exact `δ`, and (Stage 9b) the front-end
+validation, whose mismatch is an error. -/
 def certificateOf (src : String) (cfg : RefConfig) (iters : Option Nat := none) :
     Except String Certificate := do
   let tp ← (parse src >>= check).mapError (·.message)
@@ -329,8 +329,11 @@ def certificateOf (src : String) (cfg : RefConfig) (iters : Option Nat := none) 
     | .diagnostic d => d.message
     | .usage m => m
   let some M := gi.M | throw "the certificate needs the solution count M"
+  let fe := validateFrontEnd tp gi.net gi.n
+  let some feText := fe.trustText
+    | throw ((fe.diagnostic? tp.name ⟨1, 1⟩).map (·.message) |>.getD "front-end validation")
   Certificate.build src sig gi.entry gi.facts gi.circuit gi.circuit.grade gi.r gi.n M
-    (groverDelta gi.r gi.n M) cfg
+    (groverDelta gi.r gi.n M) cfg feText
 
 end CQRV.Certify
 

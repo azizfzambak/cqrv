@@ -1,6 +1,6 @@
-"""Certificate JSON schema v1.2.0 (report §8.4.2, §8.4.4, §9.5.3; Stage 8a, reviewer
+"""Certificate JSON schema v1.3.0 (report §8.4.2, §8.4.4, §9.5.3; Stage 8a, reviewer
 decisions 2 and 3; Stage 8b: theorem, obligations, machine fields; Stage 8b review:
-trust_boundary.front_end).
+trust_boundary.front_end; Stage 9b: front_end after the exhaustive front-end validation).
 
 Builds the Stage 8a certificate of examples/grover_pred_037.cqr in Lean (scripts/CertifyTool.lean
 `sample`: no kernel check, no axiom audit) and checks that
@@ -59,8 +59,8 @@ def main():
     assert cert["instance"] == {"n": 8, "M": 32, "r": 2}, cert["instance"]
     assert cert["status"] == "not yet audited" and cert["axioms"] == []
     assert cert["hashes"]["proof"] is None
-    assert cert["trust_boundary"]["front_end"] == \
-        "DSL → network (toNetwork) unverified; predicate_hash binds the source"
+    assert cert["trust_boundary"]["front_end"] == ("DSL → network: exhaustively validated "
+        "(2^8 inputs) by the unverified evaluator; not kernel-checked")
     assert cert["theorem"] is None and cert["obligations"] == []
     assert cert["reference_configuration"]["kernel_check"] is None
     print("ok:   delta 7/128, grade (15, 230, 72, 7), status 'not yet audited'")
@@ -119,7 +119,10 @@ def main():
                                   c.update(obligations=["lemma_6_3_2_xor"],
                                            axioms=["propext", "sorryAx"])))
     validator.validate(with_obl)
-    print("ok:   filled-in 'certified' and 'certificate with tracked obligations' envelopes validate")
+    validator.validate(mutated(lambda c: c["trust_boundary"].update(
+        front_end="DSL → network (toNetwork) unverified; predicate_hash binds the source")))
+    print("ok:   filled-in 'certified' and 'certificate with tracked obligations' envelopes "
+          "validate; the Stage 8b front_end wording (n > 16) validates")
     bad.update({
         "certified with an obligation":
             mutated(lambda c: (audited(c), c.update(obligations=["lemma_6_3_2_xor"]))),
@@ -132,7 +135,11 @@ def main():
             mutated(lambda c: audited(c, "certificate with tracked obligations")),
         "not yet audited with theorem": mutated(lambda c: c.update(theorem="x")),
         "not yet audited with obligations": mutated(lambda c: c.update(obligations=["x"])),
-        "old schema version": mutated(lambda c: c.update(schema_version="1.1.0")),
+        "old schema version": mutated(lambda c: c.update(schema_version="1.2.0")),
+        "front_end with n = 17 validated": mutated(lambda c: c["trust_boundary"].update(
+            front_end="DSL → network: exhaustively validated (2^17 inputs) by the unverified "
+                      "evaluator; not kernel-checked")),
+        "front_end free text": mutated(lambda c: c["trust_boundary"].update(front_end="verified")),
         "missing front_end": mutated(lambda c: c["trust_boundary"].pop("front_end")),
     })
     for label, c in bad.items():

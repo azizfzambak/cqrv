@@ -167,29 +167,23 @@ theorem nAnc_eq : emitted.nAnc = {q.nAnc} := by decide +kernel
 "
   let body := s!"
 /-- The synthesized oracle of `net`. -/
-def oracleCircuit : Circuit :=
-  match synthesizeOracle net with
-  | .ok c => c
-  | .error _ => default
+def oracleCircuit : Circuit := okPayload (synthesizeOracle net)
 
 /-- The oracle certificate (§5.2.4): Lemma 6.3.2 fills its restoration field. -/
 def oracle : OracleCert {q.n} where
   N := net
   C := oracleCircuit
   hn := rfl
-  hC := except_eq_ok_payload (synthesizeOracle net) (by decide +kernel)
+  hC := except_eq_ok_okPayload (synthesizeOracle net) (by decide +kernel)
   hWF := by decide +kernel
 
 /-- The MCZ of the V1 diffusion on {q.n} qubits. -/
-def mczCircuit : Circuit :=
-  match synthesizeOracle (allNet {q.n}) with
-  | .ok c => c
-  | .error _ => default
+def mczCircuit : Circuit := okPayload (synthesizeOracle (allNet {q.n}))
 
 /-- The diffusion certificate `DiffusionCert {q.n}` (§8.2). -/
 def mcz : DiffusionCert {q.n} where
   mcz := {lb}N := allNet {q.n}, C := mczCircuit, hn := rfl,
-           hC := except_eq_ok_payload (synthesizeOracle (allNet {q.n})) (by decide +kernel),
+           hC := except_eq_ok_okPayload (synthesizeOracle (allNet {q.n})) (by decide +kernel),
            hWF := by decide +kernel{rb}
   hN := rfl
 

@@ -3,8 +3,9 @@
 Runs the built `cqr` from the project root and checks
 
   * grover_pred_037: exit 0, status line `certified (conditional on: solution_count = 32)`,
-    certificate.json valid against docs/certificate.schema.json (v1.2.0), grade (15, 230, 72, 7),
-    delta "7/128", axioms exactly propext, Classical.choice, Quot.sound, no obligations;
+    certificate.json valid against docs/certificate.schema.json (v1.3.0), grade (15, 230, 72, 7),
+    delta "7/128", axioms exactly propext, Classical.choice, Quot.sound, no obligations,
+    trust_boundary.front_end = the exhaustive-validation wording for 2^8 inputs (Stage 9b);
   * the hash link, independently of the CLI: the `emitted` IR literal of Cert.lean (the circuit
     the kernel-checked theorem is about) is parsed here, its canonical JSON hashed with hashlib
     and compared with hashes.circuit; the .qasm / .qir files re-parse to exactly that literal;
@@ -12,6 +13,15 @@ Runs the built `cqr` from the project root and checks
   * reproducibility: a second run gives byte-identical Cert.lean / .qir / .qasm and the same JSON
     except the timing field reference_configuration.kernel_check; the committed example
     examples/certs/grover_pred_037/ agrees with the run (JSON modulo the machine fields);
+  * the second worked predicate examples/simple_alu_x0_1.cqr (RevLib Simple ALU, bit 1 of x0;
+    Stage 9b): M = 30 recounted here from the SyReC semantics (benchmark_diff.reference),
+    --solutions 30 → exit 0, `certified (conditional on: solution_count = 30)`, r = 1, delta
+    833/2048, grade (16, 145, 60, 10), front end validated on 2^6 inputs; the committed
+    examples/certs/simple_alu_x0_1/ agrees with the run;
+  * the committed run reports (run_report.md / run_report.json, Stage 9b decision 4) of both
+    examples: 8 rows in the order of Table 8.5.2, each verification one of the four words, the
+    measured grade, delta, kernel time and axioms equal to those of the committed
+    certificate.json;
   * the XOR predicate tests/certify/xor_pred.cqr (--solutions 4; Stage 9a, `lemma_6_3_2_xor`
     proved): exit 0, `certified (conditional on: solution_count = 4)`, schema, hash link, axioms
     exactly the standard three, no obligations;
@@ -44,6 +54,7 @@ import jsonschema
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lean_tool import ROOT  # noqa: E402
+import benchmark_diff  # noqa: E402
 import reparse_qasm  # noqa: E402
 import reparse_qir  # noqa: E402
 
@@ -53,6 +64,46 @@ NAME = "grover_pred_037"
 THEOREM = "CQRV.Cert.grover_pred_037.cert"
 STANDARD = ["propext", "Classical.choice", "Quot.sound"]
 MACHINE = ("cpu", "logical_cpus", "clock", "lean_threads", "kernel_check")
+STAGES = ["1. DSL Input", "2. Spec Extraction", "3. Pattern Matching", "4. QPLP Instant.",
+          "5. Oracle Synthesis", "6. Ancilla Restore", "7. Certificate Gen", "8. QIR Export"]
+VERIFICATION = {"kernel-checked", "exhaustively validated", "declared trust boundary",
+                "unverified"}
+
+
+def validated(n):
+    return (f"DSL → network: exhaustively validated (2^{n} inputs) by the unverified evaluator; "
+            "not kernel-checked")
+
+
+def secs(ms):
+    c = (ms + 5) // 10
+    return f"{c // 100}.{c % 100:02d} s"
+
+
+def check_report(d, cert):
+    """The committed run report of a certificate directory agrees with its certificate.json."""
+    rep = json.loads(read(os.path.join(d, "run_report.json")))
+    md = read(os.path.join(d, "run_report.md"))
+    assert [r["stage"] for r in rep["rows"]] == STAGES, [r["stage"] for r in rep["rows"]]
+    assert all(r["verification"] in VERIFICATION for r in rep["rows"]), rep["rows"]
+    status = "certified (conditional on: solution_count = {})".format(cert["instance"]["M"])
+    assert rep["status"] == status and rep["certified"] is True, rep["status"]
+    rows = {r["stage"]: r for r in rep["rows"]}
+    g = cert["grade"]
+    assert f"({g['w']}, {g['d']}, {g['t']}, {g['a']})" in rows["4. QPLP Instant."]["resources"]
+    assert f"δ = {cert['spec']['delta']} exact" in rows["4. QPLP Instant."]["resources"]
+    kc = cert["reference_configuration"]["kernel_check"]
+    res7 = rows["7. Certificate Gen"]["resources"]
+    assert f"kernel {secs(kc['kernel_ms'])}" in res7 and f"wall {secs(kc['wall_ms'])}" in res7, \
+        (res7, kc)
+    assert ", ".join(cert["axioms"]) in res7
+    assert f"G = {cert['hardware_perturbation']['G']} " in rows["8. QIR Export"]["resources"]
+    assert rows["1. DSL Input"]["verification"] == "exhaustively validated"
+    assert cert["trust_boundary"]["front_end"] in rows["1. DSL Input"]["note"]
+    assert [r["verification"] for r in rep["rows"][3:7]] == ["kernel-checked"] * 4
+    assert rows["8. QIR Export"]["verification"] == "declared trust boundary"
+    assert md.count("\n| ") == 9 and all(st in md for st in STAGES), "run_report.md table"
+    return rep
 
 
 def sha3(b):
@@ -181,8 +232,10 @@ def main():
         assert cert["spec"]["delta"] == "7/128", cert["spec"]
         assert cert["axioms"] == STANDARD, cert["axioms"]
         assert cert["theorem"] == THEOREM
-        print("ok:   JSON valid (schema v1.2.0); grade (15, 230, 72, 7), delta 7/128, "
-              "axioms exactly propext, Classical.choice, Quot.sound")
+        assert cert["trust_boundary"]["front_end"] == validated(8), cert["trust_boundary"]
+        print("ok:   JSON valid (schema v1.3.0); grade (15, 230, 72, 7), delta 7/128, "
+              "axioms exactly propext, Classical.choice, Quot.sound; front end validated "
+              "on 2^8 inputs")
         print("ok:   circuit hash = SHA3 of the IR literal of Cert.lean (hashlib); "
               ".qasm / .qir re-parse to that literal; proof hash recomputed")
         cert2, _ = check_dir(runs[1], validator)
@@ -197,6 +250,39 @@ def main():
         assert without(cert, MACHINE) == without(ex, MACHINE), "committed certificate.json"
         assert ex["reference_configuration"]["kernel_check"]["runs"] == 5
         print("ok:   committed examples/certs/grover_pred_037 agrees (JSON modulo machine fields)")
+
+        # The second worked predicate (Stage 9b): RevLib Simple ALU, bit 1 of x0
+        m = sum(1 for x in range(64)
+                if benchmark_diff.reference(benchmark_diff.input_bits(x)))
+        assert m == 30, m
+        alu = "simple_alu_x0_1"
+        out = os.path.join(tmp, alu)
+        rc, so, se = certify(args.cqr, os.path.join("examples", f"{alu}.cqr"), out,
+                             "--solutions", str(m))
+        last = so.rstrip("\n").split("\n")[-1]
+        assert rc == 0 and last == "certified (conditional on: solution_count = 30)", (rc, so, se)
+        ac, atext = check_dir(out, validator)
+        assert ac["status"] == "certified" and ac["obligations"] == []
+        assert ac["axioms"] == STANDARD, ac["axioms"]
+        assert ac["instance"] == {"n": 6, "M": 30, "r": 1}, ac["instance"]
+        assert ac["spec"]["delta"] == "833/2048", ac["spec"]
+        assert ac["grade"] == {"w": 16, "d": 145, "t": 60, "a": 10}, ac["grade"]
+        assert ac["trust_boundary"]["front_end"] == validated(6)
+        assert "sorry" not in atext and ".xor " in atext
+        exa = os.path.join(ROOT, "examples", "certs", alu)
+        ea, _ = check_dir(exa, validator)
+        for f in ("Cert.lean", f"{alu}.qir", f"{alu}.qasm"):
+            assert read(os.path.join(out, f), "rb") == read(os.path.join(exa, f), "rb"), \
+                f"committed example differs: {f}"
+        assert without(ac, MACHINE) == without(ea, MACHINE), "committed certificate.json"
+        assert ea["reference_configuration"]["kernel_check"]["runs"] == 5
+        print(f"ok:   second predicate {alu} (M = 30 from the SyReC semantics): `{last}` (exit 0; "
+              "r = 1, delta 833/2048, grade (16, 145, 60, 10), front end validated on 2^6 "
+              "inputs); committed examples/certs/simple_alu_x0_1 agrees")
+        for d, c in ((EXAMPLE, ex), (exa, ea)):
+            check_report(d, c)
+        print("ok:   committed run reports (both examples): 8 rows of Table 8.5.2, statuses, "
+              "measured grade / delta / kernel time / axioms / G = certificate.json")
 
         # XOR predicate: certified since Stage 9a (Lemma 6.3.2 for XOR, `lemma_6_3_2_xor`)
         out = os.path.join(tmp, "xor")

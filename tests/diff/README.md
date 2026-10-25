@@ -41,6 +41,17 @@ is test-only: nothing here is part of the trusted pipeline.
   (`tests/certify/xor_pred.cqr`) → `lemma_6_3_2_xor`, injected `sorry` → `sorryAx`,
   `native_decide` → its auxiliary axiom, `search_while` → Stage 4 hint. Driver:
   `scripts/check_certify.sh` (CI).
+- Stage 9b: `frontend_diff.py` compares `cqr check --truth-table` (the Lean DSL evaluator
+  `evalProgram` and `Network.pred (toNetwork …)`) with a Python reference on every input of the
+  corpus files and of 100 random and/or/xor/if predicates (`oracle_diff.gen_tree`, n ≤ 12).
+  Driver: `scripts/diff_frontend.sh` (CI). `benchmark_diff.py` is the second worked predicate
+  `examples/simple_alu_x0_1.cqr` (RevLib Simple ALU, bit 1 of x0): reference from the SyReC
+  integer semantics, M = 30 by enumeration (test oracle only), check / extract / match /
+  synthesize, the oracle, one Grover iteration and the full r* = 1 circuit in **every**
+  measurement branch, success probability = 1215/2048 = 1 − δ exactly. Driver:
+  `scripts/diff_benchmark.sh` (CI, ~4 min). `certify_check.py` now also certifies
+  `simple_alu_x0_1`, checks schema v1.3.0 (`front_end` after the exhaustive validation) and the
+  committed run reports of both examples.
 
 Run from the repository root:
 

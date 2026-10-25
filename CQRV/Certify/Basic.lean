@@ -4,6 +4,8 @@ public import CQRV.Certify.SHA3
 public import CQRV.Certify.Certificate
 public import CQRV.Certify.Generate
 public import CQRV.Certify.Audit
+public import CQRV.Certify.FrontEnd
+public import CQRV.Certify.RunReport
 
 /-!
 # CQRV.Certify
@@ -15,5 +17,7 @@ schema, the exact δ, the hashes; §8.4.2, §8.4.4, §9.5.3). Stage 8b: `Generat
 specialized certificate `Cert.lean`, §5.1.3, §8.4.1) and `Audit` (kernel check by `lake env lean`,
 `#print axioms`, `auditAxioms`, §9.5.1, §9.5.3). `CQRV.Certify.Specialize` (the lemmas a
 certificate instantiates) imports the Grover proof and Physlib; it is imported by `CQRV`, not by
-this module, so that the CLI does not link Physlib.
+this module, so that the CLI does not link Physlib. Stage 9b: `FrontEnd` (exhaustive validation
+of the front end, `evalProgram` vs `Network.pred` on all `2ⁿ` inputs, §5.3.3) and `RunReport`
+(one row per pipeline stage in the shape of Table 8.5.2, §8.5.2).
 -/

@@ -17,6 +17,9 @@
 # and `cqr synthesize` (Stage 5): the Grover oracle grade (10, 27, 8, 2) and its layer dump, the
 # and_chain_8 budgets (--amax 4 feasible, --amax 2 infeasible), search_while → unbounded_loop.
 #
+# and Stage 9b: the second worked predicate simple_alu_x0_1 (check, extract, match with and
+# without --solutions 30, synthesize oracle and --grover grades, --truth-table).
+#
 # Usage (after `lake build`): scripts/cli_smoke.sh
 # Portable: bash + grep; ubuntu and Git Bash on Windows.
 
@@ -173,6 +176,36 @@ expect_exit "emit search_or --solutions 5" 0 "" "$rc"
 out="$("${cqr[@]}" emit examples/search_while.cqr --format qir --solutions 64 | tr -d '')"; rc=$?
 expect_exit "emit search_while --solutions 64 (no match)" 1 "$out" "$rc"
 expect_has "emit search_while code" '"code":"no_matching_pattern"' "$out"
+
+# Stage 9b: the second worked predicate (RevLib Simple ALU, bit 1 of x0), M = 30 from the harness
+# (tests/diff/benchmark_diff.py), and the front-end truth tables.
+alu=examples/simple_alu_x0_1.cqr
+"${cqr[@]}" check "$alu" >/dev/null; rc=$?
+expect_exit "check simple_alu_x0_1" 0 "" "$rc"
+out="$("${cqr[@]}" extract "$alu" | tr -d '\r')"; rc=$?
+expect_exit "extract simple_alu_x0_1 (M unknown: XOR)" 0 "$out" "$rc"
+expect_has "simple_alu_x0_1 solution_count unknown" '"solution_count": null' "$out"
+expect_has "simple_alu_x0_1 and_complexity" '"and_complexity": 10' "$out"
+expect_has "simple_alu_x0_1 and_depth" '"and_depth": 4' "$out"
+out="$("${cqr[@]}" match "$alu" | tr -d '\r')"; rc=$?
+expect_exit "match simple_alu_x0_1 without --solutions (hint)" 1 "$out" "$rc"
+expect_has "simple_alu_x0_1 hint" '"code":"no_matching_pattern"' "$out"
+out="$("${cqr[@]}" match "$alu" --solutions 30 | tr -d '\r')"; rc=$?
+expect_exit "match simple_alu_x0_1 --solutions 30" 0 "$out" "$rc"
+expect_has "simple_alu_x0_1 F₂" '"F₂": 30' "$out"
+out="$("${cqr[@]}" synthesize "$alu" | tr -d '\r')"; rc=$?
+expect_exit "synthesize simple_alu_x0_1" 0 "$out" "$rc"
+expect_has "simple_alu_x0_1 oracle grade" '"grade": {"w": 16, "t": 40, "d": 80, "a": 10}' "$out"
+out="$("${cqr[@]}" synthesize "$alu" --grover --solutions 30 | tr -d '\r')"; rc=$?
+expect_exit "synthesize simple_alu_x0_1 --grover --solutions 30" 0 "$out" "$rc"
+expect_has "simple_alu_x0_1 r_star" '"r_star": 1' "$out"
+expect_has "simple_alu_x0_1 Grover grade" '"circuit": {"w": 16, "t": 60, "d": 145, "a": 10}' "$out"
+out="$("${cqr[@]}" check "$alu" --truth-table | tr -d '\r')"; rc=$?
+expect_exit "check simple_alu_x0_1 --truth-table" 0 "$out" "$rc"
+expect_has "simple_alu_x0_1 evaluator table" '"evaluator":"0000000011011101010010001011011111011111000000101001011101101000"' "$out"
+expect_has "simple_alu_x0_1 network table" '"network":"0000000011011101010010001011011111011111000000101001011101101000"' "$out"
+"${cqr[@]}" check examples/search_while.cqr --truth-table >/dev/null 2>&1; rc=$?
+expect_exit "check search_while --truth-table (loop … while refused)" 2 "" "$rc"
 
 [ "$fail" -eq 0 ] && echo "cli_smoke: all checks passed" || echo "cli_smoke: FAILED"
 exit "$fail"

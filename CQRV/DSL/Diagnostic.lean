@@ -21,17 +21,20 @@ open Lean
 hypothesis (the ground solution count `--solutions`, §4.1.4) contradicts the extracted value;
 ℰ itself never fails (§7.2.1; DECISIONS.md 2026-10-23). `matching`: the matcher found no library
 pattern (§4.2.4, Algorithm 2; JSON name `match`). `synthesis`: the oracle synthesizer cannot
-build the Boolean network or the circuit (§6.1.2; JSON name `synthesize`). -/
+build the Boolean network or the circuit (§6.1.2; JSON name `synthesize`). `validation`: the
+exhaustive front-end validation found an input on which the DSL evaluator and the network
+disagree (§5.3.3; Stage 9b, decision 1; JSON name `validate`). -/
 inductive Stage where
   | parse
   | surface
   | hypothesis
   | matching
   | synthesis
+  | validation
   deriving Repr, DecidableEq, Inhabited
 
-/-- Report §4.2.2–4.2.3, §4.2.4, §6.1.2 — diagnostic codes of the front end, the matcher and
-the synthesizer. -/
+/-- Report §4.2.2–4.2.3, §4.2.4, §6.1.2, §5.3.3 — diagnostic codes of the front end, the
+matcher, the synthesizer and the front-end validation. -/
 inductive Code where
   | syntaxError
   | typeError
@@ -44,6 +47,7 @@ inductive Code where
   | unboundedLoop
   | unsupportedNetwork
   | infeasibleBudget
+  | frontEndMismatch
   deriving Repr, DecidableEq, Inhabited
 
 /-- Report §4.2.3 — JSON name of a stage. -/
@@ -53,6 +57,7 @@ def Stage.name : Stage → String
   | .hypothesis => "hypothesis"
   | .matching => "match"
   | .synthesis => "synthesize"
+  | .validation => "validate"
 
 /-- Report §4.2.3 — JSON name of a diagnostic code. -/
 def Code.name : Code → String
@@ -67,6 +72,7 @@ def Code.name : Code → String
   | .unboundedLoop => "unbounded_loop"
   | .unsupportedNetwork => "unsupported_network"
   | .infeasibleBudget => "infeasible_budget"
+  | .frontEndMismatch => "front_end_mismatch"
 
 /-- Report §4.2.2–4.2.3 — a front-end diagnostic; `line`/`col` are 1-based. -/
 structure Diagnostic where

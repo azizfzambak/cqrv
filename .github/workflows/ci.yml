@@ -2,6 +2,8 @@
 # pinned:    blocking; the committed toolchain and lake-manifest.json.
 # candidate: non-blocking, monthly + manual; newest Mathlib release tag in a temporary copy
 #            (scripts/candidate_build.sh); never modifies the committed pins (CLAUDE.md rule 4).
+# CI stays local (Stage 9b): scripts/ci_local.sh runs the `pinned` steps in this order on the
+# development machine; keep the two lists in sync.
 name: CI
 
 on:
@@ -43,7 +45,7 @@ jobs:
       - name: CLI smoke (cqr check / extract / match / synthesize on examples/)
         run: scripts/cli_smoke.sh
 
-      - name: Axiom audit (blocking, Stage 8b; CQRV.Certify named theorems + committed example certificate)
+      - name: Axiom audit (blocking, Stage 8b; CQRV.Certify named theorems + both committed certificates)
         run: scripts/print_axioms.sh
 
       - uses: actions/setup-python@v5
@@ -61,11 +63,17 @@ jobs:
       - name: Differential oracle test (101 predicates, every measurement branch)
         run: scripts/diff_oracles.sh
 
+      - name: Front-end validation (Stage 9b; DSL evaluator = network = Python reference, corpus + 100 random)
+        run: scripts/diff_frontend.sh
+
       - name: Synthesized circuits byte-identical to the golden file (Stage 6b-3, decision 1)
         run: scripts/check_oracle_json.sh
 
       - name: Diffusion and Grover circuit (Stage 5b, every branch; success probability)
         run: scripts/diff_grover.sh
+
+      - name: Second worked predicate simple_alu_x0_1 (Stage 9b; oracle and Grover circuit, every branch; exact delta)
+        run: scripts/diff_benchmark.sh
 
       - name: Install llvm (llvm-as for the QIR assembly check)
         run: sudo apt-get update && sudo apt-get install -y llvm && llvm-as --version

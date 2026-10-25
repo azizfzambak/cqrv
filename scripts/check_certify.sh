@@ -2,12 +2,15 @@
 # Stage 8b checks — report §5.1.3, §8.4.1, §8.4.4, §9.5.1, §9.5.3 (`cqr certify`).
 #
 #   tests/diff/certify_check.py  cqr certify examples/grover_pred_037.cqr: status line, schema
-#                                v1.2.0, grade, δ, axioms; circuit hash = SHA3 of the IR literal
+#                                v1.3.0, grade, δ, axioms; circuit hash = SHA3 of the IR literal
 #                                of Cert.lean (hashlib); .qasm / .qir re-parse to the literal;
 #                                second run byte-identical (JSON except kernel_check); the
 #                                committed examples/certs/grover_pred_037 agrees; the XOR
 #                                predicate tests/certify/xor_pred.cqr and the `if` predicate
 #                                tests/certify/if_pred.cqr are certified (Stage 9a, 9a review);
+#                                the second worked predicate examples/simple_alu_x0_1.cqr is
+#                                certified and the committed certificates and run reports of
+#                                both examples agree (Stage 9b);
 #                                negative tests (network failing C.WF → kernel check fails,
 #                                injected sorry → sorryAx, native_decide → its auxiliary axiom,
 #                                search_while → Stage 4 hint)

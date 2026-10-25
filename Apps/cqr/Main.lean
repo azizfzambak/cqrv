@@ -12,6 +12,10 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
 §6.1–6.2); the other subcommands exit with code 2 and name their stage.
 
 * `cqr check <file>` — parse + surface check; exit 0, or print the diagnostic JSON and exit 1.
+* `cqr check <file> --truth-table` — Stage 9b: also print `{name, n, evaluator, network}` with
+  the truth tables of the DSL evaluator (`evalProgram`) and of `Network.pred (toNetwork …)` as
+  `0`/`1` strings (character `x` = value on input `x`, bit `k` of `x` = input bit `k`), for
+  `n ≤ 16`; the differential harness compares them with its own reference evaluator.
 * `cqr extract <file> [--solutions M]` — print the `SigmaIn` JSON (exit 0), or the diagnostic
   JSON (exit 1). `--solutions M` supplies the ground solution count when ℰ cannot compute it
   (DECISIONS.md 2026-10-23, decision 5); a value that contradicts ℰ's is a diagnostic with
@@ -47,6 +51,10 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   (exit 0) only if the kernel check and the audit pass; otherwise `certificate with tracked
   obligations: <list>` (exit 3). Kernel-check failure: message, exit 1, no JSON. `--bench k`:
   `k + 1` kernel checks, the median of the last `k` is recorded (scripts/bench_kernel.sh).
+  Stage 9b: before writing anything, the front end is validated exhaustively for `n ≤ 16`
+  (`validateFrontEnd`; a disagreement is a `front_end_mismatch` diagnostic, exit 1, nothing
+  written) and `trust_boundary.front_end` says so. `--report` also writes `run_report.md` and
+  `run_report.json` (Table 8.5.2, measured values; `CQRV.Certify.RunReport`).
 -/
 
 open CQRV CQRV.DSL CQRV.Matching CQRV.Synthesis CQRV.Certify CQRV.Emit
@@ -61,7 +69,8 @@ def usage : String :=
     "  synthesize <file> [--amax k] [--json] [--layers]\n" ++
     "  synthesize --diffusion n [--amax k] [--json] [--layers]\n" ++
     "  synthesize <file> --grover [--iterations r] [--solutions M] [--json] [--layers]\n" ++
-    "  certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k]\n" ++
+    "  check <file> --truth-table\n" ++
+    "  certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k] [--report]\n" ++
     "  emit <file> --format qir|qasm [--iterations r] [--solutions M] [--oracle]\n"
 
 /-- Report §4.2.2 — parse and surface-check a source file; also returns the position of the
@@ -78,6 +87,25 @@ def runCheck (path : String) : IO UInt32 := do
   match ← frontEnd path with
   | .ok _ => return 0
   | .error d => IO.println d.toJson.compress; return 1
+
+/-- `cqr check <file> --truth-table` — report §5.3.3 (Stage 9b): the truth tables of the DSL
+evaluator and of the network, for the differential harness. -/
+def runTruthTable (path : String) : IO UInt32 := do
+  match ← frontEnd path with
+  | .error d => IO.println d.toJson.compress; return 1
+  | .ok (tp, _) =>
+    if tp.hasLoop then
+      IO.eprintln "cqr check --truth-table: `loop … while` has no finite truth table"; return 2
+    match toNetwork tp with
+    | .error d => IO.println d.toJson.compress; return 1
+    | .ok N =>
+      let n := N.nInputs
+      if n > frontEndLimit then
+        IO.eprintln s!"cqr check --truth-table: n = {n} > {frontEndLimit}"; return 2
+      IO.println (Lean.Json.mkObj [("name", Lean.toJson tp.name), ("n", Lean.toJson n),
+        ("evaluator", Lean.toJson (truthTable n (evalProgram tp))),
+        ("network", Lean.toJson (truthTable n (N.pred n)))]).compress
+      return 0
 
 /-- Report §4.1.4, §7.2 — front end + ℰ + the `--solutions` hypothesis: the signature, or the
 diagnostic to print (a front-end failure or `solution_count_mismatch`). -/
@@ -274,26 +302,27 @@ def runEmit (path : String) (fmt : EmitFormat) (iters solutions : Option Nat) (o
       IO.print (match fmt with | .qir => emitQIR name C | .qasm => emitQASM name C)
       return 0
 
-/-- Parse `[--solutions M] [--iterations r] [--out dir] [--bench k]` in any order. -/
+/-- Parse `[--solutions M] [--iterations r] [--out dir] [--bench k] [--report]` in any order. -/
 def certifyFlags :
-    List String → Option (Option Nat × Option Nat × Option String × Option Nat)
-  | [] => some (none, none, none, none)
+    List String → Option (Option Nat × Option Nat × Option String × Option Nat × Bool)
+  | [] => some (none, none, none, none, false)
   | "--solutions" :: m :: rest => do
     let m ← m.toNat?
-    let (_, r, o, b) ← certifyFlags rest
-    return (some m, r, o, b)
+    let (_, r, o, b, p) ← certifyFlags rest
+    return (some m, r, o, b, p)
   | "--iterations" :: r :: rest => do
     let r ← r.toNat?
-    let (m, _, o, b) ← certifyFlags rest
-    return (m, some r, o, b)
+    let (m, _, o, b, p) ← certifyFlags rest
+    return (m, some r, o, b, p)
   | "--out" :: o :: rest => do
-    let (m, r, _, b) ← certifyFlags rest
-    return (m, r, some o, b)
+    let (m, r, _, b, p) ← certifyFlags rest
+    return (m, r, some o, b, p)
   | "--bench" :: k :: rest => do
     let k ← k.toNat?
     guard (k ≥ 1)
-    let (m, r, o, _) ← certifyFlags rest
-    return (m, r, o, some k)
+    let (m, r, o, _, p) ← certifyFlags rest
+    return (m, r, o, some k, p)
+  | "--report" :: rest => (certifyFlags rest).map fun (m, r, o, b, _) => (m, r, o, b, true)
   | _ => none
 
 /-- The median of a non-empty list (the lower middle element for an even length). -/
@@ -312,21 +341,25 @@ def secs (ms : Nat) : String :=
   let c := (ms + 5) / 10
   s!"{c / 100}.{if c % 100 < 10 then "0" else ""}{c % 100} s"
 
-/-- `cqr certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k]` — report
-§5.1.3, §8.4.1, §8.4.4, §9.5.1 (Stage 8b): check → extract → match → synthesize (`r = r⋆`
-unless given) → generate `Cert.lean` → kernel check (`lake env lean`) → axiom audit → write
-`certificate.json`, `<name>.qir`, `<name>.qasm` (from the same circuit) → status line.
+/-- `cqr certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k] [--report]` —
+report §5.1.3, §8.4.1, §8.4.4, §9.5.1 (Stage 8b): check → extract → match → synthesize (`r = r⋆`
+unless given) → front-end validation (Stage 9b) → generate `Cert.lean` → kernel check
+(`lake env lean`) → axiom audit → write `certificate.json`, `<name>.qir`, `<name>.qasm` (from the
+same circuit) and, with `--report`, `run_report.md` / `run_report.json` → status line.
 `--bench k` repeats the kernel check `k + 1` times and records the median of the last `k`. -/
 def runCertify (path : String) (solutions iters : Option Nat) (out : Option String)
-    (bench : Option Nat) : IO UInt32 := do
+    (bench : Option Nat) (report : Bool) : IO UInt32 := do
   let src ← IO.FS.readFile path
   match ← frontEnd path, ← signature path solutions with
   | .error d, _ | _, .error d => IO.println d.toJson.compress; return 1
-  | .ok (tp, _), .ok sig =>
+  | .ok (tp, entryPos), .ok sig =>
     let t := sig.toTerm.normalize
-    match matchLibrary library t with
-    | .matched .. => pure ()
-    | r => return (← printNoMatch "certify" t r false)
+    let (subst, sides) ← match matchLibrary library t with
+      | .matched _ σ ds =>
+        let σs := σ.mergeSort fun a b => Term.MVar.cmp a.1 b.1 != .gt
+        pure (", ".intercalate (σs.map fun (m, b) => s!"{m.name} ↦ {b.toJson.compress}"),
+          ds.map fun d => s!"{d.cond.render}: {d.render}")
+      | r => return (← printNoMatch "certify" t r false)
     let gi ← match groverInstance tp sig iters with
       | .ok gi => pure gi
       | .error (.diagnostic d) => IO.println d.toJson.compress; return 1
@@ -334,6 +367,12 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
     let some M := gi.M
       | IO.eprintln "cqr certify: the certificate needs the solution count M (--solutions M)"
         return 2
+    -- front-end validation (Stage 9b, decision 1): before anything is written
+    let fe := validateFrontEnd tp gi.net gi.n
+    let some feText := fe.trustText
+      | match fe.diagnostic? tp.name entryPos with
+        | some d => IO.println d.toJson.compress; return 1
+        | none => return 1
     let cfg ← match RefConfig.ofFiles (← IO.FS.readFile "lean-toolchain")
         (← IO.FS.readFile "lake-manifest.json") with
       | .ok c => pure c
@@ -368,7 +407,7 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
     let cfg := { cfg with cpu := some (cpu.getD "unknown"), logicalCpus := cpus, clock,
                           leanThreads := ← IO.getEnv "LEAN_NUM_THREADS", kernelCheck := timing }
     let base ← match Certificate.build src sig gi.entry gi.facts gi.circuit gi.circuit.grade gi.r
-        gi.n M q.delta cfg with
+        gi.n M q.delta cfg feText with
       | .ok c => pure c
       | .error e => IO.eprintln s!"cqr certify: {e}"; return 1
     let cert := { base with
@@ -378,23 +417,36 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
     IO.FS.writeFile (file "certificate.json") (cert.toJson.compress ++ "\n")
     IO.FS.writeFile (file s!"{tp.name}.qir") (emitQIR tp.name gi.circuit)
     IO.FS.writeFile (file s!"{tp.name}.qasm") (emitQASM tp.name gi.circuit)
+    let statusLine := match status with
+      | .certified => s!"certified (conditional on: solution_count = {M})"
+      | _ => s!"certificate with tracked obligations: {", ".intercalate obligations}"
+    if report then
+      let dif ← match diffusion gi.n none with
+        | .ok c => pure c
+        | .error d => IO.println d.toJson.compress; return 1
+      let rd : RunData :=
+        { name := tp.name, source := path, predicateHash := cert.predicateHash, sig,
+          pattern := gi.entry.name, subst, sides, net := gi.net, oracle := gi.oracle,
+          diffusion := dif, circuit := gi.circuit, n := gi.n, M, r := gi.r, delta := q.delta,
+          frontEnd := fe, theoremName := q.theoremName, certPath, timing,
+          axioms := last.axioms, statusLine, certified := status == .certified }
+      IO.FS.writeFile (file "run_report.md") rd.toMarkdown
+      IO.FS.writeFile (file "run_report.json") (rd.toJson.pretty ++ "\n")
     let kms := match timing.kernelMs with | some k => s!", {secs k} kernel" | none => ""
     IO.println s!"kernel check: {certPath} (exit 0, {secs timing.wallMs} wall{kms}; \
       {timing.statistic})"
     IO.println s!"axioms: {", ".intercalate last.axioms}"
     IO.println s!"wrote: {file "certificate.json"}, {file s!"{tp.name}.qir"}, \
-      {file s!"{tp.name}.qasm"}"
-    match status with
-    | .certified =>
-      IO.println s!"certified (conditional on: solution_count = {M})"
-      return 0
-    | _ =>
-      IO.println s!"certificate with tracked obligations: {", ".intercalate obligations}"
-      return 3
+      {file s!"{tp.name}.qasm"}{if report then s!", {file "run_report.md"}, \
+      {file "run_report.json"}" else ""}"
+    IO.println s!"front end: {feText}"
+    IO.println statusLine
+    return if status == .certified then 0 else 3
 
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["check", file] => runCheck file
+  | ["check", file, "--truth-table"] => runTruthTable file
   | ["extract", file] => runExtract file none
   | ["extract", file, "--solutions", m] =>
     match m.toNat? with
@@ -418,7 +470,7 @@ def main (args : List String) : IO UInt32 := do
     | none => IO.eprint usage; return 2
   | "certify" :: file :: flags =>
     match certifyFlags flags with
-    | some (m, r, o, b) => runCertify file m r o b
+    | some (m, r, o, b, p) => runCertify file m r o b p
     | none => IO.eprint usage; return 2
   | "emit" :: file :: flags =>
     match emitFlags flags with
