@@ -57,6 +57,8 @@ inputs.
 
 ## 3. Remaining tracked obligations (`docs/SORRIES.md`)
 
+Post-M2 note (2026-10-25): measured_composition (Theorem 3.3a, general ε) closed in c691700.
+
 | Obligation | Report § | Status |
 |---|---|---|
 | `measured_composition` (Theorem 3.3a, general ε; `CQRV/Realizability/Composition.lean:146`) | §2.3.2 | open (`sorry`, tracked); not used by either certificate |
