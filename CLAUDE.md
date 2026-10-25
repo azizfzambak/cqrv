@@ -13,7 +13,7 @@ A certifying compiler: classical specification (DSL, Chapter 7) → ground signa
 → instantiation and resource grade (Chapter 3) → oracle synthesis with measurement-based
 uncomputation (Chapter 6) → Lean 4 certificate (Chapter 5) → QIR / OpenQASM 3 text
 (§5.3, §8.4.3). The MVP is the Grover vertical slice of Chapter 8 with grade
-(w, d, t, a) = (10, 74, 72, 2).
+(w, d, t, a) = (15, 230, 72, 7), as measured (report v3; v2 said (10, 74, 72, 2)).
 
 ## Layout (one Lean package per chapter-level component)
 

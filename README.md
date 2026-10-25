@@ -1,7 +1,7 @@
 # CQRV — Certified Quantum Realization
 
 Implementation of *Applying Certified Quantum Realization: A Practical Implementation Guide*
-(`docs/cqrv_report_revised_v2.docx`). The report is the specification; `docs/PLAN.md` is the
+(`docs/cqrv_report_revised_v3.docx`). The report is the specification; `docs/PLAN.md` is the
 stage-by-stage execution plan; `CLAUDE.md` holds the rules every Claude Code session follows.
 
 Status: **M2 reached (local CI)** — Stage 9b. Two Grover certificates, `grover_pred_037` and the
