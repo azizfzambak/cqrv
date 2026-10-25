@@ -561,3 +561,9 @@ Decision: (1) `docs/M2_REPORT.md` §2 states that M/N = 30/64 ≈ 1/2 gives almo
 Why: Stage 9b review; the validation compares two functions of the same typed AST, so calling the parser "exhaustively validated" overstated it.
 Rejected: patching the old run reports by hand (they must be the output of the run whose kernel time certificate.json records).
 Report §: 8.5.2, 5.3.3.
+
+## 2026-10-25 — Theorem 3.3a, general ε: shared union bound; `measured_composition_exact'` keeps hypothesis (ii) (Stage 10a)
+Decision: (1) The union-bound step is factored into `mixture_union_bound` (events `E_f`, `E` as parameters, 28 lines), used by both `measured_composition_exact` (statement unchanged, proof now 12 lines) and `measured_composition` (statement unchanged, sorry closed); the new event inclusion is `relax_comp`. (2) The consistency corollary `measured_composition_exact'` (from the general theorem at ε = 0 via `realizes_zero_iff`, `Spec.relax_zero`) needs `[MetricSpace Y] [MetricSpace Z]` and the non-expansiveness hypothesis (ii): the general statement requires (ii) for every ε, although the exact case does not use it. So the corollary is the exact theorem plus `hnonexp`, not the exact theorem itself; the original `measured_composition_exact` is kept. (3) `relax_comp` needs only `PseudoMetricSpace`.
+Why: (1) the refactor stays short and removes a 25-line duplicate (task item 2 allows it on that condition). (2) the statement of `measured_composition` is fixed (task); dropping (ii) from the corollary would need a separate metric construction (e.g. a discrete metric, under which (ii) holds for every `S_g`), which is outside the task's "via `realizes_zero_iff`".
+Rejected: duplicating the exact-case proof; weakening the general statement to make (ii) conditional on ε > 0 (statement fixed).
+Report §: 2.3.2, 2.1.2, 2.3.3.
