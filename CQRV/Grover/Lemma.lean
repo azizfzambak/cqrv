@@ -482,6 +482,19 @@ theorem grover_parametric_lemma (gp : GroverParams) (D : DiffusionCert gp.n) (r 
       AncRestore gp.n C.nAnc C (groverOp gp.oracle.P ^ r * hadamardU gp.n) :=
   ⟨grover_realizes gp D r hC, grover_ancRestore gp.oracle D hC⟩
 
+/-- Report §5.2.4, §8.3.4 Figure 8.1 (Stage 11a item 3) — `grover_parametric_lemma` without the
+`DiffusionCert` argument: `groverCircuit … = .ok C` already synthesized the MCZ of `allNet n`, and
+`DiffusionCert.mk'` certifies it (`hWF` by `synthesizeOracle_WF`). Same conclusion. -/
+theorem grover_parametric_lemma' (gp : GroverParams) (r : ℕ)
+    {C : Circuit} (hC : groverCircuit gp.oracle.N gp.n r = .ok C) :
+    RealizesExact (SearchSpec gp.oracle.P) (basisPOVM gp.n) (groverChannel gp.n C)
+        (1 - Real.sin ((2 * r + 1) * gp.θ) ^ 2) (Synthesis.grade C) ∧
+      AncRestore gp.n C.nAnc C (groverOp gp.oracle.P ^ r * hadamardU gp.n) := by
+  obtain ⟨it, hit, -⟩ := groverCircuit_ok hC
+  obtain ⟨-, d, -, hd, -⟩ := groverIteration_ok hit
+  obtain ⟨-, mcz, hmcz, -⟩ := diffusion_ok hd
+  exact grover_parametric_lemma gp (DiffusionCert.mk' gp.n hmcz) r hC
+
 /-! ## The instance trig fact (decision 3) -/
 
 /-- Report §8.2.3, decision 3 — `sin²θ = 1/8 ⇒ sin²(5θ) = 121/128`: with `s = sin θ`,

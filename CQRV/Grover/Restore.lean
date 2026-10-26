@@ -17,6 +17,8 @@ the Grover circuit restores its ancillae and applies `G^r H^{⊗n}` on the data 
 * The diffusion circuit restores with `2|s⟩⟨s| − I` (`AncRestore.comp` twice and decision 5);
   one iteration with `G = U_s U_P`; by induction the full circuit with `G^r H^{⊗n}`
   (`grover_ancRestore`, the restoration conjunct of `grover_parametric_lemma`).
+* Stage 11a: `allNet_WF` (`n ≥ 1`), `diffusion_WF`, and the constructors `OracleCert.ofNetwork`,
+  `DiffusionCert.mk'`, whose `hWF` comes from `synthesizeOracle_WF` instead of `decide`.
 -/
 
 @[expose] public section
@@ -582,6 +584,101 @@ theorem grover_ancRestore {n r : ℕ} (O : OracleCert n) (D : DiffusionCert n) {
         (bitsOk_dataLayer _ _ (post_unitary n)))
     exact (ancRestore_foldl _ _ _ _ (bitsOk_dataLayer _ _ (onAll_h_unitary n)) hitb
       (ancRestore_hLayer n _) (iteration_ancRestore O D hn hO hD) (k + 1)).2
+
+
+/-! ## Stage 11a — `allNet_WF`, the diffusion is well formed, constructors without `decide` -/
+
+/-- Report §8.2, §6.1.2 (Stage 11a item 2) — the network of `P_all` is well formed for `n ≥ 1`.
+For `n = 0` it is not: `allNet 0` has no nodes and the output index `0` (`diffusion 0 none`
+fails, so the corollaries below need no case `n = 0`). -/
+theorem allNet_WF {n : ℕ} (hn : n ≠ 0) : (allNet n).WF := by
+  have hnodes : (allNet n).nodes =
+      ((List.range n).map Node.input ++ allAnds n (n - 1)).toArray := by
+    simp [allNet, allAnds]
+  have hsize : (allNet n).nodes.size = n + (n - 1) := by simp [hnodes, allAnds]
+  have hnI : (allNet n).nInputs = n := rfl
+  unfold Network.WF Network.wf
+  rw [hnI, Bool.and_eq_true, List.all_eq_true, List.all_eq_true]
+  refine ⟨fun k hk => ?_, fun o ho => ?_⟩
+  · rw [List.mem_range, hsize] at hk
+    rw [hnodes, List.getElem?_toArray]
+    by_cases hkn : k < n
+    · rw [List.getElem?_append_left (by simpa using hkn), List.getElem?_map,
+        List.getElem?_range hkn]
+      simpa using hkn
+    · rw [List.getElem?_append_right (by simp; omega)]
+      simp only [List.length_map, List.length_range, allAnds, List.getElem?_map,
+        List.getElem?_range (by omega : k - n < n - 1), Option.map_some]
+      by_cases hk0 : k - n = 0
+      · simp [hk0]; omega
+      · simp [hk0]; omega
+  · have ho' : o = if n ≤ 1 then 0 else 2 * n - 2 := by simpa [allNet] using ho
+    rw [ho', hsize]
+    split_ifs <;> simp <;> omega
+
+/-- Report §9.1.1 — a unitary data-only layer on `x[0..n)` is well formed. -/
+theorem dataLayer_WF (n : ℕ) (gs : List Gate) (hu : gs.all Gate.isUnitary = true)
+    (hq : ∀ g ∈ gs, g.qubitsOk n = true) : (⟨n, gs⟩ : Circuit).WF := by
+  unfold Circuit.WF Circuit.wf
+  rw [Bool.and_eq_true, List.all_eq_true]
+  exact ⟨hq, bitsOk_dataLayer n gs hu⟩
+
+/-- One single-qubit gate on each of `x[0..n)` passes `qubitsOk n`. -/
+theorem onAll_qubitsOk (g : Qubit → Gate) (n : ℕ)
+    (hg : ∀ i, i < n → (g (.data i)).qubitsOk n = true) :
+    ∀ x ∈ Diffusion.onAll g n, x.qubitsOk n = true := by
+  intro x hx
+  simp only [Diffusion.onAll, List.mem_map, List.mem_range] at hx
+  obtain ⟨i, hi, rfl⟩ := hx
+  exact hg i hi
+
+/-- Report §8.2, §9.1.1 (Stage 11a item 2) — the V1 diffusion circuit is well formed for every `n`
+for which it is synthesized: its MCZ by `synthesizeOracle_WF` and `allNet_WF`, the `H` / `X`
+layers directly, the pieces joined by `Circuit.WF_append`. -/
+theorem diffusion_WF {n : ℕ} {D : Circuit} (h : diffusion n none = .ok D) : D.WF := by
+  obtain ⟨hn, mcz, hmcz, rfl⟩ := diffusion_ok h
+  have hm := synthesizeOracle_WF (allNet_WF hn) hmcz
+  have hmd : mcz.nData = n := by
+    obtain ⟨_, _, _, _, _, _, hC⟩ := synthesizeOracle_ok hmcz
+    rw [hC]
+    rfl
+  have h1 : ∀ i, i < n → (Gate.h (.data i)).qubitsOk n = true := fun i hi => by
+    simp [Gate.qubitsOk, Gate.qubits, hi]
+  have h2 : ∀ i, i < n → (Gate.x (.data i)).qubitsOk n = true := fun i hi => by
+    simp [Gate.qubitsOk, Gate.qubits, hi]
+  have hpre : (⟨n, Diffusion.onAll .h n ++ Diffusion.onAll .x n⟩ : Circuit).WF :=
+    dataLayer_WF n _ (pre_unitary n) (fun g hg => (List.mem_append.mp hg).elim
+      (onAll_qubitsOk _ n h1 g) (onAll_qubitsOk _ n h2 g))
+  have hpost : (⟨n, Diffusion.onAll .x n ++ Diffusion.onAll .h n⟩ : Circuit).WF :=
+    dataLayer_WF n _ (post_unitary n) (fun g hg => (List.mem_append.mp hg).elim
+      (onAll_qubitsOk _ n h2 g) (onAll_qubitsOk _ n h1 g))
+  exact Circuit.WF_append rfl (Circuit.WF_append hmd.symm hpre hm) hpost
+
+/-- Report §5.2.4, §6.3.2 (Stage 11a item 3) — the certified oracle of a well-formed network:
+`hWF` is filled by `synthesizeOracle_WF`, not by a per-instance `decide`. -/
+def OracleCert.ofNetwork (N : Network) {C : Circuit} (hN : N.WF)
+    (hC : synthesizeOracle N = .ok C) : OracleCert N.nInputs where
+  N := N
+  C := C
+  hn := rfl
+  hC := hC
+  hWF := synthesizeOracle_WF hN hC
+
+/-- The MCZ of `P_all` is synthesized only for `n ≥ 1`. -/
+theorem allNet_ok_ne_zero {n : ℕ} {C : Circuit} (hC : synthesizeOracle (allNet n) = .ok C) :
+    n ≠ 0 := by
+  rintro rfl
+  have h : (synthesizeOracle (allNet 0)).toBool = false := by decide
+  rw [hC] at h
+  cases h
+
+/-- Report §6 (`DiffusionCert(n)`), §8.2 (Stage 11a item 3) — the MCZ certificate for every `n`
+whose MCZ is synthesized: `hWF` from `synthesizeOracle_WF` and `allNet_WF`. -/
+def DiffusionCert.mk' (n : ℕ) {C : Circuit} (hC : synthesizeOracle (allNet n) = .ok C) :
+    DiffusionCert n where
+  mcz := { N := allNet n, C := C, hn := rfl, hC := hC,
+           hWF := synthesizeOracle_WF (allNet_WF (allNet_ok_ne_zero hC)) hC }
+  hN := rfl
 
 end CQRV.Grover
 

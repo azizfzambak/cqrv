@@ -107,4 +107,35 @@ example (n : ℕ) : ((List.range n).map Node.input).toArray = (Array.range n).ma
 #print axioms uConj_ancZero_m
 #print axioms basisPOVM_measure
 
+/-! ## Stage 11a — `synthesizeOracle_WF`, `allNet_WF`, constructors without `decide` -/
+
+/-- info: 'CQRV.synthesizeOracle_WF' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms synthesizeOracle_WF
+
+/-- info: 'CQRV.Grover.allNet_WF' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms allNet_WF
+
+/-- info: 'CQRV.Grover.grover_parametric_lemma'' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms grover_parametric_lemma'
+
+#print axioms diffusion_WF
+#print axioms OracleCert.ofNetwork
+#print axioms DiffusionCert.mk'
+
+-- `allNet n` is well formed exactly for `n ≥ 1` (the hypothesis of `allNet_WF`).
+#guard !(allNet 0).wf
+#guard (List.range 12).all fun n => (allNet (n + 1)).wf
+example : ¬ (allNet 0).WF := by decide
+
+-- The constructors give the same circuits as the per-instance certificates (`decide` there).
+example : (OracleCert.ofNetwork groverNet (by decide) (by rfl)).C = grover037Oracle.C := rfl
+example : (DiffusionCert.mk' 8 mcz8Circuit_ok).mcz.C = mczCert8.mcz.C := rfl
+
+-- The instance through the variant without `DiffusionCert`.
+example (hM : (Finset.univ.filter (fun x => grover037Oracle.P x = true)).card = 32) :=
+  grover_parametric_lemma' (grover037Params hM) 2 grover037Circuit_ok
+
 end CQRV.Tests.Grover

@@ -23,7 +23,10 @@ generalized in Stage 9a; basis-vector route of DECISIONS.md, Stage 6b-2):
 * `unc_kraus`: one uncompute block, every branch, `(1/√2)` and the ancilla reset;
   `chain_kraus` nests compute blocks, phase, and uncompute blocks in reverse order;
 * `lemma_6_3_2_xor` (Stage 9a) and `lemma_6_3_2` (its corollary, statement of Stage 6a), the
-  traced form and the Grover instance.
+  traced form and the Grover instance;
+* `synthesizeOracle_WF` (Stage 11a): `N.WF → synthesizeOracle N = .ok C → C.WF`, by the qubit
+  invariant `InvQ` carried alongside `Inv` and the bit discipline of the uncompute blocks
+  (`bitsOk_uncBlocks`); so `C.WF` no longer needs a per-instance check.
 
 The synthesizer is unchanged: the AND records exist only in the invariant (existentially).
 -/
@@ -939,6 +942,450 @@ theorem lemma_6_3_2_traced (N : Network) (C : Circuit) (hC : synthesizeOracle N 
     (channelDenote C.nData C.nAnc C (ρ ⊗ᴹ ancZero C.nAnc)).traceRight =
       phaseOracle (N.pred C.nData) ◃ ρ :=
   (lemma_6_3_2 N C hC hN hWF).traced ρ
+
+/-! ## Stage 11a — well-formedness of every synthesized oracle (`synthesizeOracle_WF`) -/
+
+/-- Report §9.1.1 (Stage 11a) — the data atoms of `u` lie in the register `x[0..nI)`. -/
+def DataBelow (nI : ℕ) (u : Aff) : Prop := ∀ q ∈ u.lin, ∀ d, q = .data d → d < nI
+
+/-- Report §6.3.2, §9.1.1 (Stage 11a) — the qubit part of the well-formedness invariant of the
+synthesizer's fold: every recorded value has its data atoms below `nI`, and every gate of the
+compute and uncompute blocks passes `Gate.qubitsOk nI`. Carried alongside `Inv`, which supplies
+the distinct atoms and the ancilla atoms below `anc nextAnc`. -/
+def InvQ (nI : ℕ) (st : Oracle.St) : Prop :=
+  (∀ i u, st.vals.getD i none = some u → DataBelow nI u) ∧
+  (∀ blk ∈ st.compute.toList, ∀ g ∈ blk, g.qubitsOk nI = true) ∧
+  (∀ blk ∈ st.uncompute.toList, ∀ g ∈ blk, g.qubitsOk nI = true)
+
+/-- The vals clause of `InvQ` after pushing the value `e`. -/
+theorem vals_push_data {nI : ℕ} {vals : Array (Option Aff)}
+    (hv : ∀ i u, vals.getD i none = some u → DataBelow nI u) (e : Option Aff)
+    (he : ∀ u, e = some u → DataBelow nI u) :
+    ∀ i u, (vals.push e).getD i none = some u → DataBelow nI u := by
+  intro i u hu
+  rw [Array.getD_push_eq] at hu
+  split_ifs at hu
+  exacts [he u hu, hv i u hu]
+
+/-- Report §6.1.2 — the CNOTs of `gather` have distinct operands (the pivot is filtered out). -/
+theorem gather_cnot_ne {S : List Qubit} {p : Qubit} {g : Gate} (hg : g ∈ Oracle.gather S p)
+    {a b : Qubit} (he : g = .cnot a b) : a ≠ b := by
+  simp only [Oracle.gather, List.mem_map] at hg
+  obtain ⟨s, hs, rfl⟩ := hg
+  cases he
+  simpa using (List.mem_filter.mp hs).2
+
+/-- Report §6.1.2 (Stage 11a) — the operand qubits of `prepare` are atoms of the operands, and its
+CNOTs have distinct operands. -/
+theorem prepare_wf {u v : Aff} {pre : List Gate} {pu pv : Qubit}
+    (h : Oracle.prepare u v = .ok (pre, pu, pv)) :
+    (pu ∈ u.lin ∨ pu ∈ v.lin) ∧ (pv ∈ u.lin ∨ pv ∈ v.lin) ∧
+      ∀ g ∈ pre, ∀ a b, g = .cnot a b → a ≠ b := by
+  unfold Oracle.prepare at h
+  dsimp only at h
+  split at h
+  swap
+  · rw [except_bind_eq_ok] at h
+    obtain ⟨_, hf, _⟩ := h
+    exact absurd hf (fail_ne_ok _ _)
+  rename_i p₀ us hul
+  simp only [pure_bind] at h
+  split at h
+  swap
+  · rw [except_bind_eq_ok] at h
+    obtain ⟨_, hf, _⟩ := h
+    exact absurd hf (fail_ne_ok _ _)
+  rename_i q₀ vs hvl
+  simp only [except_pure_eq_ok, Prod.mk.injEq] at h
+  obtain ⟨rfl, rfl, rfl⟩ := h
+  have hq₀f : q₀ ∈ (if v.lin.contains p₀ = true then
+      p₀ :: symDiff (u.lin.erase p₀) (v.lin.erase p₀) else v.lin).filter (· != p₀) := by
+    rw [hvl]; exact List.mem_cons_self
+  refine ⟨Or.inl (by rw [hul]; exact List.mem_cons_self), ?_, ?_⟩
+  · obtain ⟨hS, hne⟩ := List.mem_filter.mp hq₀f
+    split_ifs at hS
+    · rcases List.mem_cons.mp hS with rfl | hS
+      · simp at hne
+      · rcases mem_symDiff hS with hS | hS
+        exacts [Or.inl (List.mem_of_mem_erase hS), Or.inr (List.mem_of_mem_erase hS)]
+    · exact Or.inr hS
+  · intro g hg a b he
+    rcases List.mem_append.mp hg with hg | hg
+    · rcases List.mem_append.mp hg with hg | hg
+      exacts [gather_cnot_ne hg he, gather_cnot_ne hg he]
+    · subst he
+      split_ifs at hg <;> simp at hg
+
+/-- Report §9.1.1 — an `X` / `CNOT` gate on data qubits below `nI`, with distinct CNOT operands,
+passes `qubitsOk`. -/
+theorem Gate.qubitsOk_of_isPerm {nI : ℕ} {g : Gate} (hp : g.isPerm = true)
+    (hq : ∀ q ∈ g.qubits, ∀ d, q = .data d → d < nI) (hd : ∀ a b, g = .cnot a b → a ≠ b) :
+    g.qubitsOk nI = true := by
+  cases g with
+  | x q => cases q <;> simp_all [Gate.qubitsOk, Gate.qubits]
+  | cnot a b => cases a <;> cases b <;> simp_all [Gate.qubitsOk, Gate.qubits]
+  | _ => simp [Gate.isPerm] at hp
+
+/-- Report §6.2.2, §9.1.1 — the compute and uncompute blocks of one AND with target `anc j` pass
+`qubitsOk` when `pre` does and the operand qubits are distinct, in range, and not the target. -/
+theorem and_blocks_qubitsOk {nI j : ℕ} {pre : List Gate} {p q : Qubit}
+    (hpre : ∀ g ∈ pre, g.qubitsOk nI = true)
+    (hp : ∀ d, p = .data d → d < nI) (hq : ∀ d, q = .data d → d < nI)
+    (hpq : p ≠ q) (hpt : p ≠ .anc j) (hqt : q ≠ .anc j) :
+    (∀ g ∈ pre ++ [.alloc (.anc j)] ++ TempLogicalAND p q (.anc j) ++ pre.reverse,
+        g.qubitsOk nI = true) ∧
+      ∀ g ∈ pre ++ UncomputeTempLogicalAND p q (.anc j) 0 ++ [.free (.anc j)] ++ pre.reverse,
+        g.qubitsOk nI = true := by
+  have hand : ∀ g ∈ TempLogicalAND p q (.anc j), g.qubitsOk nI = true := by
+    intro g hg
+    clear hpre
+    have hpt' := hpt.symm
+    have hqt' := hqt.symm
+    simp only [TempLogicalAND, List.mem_cons, List.not_mem_nil, or_false] at hg
+    cases p <;> cases q <;>
+      rcases hg with rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl <;>
+      simp_all [Gate.qubitsOk, Gate.qubits]
+  have hunc : ∀ g ∈ UncomputeTempLogicalAND p q (.anc j) 0, g.qubitsOk nI = true := by
+    intro g hg
+    clear hpre
+    have hpt' := hpt.symm
+    have hqt' := hqt.symm
+    simp only [UncomputeTempLogicalAND, List.mem_cons, List.not_mem_nil, or_false] at hg
+    cases p <;> cases q <;> rcases hg with rfl|rfl|rfl|rfl <;>
+      simp_all [Gate.qubitsOk, Gate.qubits]
+  constructor
+  · intro g hg
+    simp only [List.mem_append, List.mem_reverse, List.mem_singleton] at hg
+    rcases hg with ((hg | rfl) | hg) | hg
+    exacts [hpre g hg, rfl, hand g hg, hpre g hg]
+  · intro g hg
+    simp only [List.mem_append, List.mem_reverse, List.mem_singleton] at hg
+    rcases hg with ((hg | hg) | rfl) | hg
+    exacts [hpre g hg, hunc g hg, rfl, hpre g hg]
+
+/-- Report §6.1.2 — in a well-formed network every `input i` node has `i < nInputs`. -/
+theorem Network.WF.input_lt {N : Network} (hN : N.WF) {k i : ℕ}
+    (h : N.nodes[k]? = some (.input i)) : i < N.nInputs := by
+  have hk : k < N.nodes.size := by
+    by_contra hc
+    rw [Array.getElem?_eq_none (by omega)] at h
+    cases h
+  unfold Network.WF Network.wf at hN
+  rw [Bool.and_eq_true] at hN
+  have := List.all_eq_true.mp hN.1 k (List.mem_range.mpr hk)
+  rw [h] at this
+  simpa using this
+
+/-- Report §6.1.2, §9.1.1 (Stage 11a) — one step of the synthesizer preserves `InvQ`, given `Inv`
+before the step and `N.WF` (for the `input` nodes). -/
+theorem step_ok_invQ {N : Network} (hN : N.WF) (mark : Array Bool) {n k : ℕ}
+    (hk : k < N.nodes.size) {st st' : Oracle.St} (h : Oracle.step N mark st k = .ok st')
+    (hinv : Inv N n k st) (hq : InvQ N.nInputs st) : InvQ N.nInputs st' := by
+  obtain ⟨recs, -, hnext, -, -, -, hvals⟩ := hinv
+  obtain ⟨hd, hcq, huq⟩ := hq
+  have keep : ∀ e : Option Aff, (∀ u, e = some u → DataBelow N.nInputs u) →
+      InvQ N.nInputs { st with vals := st.vals.push e } := fun e he =>
+    ⟨vals_push_data hd e he, hcq, huq⟩
+  unfold Oracle.step at h
+  split at h
+  · rw [except_pure_eq_ok] at h
+    subst h
+    exact keep none (fun u hu => by cases hu)
+  have hnk := Array.getElem?_eq_getElem hk
+  rw [hnk] at h
+  generalize hnd : N.nodes[k] = nd at h hnk
+  cases nd with
+  | input i =>
+    rw [except_pure_eq_ok] at h
+    subst h
+    refine keep _ (fun u hu => ?_)
+    cases hu
+    intro q hq d hdq
+    simp only [List.mem_singleton] at hq
+    subst hq
+    cases hdq
+    exact Network.WF.input_lt hN hnk
+  | const b =>
+    rw [except_pure_eq_ok] at h
+    subst h
+    exact keep _ (fun u hu q hq => by cases hu; simp at hq)
+  | not i =>
+    rw [except_bind_eq_ok] at h
+    obtain ⟨u, hu, h⟩ := h
+    beta_reduce at hu
+    split at hu
+    · rename_i u' hu'
+      rw [except_pure_eq_ok] at hu h
+      subst hu h
+      exact keep _ (fun w hw => by cases hw; exact hd i u' hu')
+    · exact absurd hu (fail_ne_ok _ _)
+  | xor i j =>
+    rw [except_bind_eq_ok] at h
+    obtain ⟨u, hu, h⟩ := h
+    rw [except_bind_eq_ok] at h
+    obtain ⟨v, hv, h⟩ := h
+    beta_reduce at hu hv
+    split at hu
+    swap; · exact absurd hu (fail_ne_ok _ _)
+    rename_i u' hu'
+    rw [except_pure_eq_ok] at hu
+    subst hu
+    split at hv
+    swap; · exact absurd hv (fail_ne_ok _ _)
+    rename_i v' hv'
+    rw [except_pure_eq_ok] at hv
+    subst hv
+    rw [except_pure_eq_ok] at h
+    subst h
+    refine keep _ (fun w hw q hq => ?_)
+    cases hw
+    rcases mem_symDiff hq with hq | hq
+    exacts [hd i u' hu' q hq, hd j v' hv' q hq]
+  | and i j =>
+    rw [except_bind_eq_ok] at h
+    obtain ⟨u, hu, h⟩ := h
+    rw [except_bind_eq_ok] at h
+    obtain ⟨v, hv, h⟩ := h
+    beta_reduce at hu hv
+    split at hu
+    swap; · exact absurd hu (fail_ne_ok _ _)
+    rename_i u' hu'
+    rw [except_pure_eq_ok] at hu
+    subst hu
+    split at hv
+    swap; · exact absurd hv (fail_ne_ok _ _)
+    rename_i v' hv'
+    rw [except_pure_eq_ok] at hv
+    subst hv
+    have du := hd i u' hu'
+    have dv := hd j v' hv'
+    split at h
+    · -- folded AND
+      rename_i r hr
+      rw [except_pure_eq_ok] at h
+      subst h
+      refine keep _ (fun w hw => ?_)
+      cases hw
+      rcases fold_cases hr with rfl | rfl | rfl
+      exacts [du, dv, fun q hq => by simp at hq]
+    · -- a new ancilla
+      rw [except_bind_eq_ok] at h
+      obtain ⟨⟨pre, pu, pv⟩, hprep, h⟩ := h
+      rw [except_pure_eq_ok] at h
+      subst h
+      have gu := hvals i u' hu'
+      have gv := hvals j v' hv'
+      obtain ⟨hpq, hperm, hqub, -⟩ := prepare_ok hprep gu.1 gv.1
+      obtain ⟨hpu, hpv, hcn⟩ := prepare_wf hprep
+      -- atoms of the operands: data below `nInputs`, ancillae below `anc nextAnc`
+      have atomD : ∀ q, (q ∈ u'.lin ∨ q ∈ v'.lin) → ∀ d, q = .data d → d < N.nInputs :=
+        fun q hq => hq.elim (du q) (dv q)
+      have atomA : ∀ q, (q ∈ u'.lin ∨ q ∈ v'.lin) → q ≠ .anc st.nextAnc := by
+        rintro q hq rfl
+        rcases hq with hq | hq
+        · have := gu.2.1 _ hq _ rfl; omega
+        · have := gv.2.1 _ hq _ rfl; omega
+      have hpre : ∀ g ∈ pre, g.qubitsOk N.nInputs = true := fun g hg =>
+        Gate.qubitsOk_of_isPerm (hperm g hg) (fun q hq => atomD q (hqub g hg q hq)) (hcn g hg)
+      obtain ⟨hc, hu⟩ := and_blocks_qubitsOk hpre (atomD pu hpu) (atomD pv hpv) hpq
+        (atomA pu hpu) (atomA pv hpv)
+      refine ⟨vals_push_data hd _ (fun w hw q hq d hdq => ?_), ?_, ?_⟩
+      · cases hw
+        simp only [List.mem_singleton] at hq
+        subst hq
+        cases hdq
+      · intro blk hblk
+        rw [Array.toList_push, List.mem_append, List.mem_singleton] at hblk
+        rcases hblk with hblk | rfl
+        exacts [hcq blk hblk, hc]
+      · intro blk hblk
+        rw [Array.toList_push, List.mem_append, List.mem_singleton] at hblk
+        rcases hblk with hblk | rfl
+        exacts [huq blk hblk, hu]
+
+/-- Report §9.1.1 (Stage 11a) — `InvQ` after the synthesizer's fold over the first `m` nodes. -/
+theorem fold_invQ {N : Network} (hN : N.WF) (mark : Array Bool) :
+    ∀ m, m ≤ N.nodes.size → ∀ st,
+      (List.range m).foldlM (Oracle.step N mark) ({ vals := #[] } : Oracle.St) = .ok st →
+        InvQ N.nInputs st
+  | 0, _, st, h => by
+    rw [List.range_zero, List.foldlM_nil, except_pure_eq_ok] at h
+    subst h
+    exact ⟨fun i u hu => by simp at hu, fun _ h => by simp at h, fun _ h => by simp at h⟩
+  | m + 1, hm, st, h => by
+    rw [List.range_succ, List.foldlM_append, except_bind_eq_ok] at h
+    obtain ⟨st₁, h₁, h⟩ := h
+    simp only [List.foldlM_cons, List.foldlM_nil, bind_pure] at h
+    exact step_ok_invQ hN mark (by omega) h (fold_inv mark 0 m (by omega) st₁ h₁)
+      (fold_invQ hN mark m (by omega) st₁ h₁)
+
+/-- Report §6.1.1, §9.1.1 — the phase flip passes `qubitsOk` when the data atoms of `P` are in
+range. -/
+theorem phaseFlip_qubitsOk {nI : ℕ} {pp : Aff} (hD : DataBelow nI pp) :
+    ∀ g ∈ Oracle.phaseFlip pp, g.qubitsOk nI = true := by
+  rcases hl : pp.lin with _ | ⟨q, l⟩
+  · have hpf : Oracle.phaseFlip pp = [] := by unfold Oracle.phaseFlip; rw [hl]
+    simp [hpf]
+  · set P := Oracle.gather (q :: l) q ++ (if pp.c then [Gate.x q] else []) with hPdef
+    have hpf : Oracle.phaseFlip pp = P ++ [Gate.z q] ++ P.reverse := by
+      unfold Oracle.phaseFlip
+      rw [hl]
+    have hqD : ∀ d, q = .data d → d < nI := hD q (by rw [hl]; exact List.mem_cons_self)
+    have hP : ∀ g ∈ P, g.qubitsOk nI = true := by
+      intro g hg
+      rcases List.mem_append.mp hg with hg | hg
+      · refine Gate.qubitsOk_of_isPerm (gather_isPerm _ _ g hg) (fun w hw => ?_)
+          (fun a b he => gather_cnot_ne hg he)
+        rcases gather_qubits hg hw with hw | rfl
+        exacts [hD w (by rw [hl]; exact hw), hqD]
+      · split_ifs at hg
+        · simp only [List.mem_singleton] at hg
+          subst hg
+          cases q <;> simp_all [Gate.qubitsOk, Gate.qubits]
+        · simp at hg
+    rw [hpf]
+    intro g hg
+    rcases List.mem_append.mp hg with hg | hg
+    · rcases List.mem_append.mp hg with hg | hg
+      · exact hP g hg
+      · simp only [List.mem_singleton] at hg
+        subst hg
+        cases q <;> simp_all [Gate.qubitsOk, Gate.qubits]
+    · exact hP g (List.mem_reverse.mp hg)
+
+/-- Report §9.1.1 — a gate that neither measures nor reads a classical bit. -/
+def Gate.quiet : Gate → Bool
+  | .measure _ _ | .ifBit _ _ => false
+  | _ => true
+
+/-- `X` / `CNOT` gates are quiet. -/
+theorem Gate.quiet_of_isPerm {g : Gate} (h : g.isPerm = true) : g.quiet = true := by
+  cases g <;> simp_all [Gate.isPerm, Gate.quiet]
+
+/-- Quiet gates satisfy the classical-bit discipline after any written bits. -/
+theorem bitsOkFrom_quiet {m : ℕ} {gs : List Gate} (h : ∀ g ∈ gs, g.quiet = true) (W : List ℕ) :
+    Circuit.bitsOkFrom m W gs = true := by
+  induction gs generalizing W with
+  | nil => rfl
+  | cons g gs ih =>
+    have hg := h g List.mem_cons_self
+    simp only [Circuit.bitsOkFrom, ih (fun g' hg' => h g' (List.mem_cons_of_mem _ hg')),
+      Bool.and_true]
+    cases g <;> simp_all [Gate.quiet, Gate.bitOk]
+
+/-- The compute blocks are quiet: no measurement, no classically controlled gate. -/
+theorem cmpBlocks_quiet {rs : List AndRec} (hp : ∀ r ∈ rs, ∀ g ∈ r.pre, g.isPerm = true)
+    (j : ℕ) : ∀ g ∈ cmpBlocks rs j, g.quiet = true := by
+  induction rs generalizing j with
+  | nil => simp [cmpBlocks]
+  | cons r rs ih =>
+    intro g hg
+    rw [cmpBlocks, List.mem_append] at hg
+    rcases hg with hg | hg
+    · have ht : ∀ g ∈ TempLogicalAND r.p r.q (.anc j), g.quiet = true := by
+        simp [TempLogicalAND, Gate.quiet]
+      simp only [AndRec.cmp, List.mem_append, List.mem_reverse, List.mem_singleton] at hg
+      rcases hg with ((hg | rfl) | hg) | hg
+      exacts [Gate.quiet_of_isPerm (hp r (by simp) g hg), rfl, ht g hg,
+        Gate.quiet_of_isPerm (hp r (by simp) g hg)]
+    · exact ih (fun r' hr' => hp r' (by simp [hr'])) (j + 1) g hg
+
+/-- The phase flip is quiet. -/
+theorem phaseFlip_quiet (pp : Aff) : ∀ g ∈ Oracle.phaseFlip pp, g.quiet = true := by
+  rcases hl : pp.lin with _ | ⟨q, l⟩
+  · have hpf : Oracle.phaseFlip pp = [] := by unfold Oracle.phaseFlip; rw [hl]
+    simp [hpf]
+  · set P := Oracle.gather (q :: l) q ++ (if pp.c then [Gate.x q] else []) with hPdef
+    have hpf : Oracle.phaseFlip pp = P ++ [Gate.z q] ++ P.reverse := by
+      unfold Oracle.phaseFlip
+      rw [hl]
+    have hP : ∀ g ∈ P, g.quiet = true := by
+      intro g hg
+      rcases List.mem_append.mp hg with hg | hg
+      exacts [Gate.quiet_of_isPerm (gather_isPerm _ _ g hg),
+        Gate.quiet_of_isPerm (polGates_isPerm _ _ g hg)]
+    rw [hpf]
+    intro g hg
+    rcases List.mem_append.mp hg with hg | hg
+    · rcases List.mem_append.mp hg with hg | hg
+      · exact hP g hg
+      · simp only [List.mem_singleton] at hg
+        subst hg
+        rfl
+    · exact hP g (List.mem_reverse.mp hg)
+
+/-- Report §6.2.2, §9.1.1 — the uncompute blocks of `rs`, run in reverse order, measure into the
+bits `0, 1, …, |rs| − 1` in that order (each fresh and below `K`), and each `ifBit` reads the bit
+just measured. -/
+theorem bitsOk_uncBlocks {rs : List AndRec} (hp : ∀ r ∈ rs, ∀ g ∈ r.pre, g.isPerm = true)
+    (j K : ℕ) (hK : rs.length ≤ K) :
+    Circuit.bitsOkFrom K [] (uncBlocks rs j) = true ∧
+      Circuit.written (uncBlocks rs j) = List.range rs.length := by
+  induction rs generalizing j with
+  | nil => exact ⟨rfl, rfl⟩
+  | cons r rs ih =>
+    obtain ⟨h1, h2⟩ := ih (fun r' hr' => hp r' (by simp [hr'])) (j + 1)
+      (by simp at hK; omega)
+    have hpr := hp r (by simp)
+    have hq : ∀ W, Circuit.bitsOkFrom K W r.pre = true := bitsOkFrom_quiet
+      (fun g hg => Gate.quiet_of_isPerm (hpr g hg))
+    have hqr : ∀ W, Circuit.bitsOkFrom K W r.pre.reverse = true := bitsOkFrom_quiet
+      (fun g hg => Gate.quiet_of_isPerm (hpr g (List.mem_reverse.mp hg)))
+    have hw : r.pre.flatMap Gate.writes = [] := written_perm hpr
+    have hL : rs.length < K := by simp at hK; omega
+    refine ⟨?_, ?_⟩
+    · rw [uncBlocks, bitsOkFrom_append_list, h1, Bool.true_and, h2, List.nil_append]
+      simp [AndRec.unc, UncomputeTempLogicalAND, bitsOkFrom_append_list, Circuit.bitsOkFrom,
+        Gate.bitOk, Gate.writes, Gate.isClifford, Circuit.written, hq, hqr, hw, hL]
+    · rw [uncBlocks, Circuit.written, List.flatMap_append, ← Circuit.written, ← Circuit.written,
+        h2, written_unc hpr, List.length_cons, List.range_succ]
+
+/-- Report §6.3.2 (side condition `C.WF` of Lemma 6.3.2), §8.3.4 (Figure 8.1, restoration side),
+§9.1.1 (Stage 11a) — **every oracle synthesized from a well-formed network is well formed**: data
+qubits below `nInputs` (the `input` atoms, `N.WF`), distinct CNOT / CZ operands (`prepare`, the
+`gather` CNOTs, the AND records `p ≠ q`, ancilla atoms below the target), and the classical-bit
+discipline (the uncompute blocks measure into `0, 1, …` in execution order). The hypothesis
+`N.WF` is needed: `⟨0, #[.input 5], [0]⟩` synthesizes to `Z x[5]` (Stage 9a). -/
+theorem synthesizeOracle_WF {N : Network} {C : Circuit} (hN : N.WF)
+    (hC : synthesizeOracle N = .ok C) : C.WF := by
+  obtain ⟨out, st, pp, hout, hst, hpp, hCeq⟩ := synthesizeOracle_ok hC
+  obtain ⟨recs, -, -, hcmp, hunc, hrecs, -⟩ :=
+    fold_inv (Oracle.cone N out) 0 N.nodes.size le_rfl st hst
+  obtain ⟨hd, hcq, huq⟩ := fold_invQ hN (Oracle.cone N out) N.nodes.size le_rfl st hst
+  have hperm := hrecs.isPerm
+  have hgates : C.gates = cmpBlocks recs 0 ++ Oracle.phaseFlip pp ++ uncBlocks recs 0 := by
+    have h1 := flatten_mapIdx_cmp recs 0
+    have h2 := flatten_mapIdx_unc hperm 0
+    simp only [Nat.zero_add] at h1 h2
+    rw [hCeq, hcmp, hunc, h1, h2]
+  have hnb : C.nBits = recs.length := by
+    rw [Circuit.nBits, hgates, Circuit.written, List.flatMap_append, List.flatMap_append,
+      ← Circuit.written, ← Circuit.written, ← Circuit.written, written_cmpBlocks hperm,
+      written_phaseFlip, List.nil_append, List.nil_append, written_uncBlocks_length hperm]
+  unfold Circuit.WF Circuit.wf
+  rw [Bool.and_eq_true]
+  refine ⟨?_, ?_⟩
+  · rw [List.all_eq_true]
+    intro g hg
+    rw [hCeq] at hg ⊢
+    rcases List.mem_append.mp hg with hg | hg
+    · rcases List.mem_append.mp hg with hg | hg
+      · obtain ⟨blk, hblk, hg⟩ := List.mem_flatten.mp hg
+        exact hcq blk hblk g hg
+      · exact phaseFlip_qubitsOk (hd out pp hpp) g hg
+    · obtain ⟨blk, hblk, hg⟩ := List.mem_flatten.mp hg
+      obtain ⟨i, hi, rfl⟩ := List.mem_mapIdx.mp hblk
+      obtain ⟨g', hg', rfl⟩ := List.mem_map.mp hg
+      rw [Gate.qubitsOk_shiftBits]
+      exact huq _ (List.mem_reverse.mp (List.getElem_mem hi)) g' hg'
+  · have hw : Circuit.written (cmpBlocks recs 0 ++ Oracle.phaseFlip pp) = [] := by
+      rw [Circuit.written, List.flatMap_append, ← Circuit.written, ← Circuit.written,
+        written_cmpBlocks hperm, written_phaseFlip]
+      rfl
+    unfold Circuit.bitsOk
+    rw [hnb, hgates, bitsOkFrom_append_list, bitsOkFrom_append_list,
+      bitsOkFrom_quiet (cmpBlocks_quiet hperm 0), bitsOkFrom_quiet (phaseFlip_quiet pp), hw]
+    simpa using (bitsOk_uncBlocks hperm 0 recs.length le_rfl).1
 
 /-- Report §8, §6.3.2 — the `grover_pred_037` instance of Lemma 6.3.2: the synthesized Grover
 oracle on `x[0..8) × anc[0..2)` restores its ancillae and applies `(−1)^(x0 ∧ x3 ∧ x7)`.

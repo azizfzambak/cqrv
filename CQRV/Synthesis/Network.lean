@@ -73,8 +73,8 @@ def Network.pred (N : Network) (n : Nat) (x : Fin n → Bool) : Bool :=
 
 /-- Report §6.1.2, §6.3.2 — a well-formed network (decidable check; Stage 9a review): every
 `input k` has `k < nInputs`, every operand index is smaller than its node's index (topological
-order), and every output index is a node. The side condition of the planned
-`synthesizeOracle_WF` (docs/SORRIES.md); without it the synthesizer can emit a data qubit
+order), and every output index is a node. The side condition of
+`synthesizeOracle_WF` (`CQRV.Circuit.OracleCorrect`, Stage 11a); without it the synthesizer can emit a data qubit
 outside the register (`⟨0, #[.input 5], [0]⟩` ↦ `Z x[5]`). -/
 def Network.wf (N : Network) : Bool :=
   (List.range N.nodes.size).all (fun k =>
