@@ -95,8 +95,14 @@ def aluGrade : Grade := ⟨16, 145, 60, 10⟩
 #guard (⟨1, 1, 10 ^ 9, 1⟩ : Grade).fitsPartial kyiv.budget = true
 #guard (⟨1, 201, 0, 1⟩ : Grade).fitsPartial kyiv.budget = false
 
--- agreement with `Grade.fits` when every component is given (each component on both sides of
--- its bound)
+-- agreement with `Grade.fits` when every component is given: the theorem (Stage 11b review) …
+example (r b : Grade) : r.fitsPartial (.ofGrade b) = fits r b := fitsPartial_ofGrade r b
+
+/-- info: 'CQRV.Grade.fitsPartial_ofGrade' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms fitsPartial_ofGrade
+
+-- … and its instances (each component on both sides of its bound)
 #guard [groverGrade, aluGrade, ⟨10, 74, 72, 2⟩, 0, ⟨127, 200, 72, 127⟩, ⟨128, 200, 72, 127⟩,
     ⟨127, 201, 72, 127⟩, ⟨127, 200, 73, 127⟩, ⟨127, 200, 72, 128⟩].all fun r =>
   [⟨127, 200, 72, 127⟩, ⟨127, 73, 72, 127⟩, 0, ⟨15, 230, 72, 7⟩].all fun b =>

@@ -13,7 +13,8 @@ DECISIONS.md 2026-10-26).
 
 * `PartialBudget`: a budget `(w, d, t, a)` whose components may be absent (`none` = "not
   limiting", e.g. Table 3.5's "native" T-count). `Grade.fitsPartial` compares only the given
-  components; with all four given it is `Grade.fits` (`PartialBudget.ofGrade`, tested).
+  components; with all four given it is `Grade.fits` (`Grade.fitsPartial_ofGrade`, Stage 11b
+  review).
 * `Profile`: the data of a profile file `profiles/<name>.json` (`docs/profile.schema.json`).
   Reading the JSON is in `CQRV.Certify.Profile`.
 * `HardwareCheck`: the per-component check and the exact perturbation bound
@@ -47,6 +48,13 @@ bounds the grade's component; absent components are not compared. -/
 def Grade.fitsPartial (r : Grade) (b : PartialBudget) : Bool :=
   fitsComponent r.w b.w && fitsComponent r.d b.d && fitsComponent r.t b.t &&
     fitsComponent r.a b.a
+
+/-- Report §3.1.2, §3.3.2 — with every budget component present, `fitsPartial` is the
+fibre-membership test `Grade.fits`. -/
+theorem Grade.fitsPartial_ofGrade (r b : Grade) :
+    r.fitsPartial (.ofGrade b) = Grade.fits r b := by
+  simp [Grade.fitsPartial, PartialBudget.ofGrade, fitsComponent, Grade.fits, Grade.le_def,
+    Bool.and_assoc]
 
 /-- Report §3.3.2, Table 3.5 — one row of the budget check: the grade field and its name, the grade's
 value, the budget (`none` = not limiting). -/
