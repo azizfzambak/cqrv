@@ -72,6 +72,9 @@ jobs:
       - name: Diffusion and Grover circuit (Stage 5b, every branch; success probability)
         run: scripts/diff_grover.sh
 
+      - name: Few-ancilla MCZ, unproved (Stage 12b; every branch, negative controls)
+        run: scripts/diff_mcz.sh
+
       - name: Second worked predicate simple_alu_x0_1 (Stage 9b; oracle every branch, Grover circuit 512 sampled branches; exact delta)
         run: scripts/diff_benchmark.sh
 

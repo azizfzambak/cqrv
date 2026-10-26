@@ -1,6 +1,6 @@
 # CQRV — project status (2026-10-26)
 
-One-page state of the repository after Stages 0–12a. The specification is report v3
+One-page state of the repository after Stages 0–12b. The specification is report v3
 (`docs/cqrv_report_revised_v3.docx`, tracked changes over v2, errata appendix). Details:
 `docs/M2_REPORT.md` (milestone M2, frozen, with post-M2 notes), `docs/DECISIONS.md` (every decision),
 `docs/SORRIES.md` (obligations). Toolchain: Lean 4.35.0, Mathlib v4.35.0, Physlib 96a6bc5.
@@ -42,7 +42,7 @@ The chain-shaped diffusion of the earlier stages, (15, 230, 72, 7), is kept as `
 | Item | Kind |
 |---|---|
 | Diamond norm and the domination lemma ‖Λ₁ρ − Λ₂ρ‖₁ ≤ ‖Λ₁ − Λ₂‖⋄, to instantiate Theorem 3.3b concretely | Phase III proof |
-| 2-ancilla multi-controlled Z (w 15 → 10) and, if adopted, its restoration proof | Stage 12b / 12c |
+| Restoration proof for the few-ancilla MCZ: Stage 12b measured Khattar–Gidney §5.3 + relative-phase Toffolis (`--shape few:log`, **unproved**): Grover (10, 172, 96, 2) vs tree (15, 134, 72, 7); v2 (10, 16, 28, 2) not reproduced (`docs/MCZ_NOTES.md`) | Stage 12c, reviewer's choice |
 | `synthesizeOracle_succeeds` (synthesis succeeds on every well-formed one-output network) | planned row |
 | Theorem 3.1 in categorical form; `toNetwork` well-formedness proof | documented gaps |
 | Remote CI (only `scripts/ci_local.sh` has run) | engineering, reviewer's choice |

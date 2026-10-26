@@ -66,6 +66,7 @@ step "Differential oracle test" scripts/diff_oracles.sh
 step "Front-end validation (Stage 9b)" scripts/diff_frontend.sh
 step "Synthesized circuits = golden file" scripts/check_oracle_json.sh
 step "Diffusion and Grover circuit" scripts/diff_grover.sh
+step "Few-ancilla MCZ, unproved (Stage 12b)" scripts/diff_mcz.sh
 step "Second worked predicate simple_alu_x0_1 (Stage 9b)" scripts/diff_benchmark.sh
 if command -v llvm-as >/dev/null 2>&1; then
   step "Install llvm (llvm-as present)" llvm

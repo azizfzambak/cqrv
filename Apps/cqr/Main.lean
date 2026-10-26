@@ -28,14 +28,17 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   §6.1.3). Prints `{name, schedule, and_complexity, grade: {w, d, t, a}}` (exit 0); `--json`
   adds the IR (`circuit`, the flat format of `tests/diff/`) and prints one line; `--layers`
   appends the layer dump of the depth scheduler. Failures: diagnostic JSON, exit 1.
-* `cqr synthesize --diffusion n [--shape tree|chain] [--amax k] [--json] [--layers]` — the Grover
-  diffusion on `n` data qubits (report §8.2; Stage 5b): V1 (straight-line MCZ) without `--amax`,
-  V2 (Bennett MCZ, chain only) with it. The MCZ network is the balanced AND tree unless
-  `--shape chain` (Stage 12a). Prints `{name, n, shape, schedule, grade}`; `--json`/`--layers`
-  as above.
-* `cqr synthesize <file> --grover [--shape tree|chain] [--iterations r] [--solutions M] [--json]
-  [--layers]` — the Grover circuit `H^{⊗n}` then `r` iterations of oracle ⊕ diffusion V1
-  (report §3.2.4, §8; tree diffusion by default, Stage 12a).
+* `cqr synthesize --diffusion n [--shape tree|chain|few:ladder|few:log] [--amax k] [--json]
+  [--layers]` — the Grover diffusion on `n` data qubits (report §8.2; Stage 5b): V1
+  (straight-line MCZ) without `--amax`, V2 (Bennett MCZ, chain only) with it. The MCZ network is
+  the balanced AND tree unless `--shape chain` (Stage 12a). `--shape few:<variant>` (Stage 12b)
+  uses the few-ancilla MCZ `mczFew` (no `--amax`); its output carries `status` = "unproved: …"
+  (no restoration proof; `cqr certify` never uses it). Prints `{name, n, shape, schedule,
+  grade}`; `--json`/`--layers` as above.
+* `cqr synthesize <file> --grover [--shape tree|chain|few:ladder|few:log] [--iterations r]
+  [--solutions M] [--json] [--layers]` — the Grover circuit `H^{⊗n}` then `r` iterations of
+  oracle ⊕ diffusion V1 (report §3.2.4, §8; tree diffusion by default, Stage 12a; a `few:` shape
+  is labelled "unproved", Stage 12b).
   Default `r = r⋆ = ⌊π/(4θ)⌋`, `sin²θ = M/2ⁿ` (M from ℰ or `--solutions`). Prints the grades of
   the oracle, the diffusion, one iteration (measured, and the ⊕ of the two measured parts) and
   the full circuit, and `r_star`; `--json` adds `circuit` and `iteration_circuit` (one line).
@@ -77,8 +80,8 @@ def usage : String :=
   "usage: cqr <command> [args]\n\ncommands:\n" ++
     "  check <file>\n  extract <file> [--solutions M]\n  match <file> [--solutions M] [--text]\n" ++
     "  synthesize <file> [--amax k] [--json] [--layers]\n" ++
-    "  synthesize --diffusion n [--shape tree|chain] [--amax k] [--json] [--layers]\n" ++
-    "  synthesize <file> --grover [--shape tree|chain] [--iterations r] [--solutions M] [--json] [--layers]\n" ++
+    "  synthesize --diffusion n [--shape tree|chain|few:ladder|few:log] [--amax k] [--json] [--layers]\n" ++
+    "  synthesize <file> --grover [--shape tree|chain|few:ladder|few:log] [--iterations r] [--solutions M] [--json] [--layers]\n" ++
     "  check <file> --truth-table\n" ++
     "  certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k] [--report]\n" ++
     "          [--profile name|path]\n" ++
@@ -209,36 +212,68 @@ def runSynthesize (path : String) (aMax : Option Nat) (json layers : Bool) : IO 
       printResult base [("circuit", c.toJson)] c json layers
       return 0
 
-/-- The name of a diffusion shape in the CLI and its JSON (`tree`, `chain`). -/
-def shapeName : DiffusionShape → String
-  | .tree => "tree"
-  | .chain => "chain"
+/-- The `--shape` of the CLI: a proved diffusion shape (Stage 12a) or a few-ancilla MCZ variant
+(Stage 12b, unproved). -/
+inductive ShapeArg where
+  | std (s : DiffusionShape)
+  | few (v : MczVariant)
 
-/-- Remove `--shape tree|chain` from the flags (Stage 12a decision 3; default `tree`). -/
-def shapeFlag : List String → Option (DiffusionShape × List String)
-  | [] => some (.tree, [])
-  | "--shape" :: "tree" :: rest => (shapeFlag rest).map fun (_, fs) => (.tree, fs)
-  | "--shape" :: "chain" :: rest => (shapeFlag rest).map fun (_, fs) => (.chain, fs)
-  | "--shape" :: _ => none
+/-- The name of a diffusion shape in the CLI and its JSON (`tree`, `chain`, `few:ladder`,
+`few:log`). -/
+def shapeName : ShapeArg → String
+  | .std .tree => "tree"
+  | .std .chain => "chain"
+  | .few v => s!"few:{v.name}"
+
+/-- The `status` field of a few-ancilla shape (Stage 12b decision 4: "unproved" in all output);
+empty for the proved shapes, whose output is unchanged. -/
+def shapeStatus : ShapeArg → List (String × Lean.Json)
+  | .std _ => []
+  | .few _ => [("status", Lean.toJson MczVariant.status)]
+
+/-- Parse a `--shape` value. -/
+def shapeOf : String → Option ShapeArg
+  | "tree" => some (.std .tree)
+  | "chain" => some (.std .chain)
+  | "few:ladder" => some (.few .ladder)
+  | "few:log" => some (.few .logDepth)
+  | _ => none
+
+/-- Remove `--shape tree|chain|few:ladder|few:log` from the flags (Stage 12a decision 3, Stage
+12b decision 4; default `tree`). -/
+def shapeFlag : List String → Option (ShapeArg × List String)
+  | [] => some (.std .tree, [])
+  | "--shape" :: s :: rest => do
+    let sh ← shapeOf s
+    let (_, fs) ← shapeFlag rest
+    return (sh, fs)
   | f :: rest => (shapeFlag rest).map fun (sh, fs) => (sh, f :: fs)
 
-/-- `cqr synthesize --diffusion n [--shape tree|chain] [--amax k] [--json] [--layers]` — report
-§8.2, Stage 5b; the MCZ network is the balanced tree unless `--shape chain` (Stage 12a). -/
-def runDiffusion (n : Nat) (aMax : Option Nat) (shape : DiffusionShape) (json layers : Bool) :
+/-- `cqr synthesize --diffusion n [--shape tree|chain|few:ladder|few:log] [--amax k] [--json]
+[--layers]` — report §8.2, Stage 5b; the MCZ network is the balanced tree unless `--shape chain`
+(Stage 12a); `few:<variant>` is the unproved few-ancilla MCZ (Stage 12b, no `--amax`). -/
+def runDiffusion (n : Nat) (aMax : Option Nat) (shape : ShapeArg) (json layers : Bool) :
     IO UInt32 := do
-  match diffusionWith n aMax shape with
+  let res : Except Diagnostic (String × Circuit) := match shape with
+    | .std sh => diffusionWith n aMax sh
+    | .few v => do
+      if aMax.isSome then
+        Diffusion.fail .unsupportedNetwork s!"--amax does not apply to --shape few:{v.name}"
+      return (s!"few:{v.name} ({v.source})", ← diffusionFew n v)
+  match res with
   | .error d => IO.println d.toJson.compress; return 1
   | .ok (sched, c) =>
     let base := [("name", Lean.toJson "diffusion"), ("n", Lean.toJson n),
-                 ("shape", Lean.toJson (shapeName shape)),
-                 ("schedule", Lean.toJson s!"mcz {sched}"), ("grade", gradeJson c.grade)]
+                 ("shape", Lean.toJson (shapeName shape))] ++ shapeStatus shape ++
+                [("schedule", Lean.toJson s!"mcz {sched}"), ("grade", gradeJson c.grade)]
     printResult base [("circuit", c.toJson)] c json layers
     return 0
 
-/-- `cqr synthesize <file> --grover [--shape tree|chain] [--iterations r] [--solutions M] [--json]
-[--layers]` — report §3.2.4, §8 (Stage 5b): oracle ⊕ diffusion V1, `r` (default r⋆) iterations;
-balanced-tree diffusion unless `--shape chain` (Stage 12a). -/
-def runGrover (path : String) (iters solutions : Option Nat) (shape : DiffusionShape)
+/-- `cqr synthesize <file> --grover [--shape tree|chain|few:ladder|few:log] [--iterations r]
+[--solutions M] [--json] [--layers]` — report §3.2.4, §8 (Stage 5b): oracle ⊕ diffusion V1, `r`
+(default r⋆) iterations; balanced-tree diffusion unless `--shape chain` (Stage 12a); `few:` shapes
+are unproved (Stage 12b). -/
+def runGrover (path : String) (iters solutions : Option Nat) (shape : ShapeArg)
     (json layers : Bool) : IO UInt32 := do
   match ← frontEnd path, ← signature path solutions with
   | .error d, _ | _, .error d => IO.println d.toJson.compress; return 1
@@ -251,14 +286,19 @@ def runGrover (path : String) (iters solutions : Option Nat) (shape : DiffusionS
         return 2
     let res : Except Diagnostic (Circuit × Circuit × Circuit × Circuit) := do
       let N ← toNetwork tp
-      return (← synthesizeOracle N, ← diffusion n none shape, ← groverIteration N n none shape,
-        ← groverCircuit N n r none shape)
+      match shape with
+      | .std sh =>
+        return (← synthesizeOracle N, ← diffusion n none sh, ← groverIteration N n none sh,
+          ← groverCircuit N n r none sh)
+      | .few v =>
+        return (← synthesizeOracle N, ← diffusionFew n v, ← groverIterationFew N n v,
+          ← groverCircuitFew N n r v)
     match res with
     | .error d => IO.println d.toJson.compress; return 1
     | .ok (o, d, it, g) =>
       let base := [("name", Lean.toJson tp.name), ("n", Lean.toJson n),
-        ("shape", Lean.toJson (shapeName shape)),
-        ("solutions", Lean.toJson sig.solutionCount), ("r_star", Lean.toJson rs),
+        ("shape", Lean.toJson (shapeName shape))] ++ shapeStatus shape ++
+        [("solutions", Lean.toJson sig.solutionCount), ("r_star", Lean.toJson rs),
         ("iterations", Lean.toJson r),
         ("grades", Lean.Json.mkObj [("oracle", gradeJson o.grade),
           ("diffusion", gradeJson d.grade), ("iteration", gradeJson it.grade),
