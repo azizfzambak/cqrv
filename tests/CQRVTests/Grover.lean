@@ -20,8 +20,12 @@ open CQRV CQRV.Grover CQRV.Synthesis
 
 /-! ## Computed grade and circuit facts -/
 
-#guard Synthesis.grade grover037Circuit == ⟨15, 230, 72, 7⟩
+#guard Synthesis.grade grover037Circuit == ⟨15, 134, 72, 7⟩
 #guard (groverCircuit groverNet 8 2).toOption == some grover037Circuit
+-- Stage 12a: the chain construction keeps its report-v3 grade.
+#guard Synthesis.grade grover037Circuit_chain == ⟨15, 230, 72, 7⟩
+#guard (groverCircuit groverNet 8 2 none .chain).toOption == some grover037Circuit_chain
+#guard (synthesizeOracle (treeNet 8)).toOption == some mcz8TreeCircuit
 #guard grover037Circuit.nAnc == 7 && grover037Circuit.nData == 8
 #guard (synthesizeOracle (allNet 8)).toOption == some mcz8Circuit
 #guard mcz8Circuit.nAnc == 7
@@ -133,6 +137,52 @@ example : ¬ (allNet 0).WF := by decide
 -- The constructors give the same circuits as the per-instance certificates (`decide` there).
 example : (OracleCert.ofNetwork groverNet (by decide) (by rfl)).C = grover037Oracle.C := rfl
 example : (DiffusionCert.mk' 8 mcz8Circuit_ok).mcz.C = mczCert8.mcz.C := rfl
+
+/-! ## Stage 12a — the balanced AND tree `treeNet n` -/
+
+/-- info: 'CQRV.Grover.treeNet_pred' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms treeNet_pred
+
+/-- info: 'CQRV.Grover.treeNet_WF' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms treeNet_WF
+
+-- Option (A) with preservation: the chain statements under `_chain`, the tree under the original
+-- names, the shape-general lemmas they are instances of.
+/-- info: 'CQRV.Grover.diffusion_ok_chain' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms diffusion_ok_chain
+
+/-- info: 'CQRV.Grover.grover037_grade_chain' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms grover037_grade_chain
+
+/-- info: 'CQRV.Grover.grover_pred_037_certified_statement_chain' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms grover_pred_037_certified_statement_chain
+
+/-- info: 'CQRV.Grover.grover_parametric_lemma_shape' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms grover_parametric_lemma_shape
+
+/-- info: 'CQRV.Grover.grover_ancRestore_shape' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms grover_ancRestore_shape
+
+#print axioms diffusion_ok
+#print axioms DiffusionCert.ofShape
+#print axioms diffusion_WF_shape
+
+-- The generalized `DiffusionCert` (decision 2): the Stage 7a chain certificate is unchanged
+-- (`net` defaults to `allNet 8`), the tree certificate sets `net := treeNet 8`.
+example : mczCert8.net = allNet 8 := rfl
+example : mczTreeCert8.net = treeNet 8 := rfl
+-- Both certificates are accepted by the (unchanged) parametric lemma.
+example (hM : (Finset.univ.filter (fun x => grover037Oracle.P x = true)).card = 32) :=
+  grover_parametric_lemma (grover037Params hM) mczCert8 2 grover037Circuit_ok
+example (hM : (Finset.univ.filter (fun x => grover037Oracle.P x = true)).card = 32) :=
+  grover_parametric_lemma (grover037Params hM) mczTreeCert8 2 grover037Circuit_ok
 
 -- The instance through the variant without `DiffusionCert`.
 example (hM : (Finset.univ.filter (fun x => grover037Oracle.P x = true)).card = 32) :=

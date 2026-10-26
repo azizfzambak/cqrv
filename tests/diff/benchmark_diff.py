@@ -42,7 +42,7 @@ N_IN = 6
 TOL = 1e-9
 # Measured values of this predicate (regression; any change must be explained in DECISIONS.md).
 EXPECT_ORACLE = {"w": 16, "d": 80, "t": 40, "a": 10}
-EXPECT_CIRCUIT = {"w": 16, "d": 145, "t": 60, "a": 10}
+EXPECT_CIRCUIT = {"w": 16, "d": 121, "t": 60, "a": 10}  # tree diffusion (Stage 12a; chain: d = 145)
 
 
 def alu_bit(op, x1, x2, w, k=1):

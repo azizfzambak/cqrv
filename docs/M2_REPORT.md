@@ -30,6 +30,8 @@ AncRestore n a emitted (groverOp (Network.pred net n) ^ r * hadamardU n)`, under
 
 ## 2. The two certificates (`examples/certs/`, each with `run_report.md` / `.json`)
 
+Post-M2 note (2026-10-26, Stage 12a): the diffusion's MCZ is now a balanced AND tree (same 7 / 5 ANDs, ⌈log₂ n⌉ levels); both certificates were regenerated: grover_pred_037 (15, 230, 72, 7) → (15, 134, 72, 7), now within the declared ibm_kyiv depth budget 200 (δ_hw still vacuous, G·p̄ = 3.90); simple_alu_x0_1 (16, 145, 60, 10) → (16, 121, 60, 10); δ, G and predicate hashes unchanged, new circuit / proof hashes in DECISIONS.md (2026-10-26, Stage 12a); the chain values below stay machine-checked as `grover_pred_037_certified_statement_chain`.
+
 | | `grover_pred_037` (Chapter 8) | `simple_alu_x0_1` (second predicate, Table 9.2) |
 |---|---|---|
 | Predicate | x0 ∧ x3 ∧ x7, n = 8 | RevLib Simple ALU (`simple_alu_234.src`), bit 1 of x0, n = 6: `if op = k` chain, XOR chain |

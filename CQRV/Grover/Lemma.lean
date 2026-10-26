@@ -482,18 +482,42 @@ theorem grover_parametric_lemma (gp : GroverParams) (D : DiffusionCert gp.n) (r 
       AncRestore gp.n C.nAnc C (groverOp gp.oracle.P ^ r * hadamardU gp.n) :=
   ⟨grover_realizes gp D r hC, grover_ancRestore gp.oracle D hC⟩
 
+/-- Report §8.2.4, §8.3.2 (Stage 12a) — the realization conjunct for either diffusion shape
+(the proof of `grover_realizes` with `grover_ancRestore_shape`). -/
+theorem grover_realizes_shape (gp : GroverParams) (s : DiffusionShape) (r : ℕ) {C : Circuit}
+    (hC : groverCircuit gp.oracle.N gp.n r none s = .ok C) :
+    RealizesExact (SearchSpec gp.oracle.P) (basisPOVM gp.n) (groverChannel gp.n C)
+      (1 - Real.sin ((2 * r + 1) * gp.θ) ^ 2) (Synthesis.grade C) := by
+  refine ⟨le_rfl, fun u _ => ?_⟩
+  have hchan : (groverChannel gp.n C).chan (encode u) =
+      (groverOp gp.oracle.P ^ r * hadamardU gp.n) ◃ ancZero gp.n := by
+    simp only [groverChannel, GradedChannel.traceAnc, CPTPMap.compose_eq,
+      CPTPMap.replacement_apply, CPTPMap.traceRight_eq_MState_traceRight]
+    exact (grover_ancRestore_shape gp.oracle s hC).traced (ancZero gp.n)
+  rw [hchan]
+  change _ ≤ prob _ (fun x => gp.oracle.P x = true)
+  rw [terminal_measurement, sub_sub_cancel]
+
+/-- Report §5.2.4, §8.3.4 Figure 8.1 (Stage 12a) — the Grover parametric lemma for either
+diffusion shape `s` (`.tree`, the default, or `.chain`, the Stage 5b construction): same
+conclusion as `grover_parametric_lemma`; the MCZ is certified from the circuit itself. -/
+theorem grover_parametric_lemma_shape (gp : GroverParams) (s : DiffusionShape) (r : ℕ)
+    {C : Circuit} (hC : groverCircuit gp.oracle.N gp.n r none s = .ok C) :
+    RealizesExact (SearchSpec gp.oracle.P) (basisPOVM gp.n) (groverChannel gp.n C)
+        (1 - Real.sin ((2 * r + 1) * gp.θ) ^ 2) (Synthesis.grade C) ∧
+      AncRestore gp.n C.nAnc C (groverOp gp.oracle.P ^ r * hadamardU gp.n) :=
+  ⟨grover_realizes_shape gp s r hC, grover_ancRestore_shape gp.oracle s hC⟩
+
 /-- Report §5.2.4, §8.3.4 Figure 8.1 (Stage 11a item 3) — `grover_parametric_lemma` without the
-`DiffusionCert` argument: `groverCircuit … = .ok C` already synthesized the MCZ of `allNet n`, and
-`DiffusionCert.mk'` certifies it (`hWF` by `synthesizeOracle_WF`). Same conclusion. -/
+`DiffusionCert` argument: `groverCircuit … = .ok C` already synthesized the MCZ (since Stage 12a
+of the balanced tree `treeNet n`), which `DiffusionCert.ofShape` certifies (`hWF` by
+`synthesizeOracle_WF`). Same conclusion. -/
 theorem grover_parametric_lemma' (gp : GroverParams) (r : ℕ)
     {C : Circuit} (hC : groverCircuit gp.oracle.N gp.n r = .ok C) :
     RealizesExact (SearchSpec gp.oracle.P) (basisPOVM gp.n) (groverChannel gp.n C)
         (1 - Real.sin ((2 * r + 1) * gp.θ) ^ 2) (Synthesis.grade C) ∧
-      AncRestore gp.n C.nAnc C (groverOp gp.oracle.P ^ r * hadamardU gp.n) := by
-  obtain ⟨it, hit, -⟩ := groverCircuit_ok hC
-  obtain ⟨-, d, -, hd, -⟩ := groverIteration_ok hit
-  obtain ⟨-, mcz, hmcz, -⟩ := diffusion_ok hd
-  exact grover_parametric_lemma gp (DiffusionCert.mk' gp.n hmcz) r hC
+      AncRestore gp.n C.nAnc C (groverOp gp.oracle.P ^ r * hadamardU gp.n) :=
+  grover_parametric_lemma_shape gp .tree r hC
 
 /-! ## The instance trig fact (decision 3) -/
 

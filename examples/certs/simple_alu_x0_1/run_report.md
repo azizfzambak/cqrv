@@ -12,10 +12,10 @@ Report §8.5.2 (Table 8.5.2 shape), Stage 9b decision 4: every resource is a mea
 | 1b. DSL Input: typed AST → network | Typed AST `simple_alu_x0_1` | Boolean network (toNetwork) | exhaustively validated | n = 6 input bits; 2^6 = 64 inputs compared, 0 disagree |
 | 2. Spec Extraction | Typed AST | Ground signature σ_in: Search, n = 6, M = 30, iter = bounded(1) | unverified | ĉ∧ = 10 (upper bound), AND-depth 4, ancilla budget 10 |
 | 3. Pattern Matching | Signature σ_in | Grover: σ = {F₁ ↦ 6, F₂ ↦ 30, F₃ ↦ 1, F₄ ↦ [0,1,2,3,4,5]} | unverified | side conditions discharged: F₂ ≥ 1: 30 ≥ 1 |
-| 4. QPLP Instant. | QPLP Grover + σ, r = 1 | Concrete circuit H^⊗6 · (U_s U_P)^1 (`emitted` in Cert.lean) | kernel-checked | grade (w, d, t, a) = (16, 145, 60, 10) (measured); δ = 833/2048 exact |
+| 4. QPLP Instant. | QPLP Grover + σ, r = 1 | Concrete circuit H^⊗6 · (U_s U_P)^1 (`emitted` in Cert.lean) | kernel-checked | grade (w, d, t, a) = (16, 121, 60, 10) (measured); δ = 833/2048 exact |
 | 5. Oracle Synthesis | Boolean network (33 nodes, 10 AND) | U_P + proof (Lemma 6.3.2, lemma_6_3_2_xor_of_le) | kernel-checked | oracle (w, d, t, a) = (16, 80, 40, 10); 10 AND nodes vs ĉ∧ = 10 |
 | 6. Ancilla Restore | Oracle U_P and diffusion MCZ | Restored circuit (AncRestore conjunct of `cert`) | kernel-checked | T after the first measurement: oracle 0, diffusion 0; 15 MBU measurements, 30 classically controlled gates; a = 10 |
-| 7. Certificate Gen | Proof + grade | examples/certs/simple_alu_x0_1/Cert.lean, certificate.json (theorem CQRV.Cert.simple_alu_x0_1.cert) | kernel-checked | kernel 6.37 s, wall 16.25 s (median of 5 (first run excluded)); axioms: propext, Classical.choice, Quot.sound |
+| 7. Certificate Gen | Proof + grade | examples/certs/simple_alu_x0_1/Cert.lean, certificate.json (theorem CQRV.Cert.simple_alu_x0_1.cert) | kernel-checked | kernel 6.37 s, wall 16.04 s (median of 5 (first run excluded)); axioms: propext, Classical.choice, Quot.sound |
 | 8. QIR Export | Internal circuit (`emitted`) | QIR text (simple_alu_x0_1.qir), OpenQASM 3 (simple_alu_x0_1.qasm) | declared trust boundary | G = 345 noisy operations (294 unitary, 15 mid-circuit measurements, 30 classically controlled, 6 terminal measurements) |
 
 What each status covers:

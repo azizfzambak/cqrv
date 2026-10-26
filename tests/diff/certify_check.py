@@ -3,7 +3,7 @@
 Runs the built `cqr` from the project root and checks
 
   * grover_pred_037: exit 0, status line `certified (conditional on: solution_count = 32)`,
-    certificate.json valid against docs/certificate.schema.json (v1.3.0), grade (15, 230, 72, 7),
+    certificate.json valid against docs/certificate.schema.json (v1.3.0), grade (15, 134, 72, 7),
     delta "7/128", axioms exactly propext, Classical.choice, Quot.sound, no obligations,
     trust_boundary.front_end = the exhaustive-validation wording for 2^8 inputs (Stage 9b);
   * the hash link, independently of the CLI: the `emitted` IR literal of Cert.lean (the circuit
@@ -16,7 +16,7 @@ Runs the built `cqr` from the project root and checks
   * the second worked predicate examples/simple_alu_x0_1.cqr (RevLib Simple ALU, bit 1 of x0;
     Stage 9b): M = 30 recounted here from the SyReC semantics (benchmark_diff.reference),
     --solutions 30 → exit 0, `certified (conditional on: solution_count = 30)`, r = 1, delta
-    833/2048, grade (16, 145, 60, 10), front end validated on 2^6 inputs; the committed
+    833/2048, grade (16, 121, 60, 10), front end validated on 2^6 inputs; the committed
     examples/certs/simple_alu_x0_1/ agrees with the run;
   * the committed run reports (run_report.md / run_report.json, Stage 9b decision 4) of both
     examples: 9 rows in the order of Table 8.5.2 (stage 1 as 1a parser / surface checker and 1b
@@ -42,8 +42,9 @@ Runs the built `cqr` from the project root and checks
     fields), schema_version "1.3.0", no `hardware`;
   * --profile ibm_kyiv (Stage 11b; profiles/ibm_kyiv.json, report Table 3.5 / §3.3.3):
     grover_pred_037 → exit 0, the status line unchanged, then
-    `hardware profile ibm_kyiv: exceeds depth budget (230 > 200); δ_hw ≤ 7/128 + 390·1/100 =
-    2531/640 (vacuous)`; simple_alu_x0_1 → fits all budgets, δ_hw vacuous as well (G·p̄ = 3.45).
+    `hardware profile ibm_kyiv: fits all budgets; δ_hw ≤ 7/128 + 390·1/100 = 2531/640
+    (vacuous)` (since Stage 12a: tree diffusion, d = 134 ≤ 200; the chain's 230 exceeded it);
+    simple_alu_x0_1 → fits all budgets, δ_hw vacuous as well (G·p̄ = 3.45).
     Every field of `hardware` is recomputed here (components against the profile file, G,
     δ_hw = δ + G·p̄ with fractions, vacuous, profile_hash = SHA3 of the file with LF); the rest of
     the certificate equals the run without --profile (except schema_version "1.4.0"); Cert.lean,
@@ -303,12 +304,12 @@ def main():
         print("ok:   status line `certified (conditional on: solution_count = 32)` (exit 0)")
         cert, text = check_dir(runs[0], validator)
         assert cert["status"] == "certified" and cert["obligations"] == []
-        assert cert["grade"] == {"w": 15, "d": 230, "t": 72, "a": 7}, cert["grade"]
+        assert cert["grade"] == {"w": 15, "d": 134, "t": 72, "a": 7}, cert["grade"]
         assert cert["spec"]["delta"] == "7/128", cert["spec"]
         assert cert["axioms"] == STANDARD, cert["axioms"]
         assert cert["theorem"] == THEOREM
         assert cert["trust_boundary"]["front_end"] == validated(8), cert["trust_boundary"]
-        print("ok:   JSON valid (schema v1.3.0); grade (15, 230, 72, 7), delta 7/128, "
+        print("ok:   JSON valid (schema v1.3.0); grade (15, 134, 72, 7), delta 7/128, "
               "axioms exactly propext, Classical.choice, Quot.sound; front end validated "
               "on 2^8 inputs")
         print("ok:   circuit hash = SHA3 of the IR literal of Cert.lean (hashlib); "
@@ -338,12 +339,13 @@ def main():
         kc, _ = check_dir(out, validator)
         for f in ("Cert.lean", f"{NAME}.qir", f"{NAME}.qasm"):
             assert read(os.path.join(out, f), "rb") == read(os.path.join(EXAMPLE, f), "rb"), f
-        line = check_hardware(out, kc, cert, so.rstrip("\n").split("\n")[-2:], fits=False)
-        assert line == ("hardware profile ibm_kyiv: exceeds depth budget (230 > 200); "
+        line = check_hardware(out, kc, cert, so.rstrip("\n").split("\n")[-2:], fits=True)
+        assert line == ("hardware profile ibm_kyiv: fits all budgets; "
                         "δ_hw ≤ 7/128 + 390·1/100 = 2531/640 (vacuous)"), line
-        print("ok:   --profile ibm_kyiv: status line unchanged (exit 0); exceeds depth only "
-              "(230 > 200), delta_hw = 7/128 + 390*1/100 = 2531/640 (vacuous); hardware "
-              "recomputed; run report row 'Hardware profile'; Cert.lean / .qir / .qasm = committed")
+        print("ok:   --profile ibm_kyiv: status line unchanged (exit 0); fits all budgets "
+              "(d = 134 <= 200, tree diffusion), delta_hw = 7/128 + 390*1/100 = 2531/640 "
+              "(vacuous); hardware recomputed; run report row 'Hardware profile'; "
+              "Cert.lean / .qir / .qasm = committed")
 
         # The second worked predicate (Stage 9b): RevLib Simple ALU, bit 1 of x0
         m = sum(1 for x in range(64)
@@ -360,7 +362,7 @@ def main():
         assert ac["axioms"] == STANDARD, ac["axioms"]
         assert ac["instance"] == {"n": 6, "M": 30, "r": 1}, ac["instance"]
         assert ac["spec"]["delta"] == "833/2048", ac["spec"]
-        assert ac["grade"] == {"w": 16, "d": 145, "t": 60, "a": 10}, ac["grade"]
+        assert ac["grade"] == {"w": 16, "d": 121, "t": 60, "a": 10}, ac["grade"]
         assert ac["trust_boundary"]["front_end"] == validated(6)
         assert "sorry" not in atext and ".xor " in atext
         exa = os.path.join(ROOT, "examples", "certs", alu)
@@ -384,7 +386,7 @@ def main():
               "reference_configuration; --profile ibm_kyiv: fits all budgets, delta_hw = "
               "833/2048 + 345*1/100 = 39493/10240 (vacuous: G*p_bar = 3.45 >= 1)")
         print(f"ok:   second predicate {alu} (M = 30 from the SyReC semantics): `{last}` (exit 0; "
-              "r = 1, delta 833/2048, grade (16, 145, 60, 10), front end validated on 2^6 "
+              "r = 1, delta 833/2048, grade (16, 121, 60, 10), front end validated on 2^6 "
               "inputs); committed examples/certs/simple_alu_x0_1 agrees")
         for d, c in ((EXAMPLE, ex), (exa, ea)):
             check_report(d, c)

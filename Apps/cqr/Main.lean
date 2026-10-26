@@ -28,11 +28,14 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   §6.1.3). Prints `{name, schedule, and_complexity, grade: {w, d, t, a}}` (exit 0); `--json`
   adds the IR (`circuit`, the flat format of `tests/diff/`) and prints one line; `--layers`
   appends the layer dump of the depth scheduler. Failures: diagnostic JSON, exit 1.
-* `cqr synthesize --diffusion n [--amax k] [--json] [--layers]` — the Grover diffusion on `n`
-  data qubits (report §8.2; Stage 5b): V1 (straight-line MCZ) without `--amax`, V2 (Bennett
-  MCZ) with it. Prints `{name, n, schedule, grade}`; `--json`/`--layers` as above.
-* `cqr synthesize <file> --grover [--iterations r] [--solutions M] [--json] [--layers]` — the
-  Grover circuit `H^{⊗n}` then `r` iterations of oracle ⊕ diffusion V1 (report §3.2.4, §8).
+* `cqr synthesize --diffusion n [--shape tree|chain] [--amax k] [--json] [--layers]` — the Grover
+  diffusion on `n` data qubits (report §8.2; Stage 5b): V1 (straight-line MCZ) without `--amax`,
+  V2 (Bennett MCZ, chain only) with it. The MCZ network is the balanced AND tree unless
+  `--shape chain` (Stage 12a). Prints `{name, n, shape, schedule, grade}`; `--json`/`--layers`
+  as above.
+* `cqr synthesize <file> --grover [--shape tree|chain] [--iterations r] [--solutions M] [--json]
+  [--layers]` — the Grover circuit `H^{⊗n}` then `r` iterations of oracle ⊕ diffusion V1
+  (report §3.2.4, §8; tree diffusion by default, Stage 12a).
   Default `r = r⋆ = ⌊π/(4θ)⌋`, `sin²θ = M/2ⁿ` (M from ℰ or `--solutions`). Prints the grades of
   the oracle, the diffusion, one iteration (measured, and the ⊕ of the two measured parts) and
   the full circuit, and `r_star`; `--json` adds `circuit` and `iteration_circuit` (one line).
@@ -74,8 +77,8 @@ def usage : String :=
   "usage: cqr <command> [args]\n\ncommands:\n" ++
     "  check <file>\n  extract <file> [--solutions M]\n  match <file> [--solutions M] [--text]\n" ++
     "  synthesize <file> [--amax k] [--json] [--layers]\n" ++
-    "  synthesize --diffusion n [--amax k] [--json] [--layers]\n" ++
-    "  synthesize <file> --grover [--iterations r] [--solutions M] [--json] [--layers]\n" ++
+    "  synthesize --diffusion n [--shape tree|chain] [--amax k] [--json] [--layers]\n" ++
+    "  synthesize <file> --grover [--shape tree|chain] [--iterations r] [--solutions M] [--json] [--layers]\n" ++
     "  check <file> --truth-table\n" ++
     "  certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k] [--report]\n" ++
     "          [--profile name|path]\n" ++
@@ -206,20 +209,37 @@ def runSynthesize (path : String) (aMax : Option Nat) (json layers : Bool) : IO 
       printResult base [("circuit", c.toJson)] c json layers
       return 0
 
-/-- `cqr synthesize --diffusion n [--amax k] [--json] [--layers]` — report §8.2, Stage 5b. -/
-def runDiffusion (n : Nat) (aMax : Option Nat) (json layers : Bool) : IO UInt32 := do
-  match diffusionWith n aMax with
+/-- The name of a diffusion shape in the CLI and its JSON (`tree`, `chain`). -/
+def shapeName : DiffusionShape → String
+  | .tree => "tree"
+  | .chain => "chain"
+
+/-- Remove `--shape tree|chain` from the flags (Stage 12a decision 3; default `tree`). -/
+def shapeFlag : List String → Option (DiffusionShape × List String)
+  | [] => some (.tree, [])
+  | "--shape" :: "tree" :: rest => (shapeFlag rest).map fun (_, fs) => (.tree, fs)
+  | "--shape" :: "chain" :: rest => (shapeFlag rest).map fun (_, fs) => (.chain, fs)
+  | "--shape" :: _ => none
+  | f :: rest => (shapeFlag rest).map fun (sh, fs) => (sh, f :: fs)
+
+/-- `cqr synthesize --diffusion n [--shape tree|chain] [--amax k] [--json] [--layers]` — report
+§8.2, Stage 5b; the MCZ network is the balanced tree unless `--shape chain` (Stage 12a). -/
+def runDiffusion (n : Nat) (aMax : Option Nat) (shape : DiffusionShape) (json layers : Bool) :
+    IO UInt32 := do
+  match diffusionWith n aMax shape with
   | .error d => IO.println d.toJson.compress; return 1
   | .ok (sched, c) =>
     let base := [("name", Lean.toJson "diffusion"), ("n", Lean.toJson n),
+                 ("shape", Lean.toJson (shapeName shape)),
                  ("schedule", Lean.toJson s!"mcz {sched}"), ("grade", gradeJson c.grade)]
     printResult base [("circuit", c.toJson)] c json layers
     return 0
 
-/-- `cqr synthesize <file> --grover [--iterations r] [--solutions M] [--json] [--layers]` —
-report §3.2.4, §8 (Stage 5b): oracle ⊕ diffusion V1, `r` (default r⋆) iterations. -/
-def runGrover (path : String) (iters solutions : Option Nat) (json layers : Bool) :
-    IO UInt32 := do
+/-- `cqr synthesize <file> --grover [--shape tree|chain] [--iterations r] [--solutions M] [--json]
+[--layers]` — report §3.2.4, §8 (Stage 5b): oracle ⊕ diffusion V1, `r` (default r⋆) iterations;
+balanced-tree diffusion unless `--shape chain` (Stage 12a). -/
+def runGrover (path : String) (iters solutions : Option Nat) (shape : DiffusionShape)
+    (json layers : Bool) : IO UInt32 := do
   match ← frontEnd path, ← signature path solutions with
   | .error d, _ | _, .error d => IO.println d.toJson.compress; return 1
   | .ok (tp, _), .ok sig =>
@@ -231,12 +251,13 @@ def runGrover (path : String) (iters solutions : Option Nat) (json layers : Bool
         return 2
     let res : Except Diagnostic (Circuit × Circuit × Circuit × Circuit) := do
       let N ← toNetwork tp
-      return (← synthesizeOracle N, ← diffusion n none, ← groverIteration N n,
-        ← groverCircuit N n r)
+      return (← synthesizeOracle N, ← diffusion n none shape, ← groverIteration N n none shape,
+        ← groverCircuit N n r none shape)
     match res with
     | .error d => IO.println d.toJson.compress; return 1
     | .ok (o, d, it, g) =>
       let base := [("name", Lean.toJson tp.name), ("n", Lean.toJson n),
+        ("shape", Lean.toJson (shapeName shape)),
         ("solutions", Lean.toJson sig.solutionCount), ("r_star", Lean.toJson rs),
         ("iterations", Lean.toJson r),
         ("grades", Lean.Json.mkObj [("oracle", gradeJson o.grade),
@@ -481,12 +502,18 @@ def main (args : List String) : IO UInt32 := do
     | some (m, t) => runMatch file m t
     | none => IO.eprint usage; return 2
   | "synthesize" :: "--diffusion" :: n :: flags =>
-    match n.toNat?, synthFlags flags with
-    | some n, some (k, j, l) => runDiffusion n k j l
+    match n.toNat?, shapeFlag flags with
+    | some n, some (sh, flags) =>
+      match synthFlags flags with
+      | some (k, j, l) => runDiffusion n k sh j l
+      | none => IO.eprint usage; return 2
     | _, _ => IO.eprint usage; return 2
   | "synthesize" :: file :: "--grover" :: flags =>
-    match groverFlags flags with
-    | some (r, m, j, l) => runGrover file r m j l
+    match shapeFlag flags with
+    | some (sh, flags) =>
+      match groverFlags flags with
+      | some (r, m, j, l) => runGrover file r m sh j l
+      | none => IO.eprint usage; return 2
     | none => IO.eprint usage; return 2
   | "synthesize" :: file :: flags =>
     match synthFlags flags with

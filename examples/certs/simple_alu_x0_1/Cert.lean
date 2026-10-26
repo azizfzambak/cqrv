@@ -79,21 +79,21 @@ def emitted : Circuit := ⟨6, [
     .x (.data 5), .alloc (.anc 0), .h (.anc 0), .t (.anc 0), .cnot (.data 0) (.anc 0),
     .cnot (.data 1) (.anc 0), .cnot (.anc 0) (.data 0), .cnot (.anc 0) (.data 1), .tdg (.data 0), .tdg (.data 1),
     .t (.anc 0), .cnot (.anc 0) (.data 0), .cnot (.anc 0) (.data 1), .h (.anc 0), .s (.anc 0),
-    .alloc (.anc 1), .h (.anc 1), .t (.anc 1), .cnot (.anc 0) (.anc 1), .cnot (.data 2) (.anc 1),
-    .cnot (.anc 1) (.anc 0), .cnot (.anc 1) (.data 2), .tdg (.anc 0), .tdg (.data 2), .t (.anc 1),
-    .cnot (.anc 1) (.anc 0), .cnot (.anc 1) (.data 2), .h (.anc 1), .s (.anc 1), .alloc (.anc 2),
-    .h (.anc 2), .t (.anc 2), .cnot (.anc 1) (.anc 2), .cnot (.data 3) (.anc 2), .cnot (.anc 2) (.anc 1),
-    .cnot (.anc 2) (.data 3), .tdg (.anc 1), .tdg (.data 3), .t (.anc 2), .cnot (.anc 2) (.anc 1),
-    .cnot (.anc 2) (.data 3), .h (.anc 2), .s (.anc 2), .alloc (.anc 3), .h (.anc 3),
-    .t (.anc 3), .cnot (.anc 2) (.anc 3), .cnot (.data 4) (.anc 3), .cnot (.anc 3) (.anc 2), .cnot (.anc 3) (.data 4),
-    .tdg (.anc 2), .tdg (.data 4), .t (.anc 3), .cnot (.anc 3) (.anc 2), .cnot (.anc 3) (.data 4),
+    .alloc (.anc 1), .h (.anc 1), .t (.anc 1), .cnot (.data 2) (.anc 1), .cnot (.data 3) (.anc 1),
+    .cnot (.anc 1) (.data 2), .cnot (.anc 1) (.data 3), .tdg (.data 2), .tdg (.data 3), .t (.anc 1),
+    .cnot (.anc 1) (.data 2), .cnot (.anc 1) (.data 3), .h (.anc 1), .s (.anc 1), .alloc (.anc 2),
+    .h (.anc 2), .t (.anc 2), .cnot (.data 4) (.anc 2), .cnot (.data 5) (.anc 2), .cnot (.anc 2) (.data 4),
+    .cnot (.anc 2) (.data 5), .tdg (.data 4), .tdg (.data 5), .t (.anc 2), .cnot (.anc 2) (.data 4),
+    .cnot (.anc 2) (.data 5), .h (.anc 2), .s (.anc 2), .alloc (.anc 3), .h (.anc 3),
+    .t (.anc 3), .cnot (.anc 0) (.anc 3), .cnot (.anc 1) (.anc 3), .cnot (.anc 3) (.anc 0), .cnot (.anc 3) (.anc 1),
+    .tdg (.anc 0), .tdg (.anc 1), .t (.anc 3), .cnot (.anc 3) (.anc 0), .cnot (.anc 3) (.anc 1),
     .h (.anc 3), .s (.anc 3), .alloc (.anc 4), .h (.anc 4), .t (.anc 4),
-    .cnot (.anc 3) (.anc 4), .cnot (.data 5) (.anc 4), .cnot (.anc 4) (.anc 3), .cnot (.anc 4) (.data 5), .tdg (.anc 3),
-    .tdg (.data 5), .t (.anc 4), .cnot (.anc 4) (.anc 3), .cnot (.anc 4) (.data 5), .h (.anc 4),
-    .s (.anc 4), .z (.anc 4), .h (.anc 4), .measure (.anc 4) 10, .ifBit 10 (.cz (.anc 3) (.data 5)),
-    .ifBit 10 (.x (.anc 4)), .free (.anc 4), .h (.anc 3), .measure (.anc 3) 11, .ifBit 11 (.cz (.anc 2) (.data 4)),
-    .ifBit 11 (.x (.anc 3)), .free (.anc 3), .h (.anc 2), .measure (.anc 2) 12, .ifBit 12 (.cz (.anc 1) (.data 3)),
-    .ifBit 12 (.x (.anc 2)), .free (.anc 2), .h (.anc 1), .measure (.anc 1) 13, .ifBit 13 (.cz (.anc 0) (.data 2)),
+    .cnot (.anc 3) (.anc 4), .cnot (.anc 2) (.anc 4), .cnot (.anc 4) (.anc 3), .cnot (.anc 4) (.anc 2), .tdg (.anc 3),
+    .tdg (.anc 2), .t (.anc 4), .cnot (.anc 4) (.anc 3), .cnot (.anc 4) (.anc 2), .h (.anc 4),
+    .s (.anc 4), .z (.anc 4), .h (.anc 4), .measure (.anc 4) 10, .ifBit 10 (.cz (.anc 3) (.anc 2)),
+    .ifBit 10 (.x (.anc 4)), .free (.anc 4), .h (.anc 3), .measure (.anc 3) 11, .ifBit 11 (.cz (.anc 0) (.anc 1)),
+    .ifBit 11 (.x (.anc 3)), .free (.anc 3), .h (.anc 2), .measure (.anc 2) 12, .ifBit 12 (.cz (.data 4) (.data 5)),
+    .ifBit 12 (.x (.anc 2)), .free (.anc 2), .h (.anc 1), .measure (.anc 1) 13, .ifBit 13 (.cz (.data 2) (.data 3)),
     .ifBit 13 (.x (.anc 1)), .free (.anc 1), .h (.anc 0), .measure (.anc 0) 14, .ifBit 14 (.cz (.data 0) (.data 1)),
     .ifBit 14 (.x (.anc 0)), .free (.anc 0), .x (.data 0), .x (.data 1), .x (.data 2),
     .x (.data 3), .x (.data 4), .x (.data 5), .h (.data 0), .h (.data 1),
@@ -107,7 +107,7 @@ theorem delta_eq : ((groverDelta 1 6 30 : ℚ) : ℝ) = (833 / 2048 : ℝ) := by
   rw [show groverDelta 1 6 30 = (833 / 2048 : ℚ) by decide +kernel]
   norm_num
 
-theorem grade_eq : Synthesis.grade emitted = ⟨16, 145, 60, 10⟩ := by decide +kernel
+theorem grade_eq : Synthesis.grade emitted = ⟨16, 121, 60, 10⟩ := by decide +kernel
 
 theorem nAnc_eq : emitted.nAnc = 10 := by decide +kernel
 
@@ -122,13 +122,14 @@ def oracle : OracleCert 6 where
   hC := except_eq_ok_okPayload (synthesizeOracle net) (by decide +kernel)
   hWF := by decide +kernel
 
-/-- The MCZ of the V1 diffusion on 6 qubits. -/
-def mczCircuit : Circuit := okPayload (synthesizeOracle (allNet 6))
+/-- The MCZ of the V1 diffusion on 6 qubits (balanced AND tree, Stage 12a). -/
+def mczCircuit : Circuit := okPayload (synthesizeOracle (treeNet 6))
 
-/-- The diffusion certificate `DiffusionCert 6` (§8.2). -/
+/-- The diffusion certificate `DiffusionCert 6` (§8.2; `hPred` by `treeNet_pred`). -/
 def mcz : DiffusionCert 6 where
-  mcz := {N := allNet 6, C := mczCircuit, hn := rfl,
-           hC := except_eq_ok_okPayload (synthesizeOracle (allNet 6)) (by decide +kernel),
+  net := treeNet 6
+  mcz := {N := treeNet 6, C := mczCircuit, hn := rfl,
+           hC := except_eq_ok_okPayload (synthesizeOracle (treeNet 6)) (by decide +kernel),
            hWF := by decide +kernel}
   hN := rfl
 
@@ -138,7 +139,7 @@ on the solution count `hM_card`. -/
 theorem cert
     (hM_card : (Finset.univ.filter fun x => Network.pred net 6 x = true).card = 30) :
     RealizesExact (SearchSpec (Network.pred net 6)) (basisPOVM 6) (groverChannel 6 emitted)
-        (833 / 2048 : ℝ) ⟨16, 145, 60, 10⟩ ∧
+        (833 / 2048 : ℝ) ⟨16, 121, 60, 10⟩ ∧
       AncRestore 6 10 emitted (groverOp (Network.pred net 6) ^ 1 * hadamardU 6) :=
   grover_certificate oracle mcz (by decide) emitted_ok delta_eq grade_eq nAnc_eq hM_card
 

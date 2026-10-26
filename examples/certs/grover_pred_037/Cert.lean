@@ -37,28 +37,28 @@ def emitted : Circuit := ⟨8, [
     .t (.anc 0), .cnot (.data 0) (.anc 0), .cnot (.data 1) (.anc 0), .cnot (.anc 0) (.data 0), .cnot (.anc 0) (.data 1),
     .tdg (.data 0), .tdg (.data 1), .t (.anc 0), .cnot (.anc 0) (.data 0), .cnot (.anc 0) (.data 1),
     .h (.anc 0), .s (.anc 0), .alloc (.anc 1), .h (.anc 1), .t (.anc 1),
-    .cnot (.anc 0) (.anc 1), .cnot (.data 2) (.anc 1), .cnot (.anc 1) (.anc 0), .cnot (.anc 1) (.data 2), .tdg (.anc 0),
-    .tdg (.data 2), .t (.anc 1), .cnot (.anc 1) (.anc 0), .cnot (.anc 1) (.data 2), .h (.anc 1),
-    .s (.anc 1), .alloc (.anc 2), .h (.anc 2), .t (.anc 2), .cnot (.anc 1) (.anc 2),
-    .cnot (.data 3) (.anc 2), .cnot (.anc 2) (.anc 1), .cnot (.anc 2) (.data 3), .tdg (.anc 1), .tdg (.data 3),
-    .t (.anc 2), .cnot (.anc 2) (.anc 1), .cnot (.anc 2) (.data 3), .h (.anc 2), .s (.anc 2),
-    .alloc (.anc 3), .h (.anc 3), .t (.anc 3), .cnot (.anc 2) (.anc 3), .cnot (.data 4) (.anc 3),
-    .cnot (.anc 3) (.anc 2), .cnot (.anc 3) (.data 4), .tdg (.anc 2), .tdg (.data 4), .t (.anc 3),
-    .cnot (.anc 3) (.anc 2), .cnot (.anc 3) (.data 4), .h (.anc 3), .s (.anc 3), .alloc (.anc 4),
-    .h (.anc 4), .t (.anc 4), .cnot (.anc 3) (.anc 4), .cnot (.data 5) (.anc 4), .cnot (.anc 4) (.anc 3),
-    .cnot (.anc 4) (.data 5), .tdg (.anc 3), .tdg (.data 5), .t (.anc 4), .cnot (.anc 4) (.anc 3),
-    .cnot (.anc 4) (.data 5), .h (.anc 4), .s (.anc 4), .alloc (.anc 5), .h (.anc 5),
-    .t (.anc 5), .cnot (.anc 4) (.anc 5), .cnot (.data 6) (.anc 5), .cnot (.anc 5) (.anc 4), .cnot (.anc 5) (.data 6),
-    .tdg (.anc 4), .tdg (.data 6), .t (.anc 5), .cnot (.anc 5) (.anc 4), .cnot (.anc 5) (.data 6),
+    .cnot (.data 2) (.anc 1), .cnot (.data 3) (.anc 1), .cnot (.anc 1) (.data 2), .cnot (.anc 1) (.data 3), .tdg (.data 2),
+    .tdg (.data 3), .t (.anc 1), .cnot (.anc 1) (.data 2), .cnot (.anc 1) (.data 3), .h (.anc 1),
+    .s (.anc 1), .alloc (.anc 2), .h (.anc 2), .t (.anc 2), .cnot (.data 4) (.anc 2),
+    .cnot (.data 5) (.anc 2), .cnot (.anc 2) (.data 4), .cnot (.anc 2) (.data 5), .tdg (.data 4), .tdg (.data 5),
+    .t (.anc 2), .cnot (.anc 2) (.data 4), .cnot (.anc 2) (.data 5), .h (.anc 2), .s (.anc 2),
+    .alloc (.anc 3), .h (.anc 3), .t (.anc 3), .cnot (.data 6) (.anc 3), .cnot (.data 7) (.anc 3),
+    .cnot (.anc 3) (.data 6), .cnot (.anc 3) (.data 7), .tdg (.data 6), .tdg (.data 7), .t (.anc 3),
+    .cnot (.anc 3) (.data 6), .cnot (.anc 3) (.data 7), .h (.anc 3), .s (.anc 3), .alloc (.anc 4),
+    .h (.anc 4), .t (.anc 4), .cnot (.anc 0) (.anc 4), .cnot (.anc 1) (.anc 4), .cnot (.anc 4) (.anc 0),
+    .cnot (.anc 4) (.anc 1), .tdg (.anc 0), .tdg (.anc 1), .t (.anc 4), .cnot (.anc 4) (.anc 0),
+    .cnot (.anc 4) (.anc 1), .h (.anc 4), .s (.anc 4), .alloc (.anc 5), .h (.anc 5),
+    .t (.anc 5), .cnot (.anc 2) (.anc 5), .cnot (.anc 3) (.anc 5), .cnot (.anc 5) (.anc 2), .cnot (.anc 5) (.anc 3),
+    .tdg (.anc 2), .tdg (.anc 3), .t (.anc 5), .cnot (.anc 5) (.anc 2), .cnot (.anc 5) (.anc 3),
     .h (.anc 5), .s (.anc 5), .alloc (.anc 6), .h (.anc 6), .t (.anc 6),
-    .cnot (.anc 5) (.anc 6), .cnot (.data 7) (.anc 6), .cnot (.anc 6) (.anc 5), .cnot (.anc 6) (.data 7), .tdg (.anc 5),
-    .tdg (.data 7), .t (.anc 6), .cnot (.anc 6) (.anc 5), .cnot (.anc 6) (.data 7), .h (.anc 6),
-    .s (.anc 6), .z (.anc 6), .h (.anc 6), .measure (.anc 6) 2, .ifBit 2 (.cz (.anc 5) (.data 7)),
-    .ifBit 2 (.x (.anc 6)), .free (.anc 6), .h (.anc 5), .measure (.anc 5) 3, .ifBit 3 (.cz (.anc 4) (.data 6)),
-    .ifBit 3 (.x (.anc 5)), .free (.anc 5), .h (.anc 4), .measure (.anc 4) 4, .ifBit 4 (.cz (.anc 3) (.data 5)),
-    .ifBit 4 (.x (.anc 4)), .free (.anc 4), .h (.anc 3), .measure (.anc 3) 5, .ifBit 5 (.cz (.anc 2) (.data 4)),
-    .ifBit 5 (.x (.anc 3)), .free (.anc 3), .h (.anc 2), .measure (.anc 2) 6, .ifBit 6 (.cz (.anc 1) (.data 3)),
-    .ifBit 6 (.x (.anc 2)), .free (.anc 2), .h (.anc 1), .measure (.anc 1) 7, .ifBit 7 (.cz (.anc 0) (.data 2)),
+    .cnot (.anc 4) (.anc 6), .cnot (.anc 5) (.anc 6), .cnot (.anc 6) (.anc 4), .cnot (.anc 6) (.anc 5), .tdg (.anc 4),
+    .tdg (.anc 5), .t (.anc 6), .cnot (.anc 6) (.anc 4), .cnot (.anc 6) (.anc 5), .h (.anc 6),
+    .s (.anc 6), .z (.anc 6), .h (.anc 6), .measure (.anc 6) 2, .ifBit 2 (.cz (.anc 4) (.anc 5)),
+    .ifBit 2 (.x (.anc 6)), .free (.anc 6), .h (.anc 5), .measure (.anc 5) 3, .ifBit 3 (.cz (.anc 2) (.anc 3)),
+    .ifBit 3 (.x (.anc 5)), .free (.anc 5), .h (.anc 4), .measure (.anc 4) 4, .ifBit 4 (.cz (.anc 0) (.anc 1)),
+    .ifBit 4 (.x (.anc 4)), .free (.anc 4), .h (.anc 3), .measure (.anc 3) 5, .ifBit 5 (.cz (.data 6) (.data 7)),
+    .ifBit 5 (.x (.anc 3)), .free (.anc 3), .h (.anc 2), .measure (.anc 2) 6, .ifBit 6 (.cz (.data 4) (.data 5)),
+    .ifBit 6 (.x (.anc 2)), .free (.anc 2), .h (.anc 1), .measure (.anc 1) 7, .ifBit 7 (.cz (.data 2) (.data 3)),
     .ifBit 7 (.x (.anc 1)), .free (.anc 1), .h (.anc 0), .measure (.anc 0) 8, .ifBit 8 (.cz (.data 0) (.data 1)),
     .ifBit 8 (.x (.anc 0)), .free (.anc 0), .x (.data 0), .x (.data 1), .x (.data 2),
     .x (.data 3), .x (.data 4), .x (.data 5), .x (.data 6), .x (.data 7),
@@ -78,28 +78,28 @@ def emitted : Circuit := ⟨8, [
     .t (.anc 0), .cnot (.data 0) (.anc 0), .cnot (.data 1) (.anc 0), .cnot (.anc 0) (.data 0), .cnot (.anc 0) (.data 1),
     .tdg (.data 0), .tdg (.data 1), .t (.anc 0), .cnot (.anc 0) (.data 0), .cnot (.anc 0) (.data 1),
     .h (.anc 0), .s (.anc 0), .alloc (.anc 1), .h (.anc 1), .t (.anc 1),
-    .cnot (.anc 0) (.anc 1), .cnot (.data 2) (.anc 1), .cnot (.anc 1) (.anc 0), .cnot (.anc 1) (.data 2), .tdg (.anc 0),
-    .tdg (.data 2), .t (.anc 1), .cnot (.anc 1) (.anc 0), .cnot (.anc 1) (.data 2), .h (.anc 1),
-    .s (.anc 1), .alloc (.anc 2), .h (.anc 2), .t (.anc 2), .cnot (.anc 1) (.anc 2),
-    .cnot (.data 3) (.anc 2), .cnot (.anc 2) (.anc 1), .cnot (.anc 2) (.data 3), .tdg (.anc 1), .tdg (.data 3),
-    .t (.anc 2), .cnot (.anc 2) (.anc 1), .cnot (.anc 2) (.data 3), .h (.anc 2), .s (.anc 2),
-    .alloc (.anc 3), .h (.anc 3), .t (.anc 3), .cnot (.anc 2) (.anc 3), .cnot (.data 4) (.anc 3),
-    .cnot (.anc 3) (.anc 2), .cnot (.anc 3) (.data 4), .tdg (.anc 2), .tdg (.data 4), .t (.anc 3),
-    .cnot (.anc 3) (.anc 2), .cnot (.anc 3) (.data 4), .h (.anc 3), .s (.anc 3), .alloc (.anc 4),
-    .h (.anc 4), .t (.anc 4), .cnot (.anc 3) (.anc 4), .cnot (.data 5) (.anc 4), .cnot (.anc 4) (.anc 3),
-    .cnot (.anc 4) (.data 5), .tdg (.anc 3), .tdg (.data 5), .t (.anc 4), .cnot (.anc 4) (.anc 3),
-    .cnot (.anc 4) (.data 5), .h (.anc 4), .s (.anc 4), .alloc (.anc 5), .h (.anc 5),
-    .t (.anc 5), .cnot (.anc 4) (.anc 5), .cnot (.data 6) (.anc 5), .cnot (.anc 5) (.anc 4), .cnot (.anc 5) (.data 6),
-    .tdg (.anc 4), .tdg (.data 6), .t (.anc 5), .cnot (.anc 5) (.anc 4), .cnot (.anc 5) (.data 6),
+    .cnot (.data 2) (.anc 1), .cnot (.data 3) (.anc 1), .cnot (.anc 1) (.data 2), .cnot (.anc 1) (.data 3), .tdg (.data 2),
+    .tdg (.data 3), .t (.anc 1), .cnot (.anc 1) (.data 2), .cnot (.anc 1) (.data 3), .h (.anc 1),
+    .s (.anc 1), .alloc (.anc 2), .h (.anc 2), .t (.anc 2), .cnot (.data 4) (.anc 2),
+    .cnot (.data 5) (.anc 2), .cnot (.anc 2) (.data 4), .cnot (.anc 2) (.data 5), .tdg (.data 4), .tdg (.data 5),
+    .t (.anc 2), .cnot (.anc 2) (.data 4), .cnot (.anc 2) (.data 5), .h (.anc 2), .s (.anc 2),
+    .alloc (.anc 3), .h (.anc 3), .t (.anc 3), .cnot (.data 6) (.anc 3), .cnot (.data 7) (.anc 3),
+    .cnot (.anc 3) (.data 6), .cnot (.anc 3) (.data 7), .tdg (.data 6), .tdg (.data 7), .t (.anc 3),
+    .cnot (.anc 3) (.data 6), .cnot (.anc 3) (.data 7), .h (.anc 3), .s (.anc 3), .alloc (.anc 4),
+    .h (.anc 4), .t (.anc 4), .cnot (.anc 0) (.anc 4), .cnot (.anc 1) (.anc 4), .cnot (.anc 4) (.anc 0),
+    .cnot (.anc 4) (.anc 1), .tdg (.anc 0), .tdg (.anc 1), .t (.anc 4), .cnot (.anc 4) (.anc 0),
+    .cnot (.anc 4) (.anc 1), .h (.anc 4), .s (.anc 4), .alloc (.anc 5), .h (.anc 5),
+    .t (.anc 5), .cnot (.anc 2) (.anc 5), .cnot (.anc 3) (.anc 5), .cnot (.anc 5) (.anc 2), .cnot (.anc 5) (.anc 3),
+    .tdg (.anc 2), .tdg (.anc 3), .t (.anc 5), .cnot (.anc 5) (.anc 2), .cnot (.anc 5) (.anc 3),
     .h (.anc 5), .s (.anc 5), .alloc (.anc 6), .h (.anc 6), .t (.anc 6),
-    .cnot (.anc 5) (.anc 6), .cnot (.data 7) (.anc 6), .cnot (.anc 6) (.anc 5), .cnot (.anc 6) (.data 7), .tdg (.anc 5),
-    .tdg (.data 7), .t (.anc 6), .cnot (.anc 6) (.anc 5), .cnot (.anc 6) (.data 7), .h (.anc 6),
-    .s (.anc 6), .z (.anc 6), .h (.anc 6), .measure (.anc 6) 11, .ifBit 11 (.cz (.anc 5) (.data 7)),
-    .ifBit 11 (.x (.anc 6)), .free (.anc 6), .h (.anc 5), .measure (.anc 5) 12, .ifBit 12 (.cz (.anc 4) (.data 6)),
-    .ifBit 12 (.x (.anc 5)), .free (.anc 5), .h (.anc 4), .measure (.anc 4) 13, .ifBit 13 (.cz (.anc 3) (.data 5)),
-    .ifBit 13 (.x (.anc 4)), .free (.anc 4), .h (.anc 3), .measure (.anc 3) 14, .ifBit 14 (.cz (.anc 2) (.data 4)),
-    .ifBit 14 (.x (.anc 3)), .free (.anc 3), .h (.anc 2), .measure (.anc 2) 15, .ifBit 15 (.cz (.anc 1) (.data 3)),
-    .ifBit 15 (.x (.anc 2)), .free (.anc 2), .h (.anc 1), .measure (.anc 1) 16, .ifBit 16 (.cz (.anc 0) (.data 2)),
+    .cnot (.anc 4) (.anc 6), .cnot (.anc 5) (.anc 6), .cnot (.anc 6) (.anc 4), .cnot (.anc 6) (.anc 5), .tdg (.anc 4),
+    .tdg (.anc 5), .t (.anc 6), .cnot (.anc 6) (.anc 4), .cnot (.anc 6) (.anc 5), .h (.anc 6),
+    .s (.anc 6), .z (.anc 6), .h (.anc 6), .measure (.anc 6) 11, .ifBit 11 (.cz (.anc 4) (.anc 5)),
+    .ifBit 11 (.x (.anc 6)), .free (.anc 6), .h (.anc 5), .measure (.anc 5) 12, .ifBit 12 (.cz (.anc 2) (.anc 3)),
+    .ifBit 12 (.x (.anc 5)), .free (.anc 5), .h (.anc 4), .measure (.anc 4) 13, .ifBit 13 (.cz (.anc 0) (.anc 1)),
+    .ifBit 13 (.x (.anc 4)), .free (.anc 4), .h (.anc 3), .measure (.anc 3) 14, .ifBit 14 (.cz (.data 6) (.data 7)),
+    .ifBit 14 (.x (.anc 3)), .free (.anc 3), .h (.anc 2), .measure (.anc 2) 15, .ifBit 15 (.cz (.data 4) (.data 5)),
+    .ifBit 15 (.x (.anc 2)), .free (.anc 2), .h (.anc 1), .measure (.anc 1) 16, .ifBit 16 (.cz (.data 2) (.data 3)),
     .ifBit 16 (.x (.anc 1)), .free (.anc 1), .h (.anc 0), .measure (.anc 0) 17, .ifBit 17 (.cz (.data 0) (.data 1)),
     .ifBit 17 (.x (.anc 0)), .free (.anc 0), .x (.data 0), .x (.data 1), .x (.data 2),
     .x (.data 3), .x (.data 4), .x (.data 5), .x (.data 6), .x (.data 7),
@@ -114,7 +114,7 @@ theorem delta_eq : ((groverDelta 2 8 32 : ℚ) : ℝ) = (7 / 128 : ℝ) := by
   rw [show groverDelta 2 8 32 = (7 / 128 : ℚ) by decide +kernel]
   norm_num
 
-theorem grade_eq : Synthesis.grade emitted = ⟨15, 230, 72, 7⟩ := by decide +kernel
+theorem grade_eq : Synthesis.grade emitted = ⟨15, 134, 72, 7⟩ := by decide +kernel
 
 theorem nAnc_eq : emitted.nAnc = 7 := by decide +kernel
 
@@ -129,13 +129,14 @@ def oracle : OracleCert 8 where
   hC := except_eq_ok_okPayload (synthesizeOracle net) (by decide +kernel)
   hWF := by decide +kernel
 
-/-- The MCZ of the V1 diffusion on 8 qubits. -/
-def mczCircuit : Circuit := okPayload (synthesizeOracle (allNet 8))
+/-- The MCZ of the V1 diffusion on 8 qubits (balanced AND tree, Stage 12a). -/
+def mczCircuit : Circuit := okPayload (synthesizeOracle (treeNet 8))
 
-/-- The diffusion certificate `DiffusionCert 8` (§8.2). -/
+/-- The diffusion certificate `DiffusionCert 8` (§8.2; `hPred` by `treeNet_pred`). -/
 def mcz : DiffusionCert 8 where
-  mcz := {N := allNet 8, C := mczCircuit, hn := rfl,
-           hC := except_eq_ok_okPayload (synthesizeOracle (allNet 8)) (by decide +kernel),
+  net := treeNet 8
+  mcz := {N := treeNet 8, C := mczCircuit, hn := rfl,
+           hC := except_eq_ok_okPayload (synthesizeOracle (treeNet 8)) (by decide +kernel),
            hWF := by decide +kernel}
   hN := rfl
 
@@ -145,7 +146,7 @@ on the solution count `hM_card`. -/
 theorem cert
     (hM_card : (Finset.univ.filter fun x => Network.pred net 8 x = true).card = 32) :
     RealizesExact (SearchSpec (Network.pred net 8)) (basisPOVM 8) (groverChannel 8 emitted)
-        (7 / 128 : ℝ) ⟨15, 230, 72, 7⟩ ∧
+        (7 / 128 : ℝ) ⟨15, 134, 72, 7⟩ ∧
       AncRestore 8 7 emitted (groverOp (Network.pred net 8) ^ 2 * hadamardU 8) :=
   grover_certificate oracle mcz (by decide) emitted_ok delta_eq grade_eq nAnc_eq hM_card
 

@@ -53,7 +53,7 @@ def cfg : RefConfig := { lean := "leanprover/lean4:v4.35.0", mathlib := "m", phy
 def sample : Except String Certificate := certificateOf groverSrc cfg
 
 #guard match sample with
-  | .ok c => c.delta == 7 / 128 && c.grade == ⟨15, 230, 72, 7⟩ && c.status == .notYetAudited &&
+  | .ok c => c.delta == 7 / 128 && c.grade == ⟨15, 134, 72, 7⟩ && c.status == .notYetAudited &&
       c.n == 8 && c.M == 32 && c.r == 2 && c.proofHash.isNone && c.axioms.isEmpty
   | .error _ => false
 -- Stage 8a review: G counts every noisy operation, terminal measurements included
@@ -136,7 +136,9 @@ def xorNet : Network := ⟨2, #[.input 0, .input 1, .xor 0 1], [2]⟩
 #guard (groverCert.splitOn "native_decide").length == 1
 #guard (groverCert.splitOn "sorry").length == 1
 #guard (groverCert.splitOn "#print axioms cert").length == 2
-#guard (groverCert.splitOn "(7 / 128 : ℝ) ⟨15, 230, 72, 7⟩").length == 2
+#guard (groverCert.splitOn "(7 / 128 : ℝ) ⟨15, 134, 72, 7⟩").length == 2
+-- Stage 12a: the generated diffusion certificate is the balanced tree
+#guard (groverCert.splitOn "  net := treeNet 8").length == 2
 #guard (groverCert.splitOn "theorem emitted_ok : groverCircuit net 8 2 = .ok emitted").length == 2
 -- Stage 9a: an XOR network gets the same proved certificate as an AND/NOT/OR network (oracle
 -- certificate, no `sorry`, no `xorFree` side condition)

@@ -127,21 +127,35 @@ expect_has "search_while synthesize code" '"code":"unbounded_loop"' "$out"
 
 # Stage 5b — diffusion and Grover circuit (report §8.2, §3.2.4; DECISIONS.md 2026-10-24): the
 # measured grades (Table 3.3 claims (10, 16, 28, 2) for D₈ and (10, 74, 72, 2) for r⋆ = 2).
+# Stage 12a: the default MCZ network is the balanced tree; the Stage 5b chain is `--shape chain`.
 out="$("${cqr[@]}" synthesize --diffusion 8 | tr -d '\r')"; rc=$?
 expect_exit "synthesize --diffusion 8" 0 "$out" "$rc"
-expect_has "diffusion 8 V1 grade" '"grade": {"w": 15, "t": 28, "d": 89, "a": 7}' "$out"
-out="$("${cqr[@]}" synthesize --diffusion 8 --amax 3 | tr -d '\r')"; rc=$?
-expect_exit "synthesize --diffusion 8 --amax 3" 0 "$out" "$rc"
+expect_has "diffusion 8 V1 tree grade" '"grade": {"w": 15, "t": 28, "d": 41, "a": 7}' "$out"
+expect_has "diffusion 8 shape" '"shape": "tree"' "$out"
+out="$("${cqr[@]}" synthesize --diffusion 8 --shape chain | tr -d '\r')"; rc=$?
+expect_exit "synthesize --diffusion 8 --shape chain" 0 "$out" "$rc"
+expect_has "diffusion 8 V1 chain grade" '"grade": {"w": 15, "t": 28, "d": 89, "a": 7}' "$out"
+out="$("${cqr[@]}" synthesize --diffusion 8 --shape chain --amax 3 | tr -d '\r')"; rc=$?
+expect_exit "synthesize --diffusion 8 --shape chain --amax 3" 0 "$out" "$rc"
 expect_has "diffusion 8 V2 grade" '"grade": {"w": 11, "t": 52, "d": 157, "a": 3}' "$out"
-out="$("${cqr[@]}" synthesize --diffusion 8 --amax 2 | tr -d '\r')"; rc=$?
-expect_exit "synthesize --diffusion 8 --amax 2 (infeasible)" 1 "$out" "$rc"
+out="$("${cqr[@]}" synthesize --diffusion 8 --amax 2 --shape chain | tr -d '\r')"; rc=$?
+expect_exit "synthesize --diffusion 8 --amax 2 --shape chain (infeasible)" 1 "$out" "$rc"
 expect_has "diffusion 8 --amax 2 code" '"code":"infeasible_budget"' "$out"
+out="$("${cqr[@]}" synthesize --diffusion 8 --amax 3 | tr -d '\r')"; rc=$?
+expect_exit "synthesize --diffusion 8 --amax 3 (tree: no Bennett pebbling)" 1 "$out" "$rc"
+expect_has "diffusion 8 tree --amax 3 code" '"code":"unsupported_network"' "$out"
+"${cqr[@]}" synthesize --diffusion 8 --shape star >/dev/null 2>&1; rc=$?
+expect_exit "synthesize --diffusion 8 --shape star (usage)" 2 "" "$rc"
 out="$("${cqr[@]}" synthesize examples/grover_pred_037.cqr --grover | tr -d '\r')"; rc=$?
 expect_exit "synthesize grover_pred_037 --grover" 0 "$out" "$rc"
 expect_has "grover r_star" '"r_star": 2' "$out"
-expect_has "grover iteration grade" '"iteration": {"w": 15, "t": 36, "d": 116, "a": 7}' "$out"
-expect_has "grover oracle ⊕ diffusion" '"oracle_plus_diffusion": {"w": 15, "t": 36, "d": 116, "a": 7}' "$out"
-expect_has "grover circuit grade" '"circuit": {"w": 15, "t": 72, "d": 230, "a": 7}' "$out"
+expect_has "grover iteration grade" '"iteration": {"w": 15, "t": 36, "d": 68, "a": 7}' "$out"
+expect_has "grover oracle ⊕ diffusion" '"oracle_plus_diffusion": {"w": 15, "t": 36, "d": 68, "a": 7}' "$out"
+expect_has "grover circuit grade" '"circuit": {"w": 15, "t": 72, "d": 134, "a": 7}' "$out"
+out="$("${cqr[@]}" synthesize examples/grover_pred_037.cqr --grover --shape chain | tr -d '\r')"; rc=$?
+expect_exit "synthesize grover_pred_037 --grover --shape chain" 0 "$out" "$rc"
+expect_has "grover chain iteration grade" '"iteration": {"w": 15, "t": 36, "d": 116, "a": 7}' "$out"
+expect_has "grover chain circuit grade" '"circuit": {"w": 15, "t": 72, "d": 230, "a": 7}' "$out"
 out="$("${cqr[@]}" synthesize examples/grover_pred_037.cqr --grover --iterations 1 | tr -d '\r')"; rc=$?
 expect_exit "synthesize grover_pred_037 --grover --iterations 1" 0 "$out" "$rc"
 expect_has "grover --iterations 1" '"iterations": 1' "$out"
@@ -199,7 +213,10 @@ expect_has "simple_alu_x0_1 oracle grade" '"grade": {"w": 16, "t": 40, "d": 80, 
 out="$("${cqr[@]}" synthesize "$alu" --grover --solutions 30 | tr -d '\r')"; rc=$?
 expect_exit "synthesize simple_alu_x0_1 --grover --solutions 30" 0 "$out" "$rc"
 expect_has "simple_alu_x0_1 r_star" '"r_star": 1' "$out"
-expect_has "simple_alu_x0_1 Grover grade" '"circuit": {"w": 16, "t": 60, "d": 145, "a": 10}' "$out"
+expect_has "simple_alu_x0_1 Grover grade" '"circuit": {"w": 16, "t": 60, "d": 121, "a": 10}' "$out"
+out="$("${cqr[@]}" synthesize "$alu" --grover --solutions 30 --shape chain | tr -d '\r')"; rc=$?
+expect_exit "synthesize simple_alu_x0_1 --grover --solutions 30 --shape chain" 0 "$out" "$rc"
+expect_has "simple_alu_x0_1 chain Grover grade" '"circuit": {"w": 16, "t": 60, "d": 145, "a": 10}' "$out"
 out="$("${cqr[@]}" check "$alu" --truth-table | tr -d '\r')"; rc=$?
 expect_exit "check simple_alu_x0_1 --truth-table" 0 "$out" "$rc"
 expect_has "simple_alu_x0_1 evaluator table" '"evaluator":"0000000011011101010010001011011111011111000000101001011101101000"' "$out"

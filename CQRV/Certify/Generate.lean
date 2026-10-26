@@ -177,13 +177,14 @@ def oracle : OracleCert {q.n} where
   hC := except_eq_ok_okPayload (synthesizeOracle net) (by decide +kernel)
   hWF := by decide +kernel
 
-/-- The MCZ of the V1 diffusion on {q.n} qubits. -/
-def mczCircuit : Circuit := okPayload (synthesizeOracle (allNet {q.n}))
+/-- The MCZ of the V1 diffusion on {q.n} qubits (balanced AND tree, Stage 12a). -/
+def mczCircuit : Circuit := okPayload (synthesizeOracle (treeNet {q.n}))
 
-/-- The diffusion certificate `DiffusionCert {q.n}` (§8.2). -/
+/-- The diffusion certificate `DiffusionCert {q.n}` (§8.2; `hPred` by `treeNet_pred`). -/
 def mcz : DiffusionCert {q.n} where
-  mcz := {lb}N := allNet {q.n}, C := mczCircuit, hn := rfl,
-           hC := except_eq_ok_okPayload (synthesizeOracle (allNet {q.n})) (by decide +kernel),
+  net := treeNet {q.n}
+  mcz := {lb}N := treeNet {q.n}, C := mczCircuit, hn := rfl,
+           hC := except_eq_ok_okPayload (synthesizeOracle (treeNet {q.n})) (by decide +kernel),
            hWF := by decide +kernel{rb}
   hN := rfl
 

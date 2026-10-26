@@ -66,13 +66,6 @@ theorem OracleCert.ancRestore {n : ℕ} (O : OracleCert n) {a : ℕ} (ha : O.C.n
     exact h
   exact key _ O.nData_eq (O.restore a ha)
 
-/-- Report §6 (the `DiffusionCert(n)` of the Grover-iteration listing), §8.2 — the MCZ of the
-V1 diffusion as a certified oracle: the synthesized oracle of `P_all` (`allNet n`). Its
-well-formedness is a field of `OracleCert` (checked by `decide` at each instance). -/
-structure DiffusionCert (n : ℕ) where
-  mcz : OracleCert n
-  hN : mcz.N = allNet n
-
 /-! ## `P_all`: the predicate of `allNet n` -/
 
 /-- After the input nodes `0..m−1`, the values are the input bits. -/
@@ -166,9 +159,216 @@ theorem allNet_pred {n : ℕ} (hn : n ≠ 0) : (allNet n).pred n = allOnes := by
   · rw [show 2 * n - 2 = n + (n - 2) by omega, hva (n - 2) (by omega),
       show n - 2 + 2 = n by omega]
 
-/-- Report §8.2 — the MCZ certificate applies the phase oracle of `P_all`. -/
-theorem DiffusionCert.P_eq {n : ℕ} (D : DiffusionCert n) (hn : n ≠ 0) : D.mcz.P = allOnes := by
-  rw [OracleCert.P, D.hN, allNet_pred hn]
+/-! ## Stage 12a — the balanced AND tree `treeNet n` -/
+
+/-- Report §6.1.2 — node `k + i` of the list `ns` is an AND whose operands are below `k + i`
+(the topological-order clause of `Network.wf` for appended AND nodes). -/
+def AndsBelow : ℕ → List Node → Prop
+  | _, [] => True
+  | k, v :: ns => (match v with | .and i j => i < k ∧ j < k | _ => False) ∧ AndsBelow (k + 1) ns
+
+theorem AndsBelow.append {k : ℕ} {a b : List Node} (ha : AndsBelow k a)
+    (hb : AndsBelow (k + a.length) b) : AndsBelow k (a ++ b) := by
+  induction a generalizing k with
+  | nil => simpa using hb
+  | cons v a ih =>
+    simp only [AndsBelow, List.cons_append] at ha ⊢
+    rw [List.length_cons, show k + (a.length + 1) = k + 1 + a.length by omega] at hb
+    exact ⟨ha.1, ih ha.2 hb⟩
+
+theorem AndsBelow.getElem? {k : ℕ} {ns : List Node} (h : AndsBelow k ns) {idx : ℕ}
+    (hi : idx < ns.length) : ∃ i j, ns[idx]? = some (.and i j) ∧ i < k + idx ∧ j < k + idx := by
+  induction ns generalizing k idx with
+  | nil => simp at hi
+  | cons v ns ih =>
+    simp only [AndsBelow] at h
+    cases idx with
+    | zero =>
+      cases v
+      case and i j => exact ⟨i, j, rfl, by simpa using h.1.1, by simpa using h.1.2⟩
+      all_goals exact False.elim h.1
+    | succ idx =>
+      obtain ⟨i, j, he, h1, h2⟩ := ih h.2 (by simpa using hi)
+      exact ⟨i, j, by simpa using he, by omega, by omega⟩
+
+/-- Pushing a value does not change the values at indices below the old size. -/
+theorem all_getD_push {l : List ℕ} {vs : Array Bool} {b : Bool} (h : ∀ m ∈ l, m < vs.size) :
+    l.all (fun m => (vs.push b).getD m false) = l.all (fun m => vs.getD m false) := by
+  induction l with
+  | nil => rfl
+  | cons m l ih =>
+    simp only [List.all_cons]
+    rw [Array.getD_push_eq, ite_eq_right (by have := h m (by simp); omega),
+      ih (fun m' hm' => h m' (by simp [hm']))]
+
+/-- One level of the tree (`treeLevel l k`, new nodes from `k`) on values `vs` of the first `k`
+nodes: the size grows by the new nodes, old values stay, the conjunction over the next level
+equals the conjunction over `l`, the next level lies below the new size, the new nodes are ANDs
+of earlier nodes, and the next level has `⌈|l| / 2⌉` entries. -/
+theorem treeLevel_spec (x : ℕ → Bool) : ∀ (l : List ℕ) (k : ℕ) (vs : Array Bool),
+    vs.size = k → (∀ i ∈ l, i < k) →
+    ((treeLevel l k).1.foldl (nodeStep x) vs).size = k + (treeLevel l k).1.length ∧
+    (∀ i < k, ((treeLevel l k).1.foldl (nodeStep x) vs).getD i false = vs.getD i false) ∧
+    (treeLevel l k).2.all (fun i => ((treeLevel l k).1.foldl (nodeStep x) vs).getD i false) =
+      l.all (fun i => vs.getD i false) ∧
+    (∀ j ∈ (treeLevel l k).2, j < k + (treeLevel l k).1.length) ∧
+    AndsBelow k (treeLevel l k).1 ∧
+    (treeLevel l k).2.length = (l.length + 1) / 2
+  | [], k, vs, hs, _ => by simp [treeLevel, hs, AndsBelow]
+  | [i], k, vs, hs, hl => by
+    simp [treeLevel, hs, AndsBelow, hl i (by simp)]
+  | i :: j :: rest, k, vs, hs, hl => by
+    have hi : i < k := hl i (by simp)
+    have hj : j < k := hl j (by simp)
+    have hs' : (vs.push (vs.getD i false && vs.getD j false)).size = k + 1 := by simp [hs]
+    obtain ⟨h1, h2, h3, h4, h5, h6⟩ := treeLevel_spec x rest (k + 1)
+      (vs.push (vs.getD i false && vs.getD j false)) hs'
+      (fun m hm => Nat.lt_succ_of_lt (hl m (by simp [hm])))
+    have hstep : nodeStep x vs (.and i j) = vs.push (vs.getD i false && vs.getD j false) := rfl
+    simp only [treeLevel, List.foldl_cons, hstep, List.length_cons]
+    refine ⟨by rw [h1]; omega, fun m hm => ?_, ?_, fun m hm => ?_, ?_, by rw [h6]; omega⟩
+    · rw [h2 m (by omega), Array.getD_push_eq, ite_eq_right (by omega)]
+    · rw [List.all_cons, h3, h2 k (by omega), Array.getD_push_eq, ite_eq_left hs.symm,
+        all_getD_push (fun m hm => hs ▸ hl m (by simp [hm]))]
+      simp [Bool.and_assoc]
+    · rcases List.mem_cons.mp hm with rfl | hm
+      · omega
+      · have := h4 m hm
+        omega
+    · simp only [AndsBelow]
+      exact ⟨⟨hi, hj⟩, h5⟩
+
+/-- The levels of the tree: for a non-empty level `l` below `k` with `|l| ≤ fuel + 1`, the root's
+value after the new nodes is the conjunction over `l`; the root lies below the new size; the
+new nodes are ANDs of earlier nodes. -/
+theorem treeBuild_spec (x : ℕ → Bool) : ∀ (f : ℕ) (l : List ℕ) (k : ℕ) (vs : Array Bool),
+    vs.size = k → (∀ i ∈ l, i < k) → l ≠ [] → l.length ≤ f + 1 →
+    ((treeBuild f l k).1.foldl (nodeStep x) vs).getD (treeBuild f l k).2 false =
+      l.all (fun i => vs.getD i false) ∧
+    (treeBuild f l k).2 < k + (treeBuild f l k).1.length ∧
+    AndsBelow k (treeBuild f l k).1 := by
+  have single : ∀ (l : List ℕ) (k : ℕ) (vs : Array Bool), (∀ i ∈ l, i < k) → l ≠ [] →
+      l.length ≤ 1 →
+      (([] : List Node).foldl (nodeStep x) vs).getD (l.headD 0) false =
+        l.all (fun i => vs.getD i false) ∧
+      l.headD 0 < k + ([] : List Node).length ∧ AndsBelow k [] := by
+    intro l k vs hl hne hlen
+    match l, hne, hlen with
+    | [i], _, _ => simp [AndsBelow, hl i (by simp)]
+    | _ :: _ :: _, _, hlen => simp at hlen
+  intro f
+  induction f with
+  | zero => exact fun l k vs _ hl hne hlen => single l k vs hl hne hlen
+  | succ f ih =>
+    intro l k vs hs hl hne hlen
+    simp only [treeBuild]
+    split_ifs with h1
+    · exact single l k vs hl hne h1
+    · obtain ⟨h1', -, h3', h4', h5', h6'⟩ := treeLevel_spec x l k vs hs hl
+      have hne' : (treeLevel l k).2 ≠ [] := by
+        intro h
+        rw [h, List.length_nil] at h6'
+        omega
+      obtain ⟨g1, g2, g3⟩ := ih (treeLevel l k).2 (k + (treeLevel l k).1.length) _ h1' h4'
+        hne' (by omega)
+      refine ⟨?_, ?_, AndsBelow.append h5' g3⟩
+      · rw [List.foldl_append, g1, h3']
+      · rw [List.length_append]
+        omega
+
+/-- The values of the input nodes `0..n−1` of `treeNet n` (and of `allNet n`). -/
+def inputValues (x : ℕ → Bool) (n : ℕ) : Array Bool :=
+  ((List.range n).map Node.input).foldl (nodeStep x) #[]
+
+/-- The root step of `treeNet n` over its inputs. -/
+theorem treeNet_spec (x : ℕ → Bool) {n : ℕ} (hn : n ≠ 0) :
+    ((treeBuild n (List.range n) n).1.foldl (nodeStep x) (inputValues x n)).getD
+        (treeBuild n (List.range n) n).2 false =
+      (List.range n).all (fun i => (inputValues x n).getD i false) ∧
+    (treeBuild n (List.range n) n).2 < n + (treeBuild n (List.range n) n).1.length ∧
+    AndsBelow n (treeBuild n (List.range n) n).1 :=
+  treeBuild_spec x n (List.range n) n _ (foldl_inputs x n).1 (fun _ hi => List.mem_range.mp hi)
+    (fun h => hn (by simpa using congrArg List.length h)) (by simp)
+
+/-- Report §8.2 (Stage 12a decision 1) — the balanced tree `treeNet n` computes
+`P_all(y) = y₀ ∧ … ∧ y_{n−1}` (`n ≥ 1`), as the chain does (`allNet_pred`). -/
+theorem treeNet_pred {n : ℕ} (hn : n ≠ 0) : (treeNet n).pred n = allOnes := by
+  funext x
+  have hnodes : (treeNet n).nodes.toList =
+      (List.range n).map Node.input ++ (treeBuild n (List.range n) n).1 := by
+    simp [treeNet]
+  have hv : (treeNet n).values (inputOf x) =
+      (treeBuild n (List.range n) n).1.foldl (nodeStep (inputOf x)) (inputValues (inputOf x) n) := by
+    rw [values_eq_valuesUpTo, valuesUpTo, List.take_of_length_le (by simp), hnodes,
+      List.foldl_append, inputValues]
+  obtain ⟨-, hi⟩ := foldl_inputs (inputOf x) n
+  obtain ⟨h1, -, -⟩ := treeNet_spec (inputOf x) hn
+  have hcongr : (List.range n).all (fun i => (inputValues (inputOf x) n).getD i false) =
+      (List.range n).all (inputOf x) := by
+    rw [Bool.eq_iff_iff]
+    simp only [List.all_eq_true, List.mem_range]
+    exact ⟨fun h k hk => by rw [← hi k hk]; exact h k hk,
+      fun h k hk => by rw [inputValues, hi k hk]; exact h k hk⟩
+  have hall : (List.range n).all (inputOf x) = allOnes x := by
+    unfold allOnes
+    rw [Bool.eq_iff_iff, List.all_eq_true, decide_eq_true_iff]
+    simp only [List.mem_range]
+    exact ⟨fun h i => by simpa [inputOf] using h i.val i.isLt,
+      fun h k hk => by simpa [inputOf, hk] using h ⟨k, hk⟩⟩
+  have hout : (treeNet n).outputs = [(treeBuild n (List.range n) n).2] := rfl
+  unfold Network.pred Network.eval
+  simp only [hout, List.map_cons, List.map_nil, List.headD_cons]
+  change ((treeNet n).values (inputOf x)).getD _ false = _
+  rw [hv, h1, hcongr, hall]
+
+/-- Report §8.2, §6.1.2 (Stage 12a decision 1) — `treeNet n` is well formed for `n ≥ 1` (for
+`n = 0` it is not, as `allNet 0`: no nodes, output index `0`). -/
+theorem treeNet_WF {n : ℕ} (hn : n ≠ 0) : (treeNet n).WF := by
+  obtain ⟨-, ho, hA⟩ := treeNet_spec (fun _ => false) hn
+  have hnodes : (treeNet n).nodes =
+      ((List.range n).map Node.input ++ (treeBuild n (List.range n) n).1).toArray := by
+    simp [treeNet]
+  have hsize : (treeNet n).nodes.size = n + (treeBuild n (List.range n) n).1.length := by
+    simp [hnodes]
+  unfold Network.WF Network.wf
+  rw [show (treeNet n).nInputs = n from rfl, Bool.and_eq_true, List.all_eq_true, List.all_eq_true]
+  refine ⟨fun k hk => ?_, fun o ho' => ?_⟩
+  · rw [List.mem_range, hsize] at hk
+    rw [hnodes, List.getElem?_toArray]
+    by_cases hkn : k < n
+    · rw [List.getElem?_append_left (by simpa using hkn), List.getElem?_map,
+        List.getElem?_range hkn]
+      simpa using hkn
+    · rw [List.getElem?_append_right (by simp; omega)]
+      simp only [List.length_map, List.length_range]
+      obtain ⟨i, j, he, h1, h2⟩ := hA.getElem? (idx := k - n) (by omega)
+      rw [he]
+      simp [show i < k by omega, show j < k by omega]
+  · have ho'' : o = (treeBuild n (List.range n) n).2 := by simpa [treeNet] using ho'
+    rw [ho'', hsize]
+    simpa using ho
+
+/-- Report §6 (the `DiffusionCert(n)` of the Grover-iteration listing), §8.2 — the MCZ of the
+V1 diffusion as a certified oracle: the synthesized oracle of a network `net` that computes
+`P_all`. Stage 12a decision 2: `net` defaults to the chain `allNet n` and `hPred` is filled
+automatically for `allNet` and `treeNet` at a numeral `n`, so `{ mcz := …, hN := rfl }` still
+denotes the chain certificate (Stage 7a); the tree certificate sets `net := treeNet n`.
+Well-formedness is a field of `OracleCert` (`decide` at each instance, or `synthesizeOracle_WF`). -/
+structure DiffusionCert (n : ℕ) where
+  /-- The network of the MCZ (§8.2): `allNet n` (default) or `treeNet n`. -/
+  net : Network := allNet n
+  mcz : OracleCert n
+  hN : mcz.N = net
+  /-- `net` computes `P_all` (`allNet_pred`, `treeNet_pred`). -/
+  hPred : net.pred n = allOnes := by
+    first
+    | (with_reducible apply allNet_pred) <;> decide
+    | (with_reducible apply treeNet_pred) <;> decide
+
+/-- Report §8.2 — the MCZ certificate applies the phase oracle of `P_all` (Stage 12a: by the
+field `hPred`; the hypothesis `n ≠ 0` is no longer used, the statement is unchanged). -/
+theorem DiffusionCert.P_eq {n : ℕ} (D : DiffusionCert n) (_hn : n ≠ 0) : D.mcz.P = allOnes := by
+  rw [OracleCert.P, D.hN, D.hPred]
 
 /-! ## Data-only layers -/
 
@@ -440,16 +640,18 @@ theorem diffusion_ancRestore {n a : ℕ} (mcz : Circuit) (hb : mcz.bitsOk = true
     (AncRestore.comp hpre hb (ancRestore_pre n a) hmcz) (ancRestore_post n a)
   exact h.congr fun ρ => uConj_neg (diffusion_circuit_matrix n) ρ
 
-/-- `diffusion n none` is the V1 diffusion circuit around the synthesized MCZ. -/
-theorem diffusion_ok {n : ℕ} {D : Circuit} (h : diffusion n none = .ok D) :
-    n ≠ 0 ∧ ∃ mcz, synthesizeOracle (allNet n) = .ok mcz ∧ D = diffusionCircuit n mcz := by
+/-- `diffusion n none s` is the V1 diffusion circuit around the synthesized MCZ of
+`diffusionNet s n` (Stage 12a, either shape). -/
+theorem diffusion_ok_shape {n : ℕ} {s : DiffusionShape} {D : Circuit}
+    (h : diffusion n none s = .ok D) :
+    n ≠ 0 ∧ ∃ mcz, synthesizeOracle (diffusionNet s n) = .ok mcz ∧ D = diffusionCircuit n mcz := by
   unfold diffusion diffusionWith synthesizeWithBudget at h
   by_cases hn : n = 0
   · subst hn
     simp [Diffusion.fail, throw, throwThe, MonadExceptOf.throw, Functor.map, Except.map, bind,
       Except.bind] at h
   · refine ⟨hn, ?_⟩
-    cases hs : synthesizeOracle (allNet n) with
+    cases hs : synthesizeOracle (diffusionNet s n) with
     | error e =>
       simp [hs, hn, Functor.map, Except.map, bind, Except.bind] at h
     | ok mcz =>
@@ -457,17 +659,29 @@ theorem diffusion_ok {n : ℕ} {D : Circuit} (h : diffusion n none = .ok D) :
       simp [hs, hn, Functor.map, Except.map, bind, Except.bind, pure, Except.pure] at h
       exact h.symm
 
-/-- `groverIteration P n` is the oracle of `P` appended with the diffusion. -/
-theorem groverIteration_ok {P : Network} {n : ℕ} {it : Circuit}
-    (h : groverIteration P n = .ok it) :
-    ∃ oc d, synthesizeOracle P = .ok oc ∧ diffusion n none = .ok d ∧ it = oc.append d := by
+/-- `diffusion n none .chain` is the V1 diffusion circuit around the synthesized MCZ of the
+chain: the Stage 7a statement of `diffusion_ok`, kept for the chain (Stage 12a). -/
+theorem diffusion_ok_chain {n : ℕ} {D : Circuit} (h : diffusion n none .chain = .ok D) :
+    n ≠ 0 ∧ ∃ mcz, synthesizeOracle (allNet n) = .ok mcz ∧ D = diffusionCircuit n mcz :=
+  diffusion_ok_shape h
+
+/-- `diffusion n none` is the V1 diffusion circuit around the synthesized MCZ of the balanced
+tree, the default shape since Stage 12a. -/
+theorem diffusion_ok {n : ℕ} {D : Circuit} (h : diffusion n none = .ok D) :
+    n ≠ 0 ∧ ∃ mcz, synthesizeOracle (treeNet n) = .ok mcz ∧ D = diffusionCircuit n mcz :=
+  diffusion_ok_shape h
+
+/-- `groverIteration P n none s` is the oracle of `P` appended with the diffusion of shape `s`. -/
+theorem groverIteration_ok_shape {P : Network} {n : ℕ} {s : DiffusionShape} {it : Circuit}
+    (h : groverIteration P n none s = .ok it) :
+    ∃ oc d, synthesizeOracle P = .ok oc ∧ diffusion n none s = .ok d ∧ it = oc.append d := by
   unfold groverIteration at h
   cases ho : synthesizeOracle P with
   | error e =>
     split_ifs at h <;> simp [ho, bind, Except.bind, Diffusion.fail, throw, throwThe,
       MonadExceptOf.throw] at h
   | ok oc =>
-    cases hd : diffusion n none with
+    cases hd : diffusion n none s with
     | error e =>
       split_ifs at h <;> simp [ho, hd, bind, Except.bind, Diffusion.fail, throw, throwThe,
         MonadExceptOf.throw] at h
@@ -477,15 +691,28 @@ theorem groverIteration_ok {P : Network} {n : ℕ} {it : Circuit}
         MonadExceptOf.throw, pure, Except.pure] at h
       exact h.symm
 
-/-- `groverCircuit P n r` is `H^{⊗n}` followed by `r` iterations. -/
-theorem groverCircuit_ok {P : Network} {n r : ℕ} {C : Circuit}
-    (h : groverCircuit P n r = .ok C) :
-    ∃ it, groverIteration P n = .ok it ∧
+/-- `groverIteration P n` is the oracle of `P` appended with the diffusion. -/
+theorem groverIteration_ok {P : Network} {n : ℕ} {it : Circuit}
+    (h : groverIteration P n = .ok it) :
+    ∃ oc d, synthesizeOracle P = .ok oc ∧ diffusion n none = .ok d ∧ it = oc.append d :=
+  groverIteration_ok_shape h
+
+/-- `groverCircuit P n r none s` is `H^{⊗n}` followed by `r` iterations of shape `s`. -/
+theorem groverCircuit_ok_shape {P : Network} {n r : ℕ} {s : DiffusionShape} {C : Circuit}
+    (h : groverCircuit P n r none s = .ok C) :
+    ∃ it, groverIteration P n none s = .ok it ∧
       C = (List.replicate r it).foldl Circuit.append ⟨n, Diffusion.onAll .h n⟩ := by
   unfold groverCircuit at h
   rw [except_bind_eq_ok] at h
   obtain ⟨it, hit, h⟩ := h
   exact ⟨it, hit, (except_pure_eq_ok.mp h).symm⟩
+
+/-- `groverCircuit P n r` is `H^{⊗n}` followed by `r` iterations. -/
+theorem groverCircuit_ok {P : Network} {n r : ℕ} {C : Circuit}
+    (h : groverCircuit P n r = .ok C) :
+    ∃ it, groverIteration P n = .ok it ∧
+      C = (List.replicate r it).foldl Circuit.append ⟨n, Diffusion.onAll .h n⟩ :=
+  groverCircuit_ok_shape h
 
 /-! ### Ancilla count of a shifted append -/
 
@@ -547,44 +774,6 @@ theorem ancRestore_foldl {n a : ℕ} (init it : Circuit) (U V : 𝐔[Reg n])
       mul_assoc]
     exact ⟨Circuit.bitsOk_append hb ht, AncRestore.comp hb ht hr rit⟩
 
-/-- Report §8.2.4, §8.3.3 — **the restoration conjunct of `grover_parametric_lemma`**: the
-Grover circuit `H^{⊗n} ; (U_P ; D_n)^r` (V1 diffusion, synthesized by `groverCircuit`) on
-`Reg n × Reg C.nAnc` restores its ancillae and applies `G^r H^{⊗n}` with `G = U_s U_P`. -/
-theorem grover_ancRestore {n r : ℕ} (O : OracleCert n) (D : DiffusionCert n) {C : Circuit}
-    (hC : groverCircuit O.N n r = .ok C) :
-    AncRestore n C.nAnc C (groverOp O.P ^ r * hadamardU n) := by
-  obtain ⟨it, hit, rfl⟩ := groverCircuit_ok hC
-  obtain ⟨oc, d, hoc, hd, rfl⟩ := groverIteration_ok hit
-  obtain rfl : oc = O.C := Except.ok.inj (hoc.symm.trans O.hC)
-  obtain ⟨hn, mcz, hmcz, rfl⟩ := diffusion_ok hd
-  obtain rfl : mcz = D.mcz.C := Except.ok.inj (hmcz.symm.trans (D.hN ▸ D.mcz.hC))
-  cases r with
-  | zero => simpa using ancRestore_hLayer n _
-  | succ k =>
-    set it := O.C.append (diffusionCircuit n D.mcz.C) with hit_def
-    set Cf := (List.replicate (k + 1) it).foldl Circuit.append
-      (⟨n, Diffusion.onAll .h n⟩ : Circuit) with hCf
-    have hle : it.nAnc ≤ Cf.nAnc := by
-      have hsplit : Cf = ((List.replicate k it).foldl Circuit.append
-          (⟨n, Diffusion.onAll .h n⟩ : Circuit)).append it := by
-        rw [hCf, List.replicate_succ', List.foldl_append, List.foldl_cons, List.foldl_nil]
-      rw [hsplit, nAnc_append _ it]
-      exact Nat.le_max_right _ _
-    have hO : O.C.nAnc ≤ Cf.nAnc := by
-      refine le_trans ?_ hle
-      rw [hit_def, nAnc_append]
-      exact le_max_left _ _
-    have hD : D.mcz.C.nAnc ≤ Cf.nAnc := by
-      refine le_trans ?_ hle
-      rw [hit_def, nAnc_append, diffusionCircuit, nAnc_append, nAnc_append]
-      exact le_max_of_le_right (le_max_of_le_left (le_max_right _ _))
-    have hitb : it.bitsOk = true :=
-      Circuit.bitsOk_append O.hWF.bitsOk (Circuit.bitsOk_append (Circuit.bitsOk_append
-        (bitsOk_dataLayer _ _ (pre_unitary n)) D.mcz.hWF.bitsOk)
-        (bitsOk_dataLayer _ _ (post_unitary n)))
-    exact (ancRestore_foldl _ _ _ _ (bitsOk_dataLayer _ _ (onAll_h_unitary n)) hitb
-      (ancRestore_hLayer n _) (iteration_ancRestore O D hn hO hD) (k + 1)).2
-
 
 /-! ## Stage 11a — `allNet_WF`, the diffusion is well formed, constructors without `decide` -/
 
@@ -632,16 +821,34 @@ theorem onAll_qubitsOk (g : Qubit → Gate) (n : ℕ)
   obtain ⟨i, hi, rfl⟩ := hx
   exact hg i hi
 
-/-- Report §8.2, §9.1.1 (Stage 11a item 2) — the V1 diffusion circuit is well formed for every `n`
-for which it is synthesized: its MCZ by `synthesizeOracle_WF` and `allNet_WF`, the `H` / `X`
-layers directly, the pieces joined by `Circuit.WF_append`. -/
-theorem diffusion_WF {n : ℕ} {D : Circuit} (h : diffusion n none = .ok D) : D.WF := by
-  obtain ⟨hn, mcz, hmcz, rfl⟩ := diffusion_ok h
-  have hm := synthesizeOracle_WF (allNet_WF hn) hmcz
+/-- Report §8.2 (Stage 12a) — the network of either shape has `n` inputs. -/
+theorem diffusionNet_nInputs (s : DiffusionShape) (n : ℕ) : (diffusionNet s n).nInputs = n := by
+  cases s <;> rfl
+
+/-- Report §8.2 (Stage 12a) — the network of either shape computes `P_all` (`n ≥ 1`). -/
+theorem diffusionNet_pred (s : DiffusionShape) {n : ℕ} (hn : n ≠ 0) :
+    (diffusionNet s n).pred n = allOnes := by
+  cases s
+  · exact treeNet_pred hn
+  · exact allNet_pred hn
+
+/-- Report §8.2, §6.1.2 (Stage 12a) — the network of either shape is well formed (`n ≥ 1`). -/
+theorem diffusionNet_WF (s : DiffusionShape) {n : ℕ} (hn : n ≠ 0) : (diffusionNet s n).WF := by
+  cases s
+  · exact treeNet_WF hn
+  · exact allNet_WF hn
+
+/-- Report §8.2, §9.1.1 (Stage 11a item 2; Stage 12a: either shape) — the V1 diffusion circuit is
+well formed for every `n` for which it is synthesized: its MCZ by `synthesizeOracle_WF` and
+`diffusionNet_WF`, the `H` / `X` layers directly, the pieces joined by `Circuit.WF_append`. -/
+theorem diffusion_WF_shape {n : ℕ} {s : DiffusionShape} {D : Circuit}
+    (h : diffusion n none s = .ok D) : D.WF := by
+  obtain ⟨hn, mcz, hmcz, rfl⟩ := diffusion_ok_shape h
+  have hm := synthesizeOracle_WF (diffusionNet_WF s hn) hmcz
   have hmd : mcz.nData = n := by
     obtain ⟨_, _, _, _, _, _, hC⟩ := synthesizeOracle_ok hmcz
     rw [hC]
-    rfl
+    exact diffusionNet_nInputs s n
   have h1 : ∀ i, i < n → (Gate.h (.data i)).qubitsOk n = true := fun i hi => by
     simp [Gate.qubitsOk, Gate.qubits, hi]
   have h2 : ∀ i, i < n → (Gate.x (.data i)).qubitsOk n = true := fun i hi => by
@@ -653,6 +860,11 @@ theorem diffusion_WF {n : ℕ} {D : Circuit} (h : diffusion n none = .ok D) : D.
     dataLayer_WF n _ (post_unitary n) (fun g hg => (List.mem_append.mp hg).elim
       (onAll_qubitsOk _ n h2 g) (onAll_qubitsOk _ n h1 g))
   exact Circuit.WF_append rfl (Circuit.WF_append hmd.symm hpre hm) hpost
+
+/-- Report §8.2, §9.1.1 (Stage 11a item 2) — the V1 diffusion circuit (default shape) is well
+formed for every `n` for which it is synthesized (`diffusion_WF_shape`). -/
+theorem diffusion_WF {n : ℕ} {D : Circuit} (h : diffusion n none = .ok D) : D.WF :=
+  diffusion_WF_shape h
 
 /-- Report §5.2.4, §6.3.2 (Stage 11a item 3) — the certified oracle of a well-formed network:
 `hWF` is filled by `synthesizeOracle_WF`, not by a per-instance `decide`. -/
@@ -679,6 +891,76 @@ def DiffusionCert.mk' (n : ℕ) {C : Circuit} (hC : synthesizeOracle (allNet n) 
   mcz := { N := allNet n, C := C, hn := rfl, hC := hC,
            hWF := synthesizeOracle_WF (allNet_WF (allNet_ok_ne_zero hC)) hC }
   hN := rfl
+  hPred := allNet_pred (allNet_ok_ne_zero hC)
+
+/-! ## Stage 12a — the diffusion shape: tree (default) and chain -/
+
+/-- The MCZ of either shape is synthesized only for `n ≥ 1`. -/
+theorem diffusionNet_ok_ne_zero {s : DiffusionShape} {n : ℕ} {C : Circuit}
+    (hC : synthesizeOracle (diffusionNet s n) = .ok C) : n ≠ 0 := by
+  rintro rfl
+  have h : (synthesizeOracle (diffusionNet s 0)).toBool = false := by cases s <;> decide
+  rw [hC] at h
+  cases h
+
+/-- Report §6 (`DiffusionCert(n)`), §8.2 (Stage 12a decision 2) — the MCZ certificate of either
+shape whose MCZ is synthesized: `hWF` by `synthesizeOracle_WF`, `hPred` by `diffusionNet_pred`. -/
+def DiffusionCert.ofShape (s : DiffusionShape) (n : ℕ) {C : Circuit}
+    (hC : synthesizeOracle (diffusionNet s n) = .ok C) : DiffusionCert n where
+  net := diffusionNet s n
+  mcz := { N := diffusionNet s n, C := C, hn := diffusionNet_nInputs s n, hC := hC,
+           hWF := synthesizeOracle_WF (diffusionNet_WF s (diffusionNet_ok_ne_zero hC)) hC }
+  hN := rfl
+  hPred := diffusionNet_pred s (diffusionNet_ok_ne_zero hC)
+
+/-- Report §8.2.4, §8.3.3 (Stage 12a: either diffusion shape) — the Grover circuit
+`H^{⊗n} ; (U_P ; D_n)^r` with the V1 diffusion of shape `s` on `Reg n × Reg C.nAnc` restores its
+ancillae and applies `G^r H^{⊗n}`, `G = U_s U_P`. The MCZ certificate is built from the circuit
+itself (`DiffusionCert.ofShape`); no `DiffusionCert` argument is needed. -/
+theorem grover_ancRestore_shape {n r : ℕ} (O : OracleCert n) (s : DiffusionShape) {C : Circuit}
+    (hC : groverCircuit O.N n r none s = .ok C) :
+    AncRestore n C.nAnc C (groverOp O.P ^ r * hadamardU n) := by
+  obtain ⟨it, hit, rfl⟩ := groverCircuit_ok_shape hC
+  obtain ⟨oc, d, hoc, hd, rfl⟩ := groverIteration_ok_shape hit
+  obtain rfl : oc = O.C := Except.ok.inj (hoc.symm.trans O.hC)
+  obtain ⟨hn, mcz, hmcz, rfl⟩ := diffusion_ok_shape hd
+  have hmb : mcz.bitsOk = true := (DiffusionCert.ofShape s n hmcz).mcz.hWF.bitsOk
+  cases r with
+  | zero => simpa using ancRestore_hLayer n _
+  | succ k =>
+    set it := O.C.append (diffusionCircuit n mcz) with hit_def
+    set Cf := (List.replicate (k + 1) it).foldl Circuit.append
+      (⟨n, Diffusion.onAll .h n⟩ : Circuit) with hCf
+    have hle : it.nAnc ≤ Cf.nAnc := by
+      have hsplit : Cf = ((List.replicate k it).foldl Circuit.append
+          (⟨n, Diffusion.onAll .h n⟩ : Circuit)).append it := by
+        rw [hCf, List.replicate_succ', List.foldl_append, List.foldl_cons, List.foldl_nil]
+      rw [hsplit, nAnc_append _ it]
+      exact Nat.le_max_right _ _
+    have hO : O.C.nAnc ≤ Cf.nAnc := by
+      refine le_trans ?_ hle
+      rw [hit_def, nAnc_append]
+      exact le_max_left _ _
+    have hD : mcz.nAnc ≤ Cf.nAnc := by
+      refine le_trans ?_ hle
+      rw [hit_def, nAnc_append, diffusionCircuit, nAnc_append, nAnc_append]
+      exact le_max_of_le_right (le_max_of_le_left (le_max_right _ _))
+    have hitb : it.bitsOk = true :=
+      Circuit.bitsOk_append O.hWF.bitsOk (Circuit.bitsOk_append (Circuit.bitsOk_append
+        (bitsOk_dataLayer _ _ (pre_unitary n)) hmb)
+        (bitsOk_dataLayer _ _ (post_unitary n)))
+    exact (ancRestore_foldl _ _ _ _ (bitsOk_dataLayer _ _ (onAll_h_unitary n)) hitb
+      (ancRestore_hLayer n _) (iteration_ancRestore O (DiffusionCert.ofShape s n hmcz) hn hO hD) (k + 1)).2
+
+/-- Report §8.2.4, §8.3.3 — **the restoration conjunct of `grover_parametric_lemma`**: the
+Grover circuit `H^{⊗n} ; (U_P ; D_n)^r` (V1 diffusion, synthesized by `groverCircuit`) on
+`Reg n × Reg C.nAnc` restores its ancillae and applies `G^r H^{⊗n}` with `G = U_s U_P`.
+Statement unchanged; since Stage 12a the default diffusion is the balanced tree and the proof is
+`grover_ancRestore_shape` (the MCZ certificate comes from the circuit, `_D` is not used). -/
+theorem grover_ancRestore {n r : ℕ} (O : OracleCert n) (_D : DiffusionCert n) {C : Circuit}
+    (hC : groverCircuit O.N n r = .ok C) :
+    AncRestore n C.nAnc C (groverOp O.P ^ r * hadamardU n) :=
+  grover_ancRestore_shape O .tree hC
 
 end CQRV.Grover
 

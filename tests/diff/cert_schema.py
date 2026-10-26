@@ -6,7 +6,7 @@ Stage 11b: the optional object `hardware`, present iff schema_version is "1.4.0"
 Builds the Stage 8a certificate of examples/grover_pred_037.cqr in Lean (scripts/CertifyTool.lean
 `sample`: no kernel check, no axiom audit) and checks that
   * it validates against docs/certificate.schema.json (JSON Schema draft 2020-12);
-  * delta = "7/128", success_probability = "121/128", grade = (15, 230, 72, 7),
+  * delta = "7/128", success_probability = "121/128", grade = (15, 134, 72, 7) (tree diffusion, Stage 12a),
     status = "not yet audited", proof hash null, axioms empty;
   * the predicate hash is SHA3-256 of the source with LF line endings, and the circuit hash is
     SHA3-256 of the compact sorted-key JSON of the circuit of `cqr synthesize --grover
@@ -59,7 +59,7 @@ def main():
     print("ok:   sample certificate validates against docs/certificate.schema.json")
 
     assert cert["spec"] == {"epsilon": "0", "delta": "7/128", "success_probability": "121/128"}
-    assert cert["grade"] == {"w": 15, "d": 230, "t": 72, "a": 7}, cert["grade"]
+    assert cert["grade"] == {"w": 15, "d": 134, "t": 72, "a": 7}, cert["grade"]
     assert cert["instance"] == {"n": 8, "M": 32, "r": 2}, cert["instance"]
     assert cert["status"] == "not yet audited" and cert["axioms"] == []
     assert cert["hashes"]["proof"] is None
@@ -67,7 +67,7 @@ def main():
         "(2^8 inputs) by the unverified evaluator; not kernel-checked")
     assert cert["theorem"] is None and cert["obligations"] == []
     assert cert["reference_configuration"]["kernel_check"] is None
-    print("ok:   delta 7/128, grade (15, 230, 72, 7), status 'not yet audited'")
+    print("ok:   delta 7/128, grade (15, 134, 72, 7), status 'not yet audited'")
 
     with open(os.path.join(ROOT, SRC), "rb") as f:
         src = f.read().replace(b"\r\n", b"\n").replace(b"\r", b"\n")

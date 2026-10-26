@@ -32,7 +32,7 @@
   {"verification": "kernel-checked",
    "stage": "4. QPLP Instant.",
    "resources":
-   "grade (w, d, t, a) = (15, 230, 72, 7) (measured); δ = 7/128 exact",
+   "grade (w, d, t, a) = (15, 134, 72, 7) (measured); δ = 7/128 exact",
    "output": "Concrete circuit H^⊗8 · (U_s U_P)^2 (`emitted` in Cert.lean)",
    "note":
    "emitted_ok (hash link: synthesizer output = IR literal), grade_eq, nAnc_eq, delta_eq by `decide +kernel` in Cert.lean; δ = 1 − sin²((2r+1)θ) via sin_sq_odd_mul",
@@ -55,7 +55,7 @@
   {"verification": "kernel-checked",
    "stage": "7. Certificate Gen",
    "resources":
-   "kernel 7.23 s, wall 17.10 s (median of 5 (first run excluded)); axioms: propext, Classical.choice, Quot.sound",
+   "kernel 7.22 s, wall 17.02 s (median of 5 (first run excluded)); axioms: propext, Classical.choice, Quot.sound",
    "output":
    "examples/certs/grover_pred_037/Cert.lean, certificate.json (theorem CQRV.Cert.grover_pred_037.cert)",
    "note":

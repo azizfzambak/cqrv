@@ -21,6 +21,10 @@ is test-only: nothing here is part of the trusted pipeline.
   measurement branch (depth-first enumeration, `statevector.iter_ir_branches`), and the full
   Grover circuit at r* = 2 on one sampled branch (`statevector.run_ir_sampled`): success
   probability = sin²(5θ), sin²θ = 32/256, to 1e-9. Driver: `scripts/diff_grover.sh` (CI).
+  Stage 12a: (a)–(c) run for both MCZ shapes (`--shape tree`, the default, and `--shape chain`;
+  Bennett budgets on the chain only); the success probability is compared with the exact
+  rational 121/128 (Chebyshev polynomial, `benchmark_diff.grover_success`); (d) adds the full
+  r* = 1 circuit of `simple_alu_x0_1` on a sampled branch, exactly 1215/2048, both shapes.
 - Stage 8a: `sha3_diff.py` compares the Lean SHA3-256 (`CQRV.Certify.SHA3`, run through
   `scripts/CertifyTool.lean` by `lean_tool.py`) with `hashlib.sha3_256` (test oracle only) on
   the two reviewer vectors, 200 random strings of lengths 0..600 and the block-boundary lengths.
