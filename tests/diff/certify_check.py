@@ -36,7 +36,20 @@ Runs the built `cqr` from the project root and checks
     copy) → audit fails with sorryAx; (b') with one side condition by `native_decide` → audit
     fails with its auxiliary axiom (`nAnc_eq._native.native_decide.ax_1_1` in Lean 4.35;
     `Lean.ofReduceBool` in older versions); (c) examples/search_while.cqr --solutions 64 → the
-    Stage 4 repair hint (no_matching_pattern), exit 1.
+    Stage 4 repair hint (no_matching_pattern), exit 1;
+  * without --profile (Stage 11b): the certificate.json of each example run is byte-identical
+    to the committed one outside the object reference_configuration (machine and timing
+    fields), schema_version "1.3.0", no `hardware`;
+  * --profile ibm_kyiv (Stage 11b; profiles/ibm_kyiv.json, report Table 3.5 / §3.3.3):
+    grover_pred_037 → exit 0, the status line unchanged, then
+    `hardware profile ibm_kyiv: exceeds depth budget (230 > 200); δ_hw ≤ 7/128 + 390·1/100 =
+    2531/640 (vacuous)`; simple_alu_x0_1 → fits all budgets, δ_hw vacuous as well (G·p̄ = 3.45).
+    Every field of `hardware` is recomputed here (components against the profile file, G,
+    δ_hw = δ + G·p̄ with fractions, vacuous, profile_hash = SHA3 of the file with LF); the rest of
+    the certificate equals the run without --profile (except schema_version "1.4.0"); Cert.lean,
+    .qir, .qasm are byte-identical to the committed ones; the run report has the extra row
+    "Hardware profile" with status "checked against declared profile (not a proof about
+    hardware)".
 
 Usage: python -I tests/diff/certify_check.py --cqr <path to cqr>   (after `lake build`)
 """
@@ -50,6 +63,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from fractions import Fraction
 
 import jsonschema
 
@@ -112,6 +126,63 @@ def check_report(d, cert):
 
 def sha3(b):
     return hashlib.sha3_256(b).hexdigest()
+
+
+KYIV = os.path.join(ROOT, "profiles", "ibm_kyiv.json")
+HW_STATUS = "checked against declared profile (not a proof about hardware)"
+HW_NOTE = "routing, native gates and calibration are outside the trust boundary"
+RE_REFCONF = re.compile(r'"reference_configuration":\{[^{}]*(?:\{[^{}]*\}|null)[^{}]*\}')
+
+
+def rat(q):
+    """Lean's `toString` of a `Rat`."""
+    return f"{q.numerator}" if q.denominator == 1 else f"{q.numerator}/{q.denominator}"
+
+
+def masked(text):
+    """certificate.json text with the object reference_configuration (machine and timing
+    fields) masked; everything else byte for byte."""
+    out, k = RE_REFCONF.subn('"reference_configuration":<masked>', text)
+    assert k == 1, "reference_configuration not found exactly once"
+    return out
+
+
+def check_hardware(d, cert, plain, last_two, fits):
+    """The `hardware` object of a --profile run, recomputed; the rest equals `plain`."""
+    prof = json.loads(read(KYIV))
+    h = cert["hardware"]
+    assert cert["schema_version"] == "1.4.0", cert["schema_version"]
+    assert h["profile"] == "ibm_kyiv" and h["note"] == HW_NOTE, h
+    assert h["profile_hash"] == sha3(read(KYIV, "rb").replace(b"\r\n", b"\n")), "profile hash"
+    names = {"w": "width", "d": "depth", "t": "T-count", "a": "ancilla"}
+    over = []
+    for k in "wdta":
+        req, bud = cert["grade"][k], prof["budget"][k]
+        ok = bud is None or req <= bud
+        assert h["components"][k] == {"required": req, "budget": bud, "fits": ok}, (k, h)
+        if not ok:
+            over.append(f"{names[k]} budget ({req} > {bud})")
+    assert h["fits"] == (not over) == fits, h
+    G = cert["hardware_perturbation"]["G"]
+    pbar = Fraction(prof["p_bar"])
+    delta = Fraction(cert["spec"]["delta"])
+    dhw = delta + G * pbar
+    assert (h["G"], h["p_bar"], h["delta_hw"], h["vacuous"]) == (G, rat(pbar), rat(dhw), dhw >= 1), h
+    line = (f"hardware profile ibm_kyiv: {'exceeds ' + ', '.join(over) if over else 'fits all budgets'}; "
+            f"δ_hw ≤ {rat(delta)} + {G}·{rat(pbar)} = {rat(dhw)}{' (vacuous)' if dhw >= 1 else ''}")
+    status = "certified (conditional on: solution_count = {})".format(cert["instance"]["M"])
+    assert last_two == [status, line], (last_two, line)
+    rest = {k: v for k, v in cert.items() if k not in ("hardware", "schema_version")}
+    base = {k: v for k, v in plain.items() if k != "schema_version"}
+    assert without(rest, ["kernel_check"]) == without(base, ["kernel_check"]), "rest of the JSON"
+    rep = json.loads(read(os.path.join(d, "run_report.json")))
+    assert [r["stage"] for r in rep["rows"]] == STAGES + ["Hardware profile"], rep["rows"]
+    row = rep["rows"][-1]
+    assert row["verification"] == HW_STATUS and row["output"] == line, row
+    assert HW_NOTE in row["note"] and f"G = {G}" in row["resources"], row
+    md = read(os.path.join(d, "run_report.md"))
+    assert md.count("\n| ") == 11 and HW_STATUS in md, "run_report.md table"
+    return line
 
 
 def read(path, mode="r"):
@@ -254,6 +325,25 @@ def main():
         assert without(cert, MACHINE) == without(ex, MACHINE), "committed certificate.json"
         assert ex["reference_configuration"]["kernel_check"]["runs"] == 5
         print("ok:   committed examples/certs/grover_pred_037 agrees (JSON modulo machine fields)")
+        assert masked(read(os.path.join(runs[0], "certificate.json"))) == \
+            masked(read(os.path.join(EXAMPLE, "certificate.json"))), "certificate.json bytes"
+        assert cert["schema_version"] == "1.3.0" and "hardware" not in cert
+        print("ok:   without --profile: certificate.json byte-identical to the committed one "
+              "outside reference_configuration (schema_version 1.3.0, no hardware)")
+
+        # --profile ibm_kyiv (Stage 11b)
+        out = os.path.join(tmp, "kyiv")
+        rc, so, se = certify(args.cqr, src, out, "--profile", "ibm_kyiv", "--report")
+        assert rc == 0, (rc, so, se)
+        kc, _ = check_dir(out, validator)
+        for f in ("Cert.lean", f"{NAME}.qir", f"{NAME}.qasm"):
+            assert read(os.path.join(out, f), "rb") == read(os.path.join(EXAMPLE, f), "rb"), f
+        line = check_hardware(out, kc, cert, so.rstrip("\n").split("\n")[-2:], fits=False)
+        assert line == ("hardware profile ibm_kyiv: exceeds depth budget (230 > 200); "
+                        "δ_hw ≤ 7/128 + 390·1/100 = 2531/640 (vacuous)"), line
+        print("ok:   --profile ibm_kyiv: status line unchanged (exit 0); exceeds depth only "
+              "(230 > 200), delta_hw = 7/128 + 390*1/100 = 2531/640 (vacuous); hardware "
+              "recomputed; run report row 'Hardware profile'; Cert.lean / .qir / .qasm = committed")
 
         # The second worked predicate (Stage 9b): RevLib Simple ALU, bit 1 of x0
         m = sum(1 for x in range(64)
@@ -280,6 +370,19 @@ def main():
                 f"committed example differs: {f}"
         assert without(ac, MACHINE) == without(ea, MACHINE), "committed certificate.json"
         assert ea["reference_configuration"]["kernel_check"]["runs"] == 5
+        assert masked(read(os.path.join(out, "certificate.json"))) == \
+            masked(read(os.path.join(exa, "certificate.json"))), "certificate.json bytes"
+        out_k = os.path.join(tmp, alu + "_kyiv")
+        rc, so, se = certify(args.cqr, os.path.join("examples", f"{alu}.cqr"), out_k,
+                             "--solutions", str(m), "--profile", "ibm_kyiv", "--report")
+        assert rc == 0, (rc, so, se)
+        akc, _ = check_dir(out_k, validator)
+        line = check_hardware(out_k, akc, ac, so.rstrip("\n").split("\n")[-2:], fits=True)
+        assert line == ("hardware profile ibm_kyiv: fits all budgets; "
+                        "δ_hw ≤ 833/2048 + 345·1/100 = 39493/10240 (vacuous)"), line
+        print("ok:   simple_alu_x0_1: certificate.json byte-identical to the committed one outside "
+              "reference_configuration; --profile ibm_kyiv: fits all budgets, delta_hw = "
+              "833/2048 + 345*1/100 = 39493/10240 (vacuous: G*p_bar = 3.45 >= 1)")
         print(f"ok:   second predicate {alu} (M = 30 from the SyReC semantics): `{last}` (exit 0; "
               "r = 1, delta 833/2048, grade (16, 145, 60, 10), front end validated on 2^6 "
               "inputs); committed examples/certs/simple_alu_x0_1 agrees")

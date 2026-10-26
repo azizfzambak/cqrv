@@ -1,6 +1,7 @@
 import CQRV.Grades.Basic
 import CQRV.Grades.Order
 import CQRV.Grades.Hardware
+import CQRV.Grades.Profile
 import CQRV.Realizability.Basic
 import CQRV.Realizability.Spec
 import CQRV.Realizability.Realizes

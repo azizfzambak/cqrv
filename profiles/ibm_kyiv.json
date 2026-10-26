@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "name": "ibm_kyiv",
+  "note": "Illustrative figures of the report (v3, §3.3.2–3.3.3, Table 3.5), not calibration data of the device. Routing, native-gate translation and calibration noise are outside the trust boundary (§5.3.1).",
+  "source": {
+    "w": "report §3.3.2 and Table 3.5: 127 qubits (Eagle r3, 127 superconducting transmon qubits)",
+    "d": "report Table 3.5: ~200 layers, coherence-limited; §3.3.3: T1/t_gate ≈ 100 μs/500 ns ≈ 200",
+    "t": "report Table 3.5: native RZ gates, no distillation overhead on NISQ (not limiting: null)",
+    "a": "report Table 3.5: available within the 127-qubit envelope",
+    "t_gate_ns": "report §3.3.3: t_gate ≈ 500 ns (T1/t_gate ≈ 100 μs/500 ns)",
+    "t_T_ns": "the report gives no T-gate duration (null)",
+    "t1_ns": "report Table 3.5: T1 ≈ 100 μs (§3.3.2: median T1 ≈ 95–263 μs)",
+    "p_bar": "report §3.3.3: current two-qubit error rates of about 10^-2 (§3.3.2: median two-qubit gate errors around 10^-2)"
+  },
+  "budget": {"w": 127, "d": 200, "t": null, "a": 127},
+  "t_gate_ns": 500,
+  "t_T_ns": null,
+  "t1_ns": 100000,
+  "p_bar": "0.01"
+}

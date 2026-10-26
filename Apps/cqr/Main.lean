@@ -55,6 +55,13 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   (`validateFrontEnd`; a disagreement is a `front_end_mismatch` diagnostic, exit 1, nothing
   written) and `trust_boundary.front_end` says so. `--report` also writes `run_report.md` and
   `run_report.json` (Table 8.5.2, measured values; `CQRV.Certify.RunReport`).
+  Stage 11b: `--profile <name|path>` (`profiles/<name>.json`, or a path) checks the measured
+  grade against the declared budget and computes `δ_hw = δ + G·p̄` (report §3.3.2–3.3.3);
+  `certificate.json` gets the object `hardware` (schema v1.4.0), the run report a row
+  "Hardware profile", and a second line after the status line says whether the grade fits and
+  whether the bound is vacuous. Hardware fitness is not part of "certified" and does not change
+  the exit code; a profile that cannot be read: message, exit 2, nothing written. Without
+  `--profile` every output is as before.
 -/
 
 open CQRV CQRV.DSL CQRV.Matching CQRV.Synthesis CQRV.Certify CQRV.Emit
@@ -71,6 +78,7 @@ def usage : String :=
     "  synthesize <file> --grover [--iterations r] [--solutions M] [--json] [--layers]\n" ++
     "  check <file> --truth-table\n" ++
     "  certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k] [--report]\n" ++
+    "          [--profile name|path]\n" ++
     "  emit <file> --format qir|qasm [--iterations r] [--solutions M] [--oracle]\n"
 
 /-- Report §4.2.2 — parse and surface-check a source file; also returns the position of the
@@ -302,27 +310,32 @@ def runEmit (path : String) (fmt : EmitFormat) (iters solutions : Option Nat) (o
       IO.print (match fmt with | .qir => emitQIR name C | .qasm => emitQASM name C)
       return 0
 
-/-- Parse `[--solutions M] [--iterations r] [--out dir] [--bench k] [--report]` in any order. -/
-def certifyFlags :
-    List String → Option (Option Nat × Option Nat × Option String × Option Nat × Bool)
-  | [] => some (none, none, none, none, false)
+/-- Parse `[--solutions M] [--iterations r] [--out dir] [--bench k] [--report]
+[--profile name|path]` in any order. -/
+def certifyFlags : List String →
+    Option (Option Nat × Option Nat × Option String × Option Nat × Bool × Option String)
+  | [] => some (none, none, none, none, false, none)
   | "--solutions" :: m :: rest => do
     let m ← m.toNat?
-    let (_, r, o, b, p) ← certifyFlags rest
-    return (some m, r, o, b, p)
+    let (_, r, o, b, p, h) ← certifyFlags rest
+    return (some m, r, o, b, p, h)
   | "--iterations" :: r :: rest => do
     let r ← r.toNat?
-    let (m, _, o, b, p) ← certifyFlags rest
-    return (m, some r, o, b, p)
+    let (m, _, o, b, p, h) ← certifyFlags rest
+    return (m, some r, o, b, p, h)
   | "--out" :: o :: rest => do
-    let (m, r, _, b, p) ← certifyFlags rest
-    return (m, r, some o, b, p)
+    let (m, r, _, b, p, h) ← certifyFlags rest
+    return (m, r, some o, b, p, h)
   | "--bench" :: k :: rest => do
     let k ← k.toNat?
     guard (k ≥ 1)
-    let (m, r, o, _, p) ← certifyFlags rest
-    return (m, r, o, some k, p)
-  | "--report" :: rest => (certifyFlags rest).map fun (m, r, o, b, _) => (m, r, o, b, true)
+    let (m, r, o, _, p, h) ← certifyFlags rest
+    return (m, r, o, some k, p, h)
+  | "--report" :: rest =>
+    (certifyFlags rest).map fun (m, r, o, b, _, h) => (m, r, o, b, true, h)
+  | "--profile" :: h :: rest => do
+    let (m, r, o, b, p, _) ← certifyFlags rest
+    return (m, r, o, b, p, some h)
   | _ => none
 
 /-- The median of a non-empty list (the lower middle element for an even length). -/
@@ -341,14 +354,16 @@ def secs (ms : Nat) : String :=
   let c := (ms + 5) / 10
   s!"{c / 100}.{if c % 100 < 10 then "0" else ""}{c % 100} s"
 
-/-- `cqr certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k] [--report]` —
+/-- `cqr certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k] [--report]
+[--profile name|path]` —
 report §5.1.3, §8.4.1, §8.4.4, §9.5.1 (Stage 8b): check → extract → match → synthesize (`r = r⋆`
 unless given) → front-end validation (Stage 9b) → generate `Cert.lean` → kernel check
 (`lake env lean`) → axiom audit → write `certificate.json`, `<name>.qir`, `<name>.qasm` (from the
 same circuit) and, with `--report`, `run_report.md` / `run_report.json` → status line.
-`--bench k` repeats the kernel check `k + 1` times and records the median of the last `k`. -/
+`--bench k` repeats the kernel check `k + 1` times and records the median of the last `k`.
+`--profile` (Stage 11b): the hardware check; the profile is read before anything is written. -/
 def runCertify (path : String) (solutions iters : Option Nat) (out : Option String)
-    (bench : Option Nat) (report : Bool) : IO UInt32 := do
+    (bench : Option Nat) (report : Bool) (profile : Option String) : IO UInt32 := do
   let src ← IO.FS.readFile path
   match ← frontEnd path, ← signature path solutions with
   | .error d, _ | _, .error d => IO.println d.toJson.compress; return 1
@@ -377,6 +392,11 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
         (← IO.FS.readFile "lake-manifest.json") with
       | .ok c => pure c
       | .error e => IO.eprintln s!"cqr certify: {e}"; return 2
+    let prof ← match profile with
+      | none => pure none
+      | some arg => match ← loadProfile arg with
+        | .ok ph => pure (some ph)
+        | .error e => IO.eprintln s!"cqr certify: {e}"; return 2
     let q := CertRequest.ofInstance tp.name src gi M
     let text := renderCert q
     let dir := (out.getD s!"certs/{tp.name}").dropEndWhile (fun c => c == '/' || c == '\\')
@@ -410,9 +430,11 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
         gi.n M q.delta cfg feText with
       | .ok c => pure c
       | .error e => IO.eprintln s!"cqr certify: {e}"; return 1
+    let hw := prof.map fun (p, h) =>
+      HardwareCheck.of p h base.grade base.delta base.gateCounts.total
     let cert := { base with
       proofHash := some (proofHash text cfg.lean cfg.mathlib cfg.physlib), axioms := last.axioms,
-      status, theoremName := some q.theoremName, obligations }
+      status, theoremName := some q.theoremName, obligations, hardware := hw }
     -- compact, keys sorted (canonical, as `circuit_hash` and `CertifyTool sample`)
     IO.FS.writeFile (file "certificate.json") (cert.toJson.compress ++ "\n")
     IO.FS.writeFile (file s!"{tp.name}.qir") (emitQIR tp.name gi.circuit)
@@ -429,7 +451,8 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
           pattern := gi.entry.name, subst, sides, net := gi.net, oracle := gi.oracle,
           diffusion := dif, circuit := gi.circuit, n := gi.n, M, r := gi.r, delta := q.delta,
           frontEnd := fe, theoremName := q.theoremName, certPath, timing,
-          axioms := last.axioms, statusLine, certified := status == .certified }
+          axioms := last.axioms, statusLine, certified := status == .certified,
+          hardware := hw }
       IO.FS.writeFile (file "run_report.md") rd.toMarkdown
       IO.FS.writeFile (file "run_report.json") (rd.toJson.pretty ++ "\n")
     let kms := match timing.kernelMs with | some k => s!", {secs k} kernel" | none => ""
@@ -441,6 +464,7 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
       {file "run_report.json"}" else ""}"
     IO.println s!"front end: {feText}"
     IO.println statusLine
+    if let some h := hw then IO.println h.statusLine
     return if status == .certified then 0 else 3
 
 def main (args : List String) : IO UInt32 := do
@@ -470,7 +494,7 @@ def main (args : List String) : IO UInt32 := do
     | none => IO.eprint usage; return 2
   | "certify" :: file :: flags =>
     match certifyFlags flags with
-    | some (m, r, o, b, p) => runCertify file m r o b p
+    | some (m, r, o, b, p, h) => runCertify file m r o b p h
     | none => IO.eprint usage; return 2
   | "emit" :: file :: flags =>
     match emitFlags flags with

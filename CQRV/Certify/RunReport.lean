@@ -16,7 +16,10 @@ circuits, the kernel-check timing and the audit. Each row also carries a note sa
 status covers; the Markdown file lists the notes under the table. Stage 1 has two rows (Stage 9b
 review, item 4): 1a the parser and surface checker (declared trust boundary, shared by both sides
 of the front-end comparison) and 1b the typed AST → network translation (exhaustively validated
-on 2ⁿ inputs; declared trust boundary for n > 16).
+on 2ⁿ inputs; declared trust boundary for n > 16). With `--profile` (Stage 11b, decision 2 of
+the tasks) a last row "Hardware profile" reports the check against the declared profile, with
+its own status `checked against declared profile (not a proof about hardware)`; without it the
+report is unchanged.
 -/
 
 @[expose] public section
@@ -31,6 +34,8 @@ inductive Verification where
   | exhaustivelyValidated
   | declaredTrustBoundary
   | unverified
+  /-- Stage 11b: the grade and δ_hw against a declared hardware profile -/
+  | checkedAgainstProfile
   deriving Repr, DecidableEq, Inhabited
 
 /-- The words of decision 4. -/
@@ -39,6 +44,7 @@ def Verification.name : Verification → String
   | .exhaustivelyValidated => "exhaustively validated"
   | .declaredTrustBoundary => "declared trust boundary"
   | .unverified => "unverified"
+  | .checkedAgainstProfile => "checked against declared profile (not a proof about hardware)"
 
 /-- Report §8.5.2 — one row of Table 8.5.2, plus what the status covers (`note`). -/
 structure ReportRow where
@@ -76,6 +82,8 @@ structure RunData where
   axioms : List String
   statusLine : String
   certified : Bool
+  /-- Stage 11b: the check against `--profile` -/
+  hardware : Option HardwareCheck := none
   deriving Inhabited
 
 /-- `(w, d, t, a)` -/
@@ -174,12 +182,32 @@ def RunData.rows (d : RunData) : List ReportRow :=
       note := "emitter unverified; translation-validated by re-parse in tests/diff \
         (check_emit.sh, certify_check.py), not in this run; trust_boundary.emitted = QIR text" } ]
 
+/-- Report §3.3.2–3.3.3 — the row "Hardware profile" (Stage 11b): per-component check and
+`δ_hw`, from the run's grade, `δ` and `G`. -/
+def hardwareRow (h : HardwareCheck) : ReportRow :=
+  let comp := "; ".intercalate (h.components.map fun c =>
+    match c.budget with
+    | some b => s!"{c.name} {c.required} / {b}: {if c.fits then "fits" else "exceeds"}"
+    | none => s!"{c.name} {c.required} / —: not limiting")
+  { stage := "Hardware profile",
+    input := s!"profile {h.profile} (profile_hash {h.profileHash.take 12}…), grade, δ, G",
+    output := h.statusLine,
+    verification := .checkedAgainstProfile,
+    resources := s!"{comp}; G = {h.G}",
+    note := s!"declared profile figures, not calibration data; {hardwareNote} (report §5.3.1); \
+      not part of the certified status (the certificate is about the ideal channel)" }
+
+/-- Report §8.5.2 — the rows of the run report: Table 8.5.2, then the hardware row if a
+profile was given. -/
+def RunData.allRows (d : RunData) : List ReportRow :=
+  d.rows ++ (d.hardware.map fun h => [hardwareRow h]).getD []
+
 /-- A Markdown table cell (`|` escaped, no newlines). -/
 def mdCell (s : String) : String := (s.replace "|" "\\|").replace "\n" " "
 
 /-- Report §8.5.2 — the run report as Markdown: status line, Table 8.5.2, notes. -/
 def RunData.toMarkdown (d : RunData) : String :=
-  let rows := d.rows
+  let rows := d.allRows
   let header := s!"# Run report: {d.name}\n\n\
     Report §8.5.2 (Table 8.5.2 shape), Stage 9b decision 4: every resource is a measured value \
     of this run, never a report target.\n\n\
@@ -198,7 +226,7 @@ def RunData.toJson (d : RunData) : Json :=
     [("name", Json.str d.name), ("source", Json.str d.source),
      ("instance", Json.mkObj [("n", d.n), ("M", d.M), ("r", d.r)]),
      ("status", Json.str d.statusLine), ("certified", Json.bool d.certified),
-     ("rows", Json.arr (d.rows.map fun r => Json.mkObj
+     ("rows", Json.arr (d.allRows.map fun r => Json.mkObj
         [("stage", Json.str r.stage), ("input", Json.str r.input), ("output", Json.str r.output),
          ("verification", Json.str r.verification.name), ("resources", Json.str r.resources),
          ("note", Json.str r.note)]).toArray)]

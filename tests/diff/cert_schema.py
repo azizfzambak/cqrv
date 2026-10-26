@@ -1,6 +1,7 @@
-"""Certificate JSON schema v1.3.0 (report §8.4.2, §8.4.4, §9.5.3; Stage 8a, reviewer
+"""Certificate JSON schema v1.4.0 (report §8.4.2, §8.4.4, §9.5.3; Stage 8a, reviewer
 decisions 2 and 3; Stage 8b: theorem, obligations, machine fields; Stage 8b review:
-trust_boundary.front_end; Stage 9b: front_end after the exhaustive front-end validation).
+trust_boundary.front_end; Stage 9b: front_end after the exhaustive front-end validation;
+Stage 11b: the optional object `hardware`, present iff schema_version is "1.4.0").
 
 Builds the Stage 8a certificate of examples/grover_pred_037.cqr in Lean (scripts/CertifyTool.lean
 `sample`: no kernel check, no axiom audit) and checks that
@@ -16,6 +17,9 @@ Builds the Stage 8a certificate of examples/grover_pred_037.cqr in Lean (scripts
     obligation or with sorryAx, "certificate with tracked obligations" without obligations, and
     "not yet audited" with a theorem or a kernel_check are rejected. (The certificates written by
     `cqr certify` are checked by tests/diff/certify_check.py.)
+  * Stage 11b: the sample with a `hardware` object and schema_version "1.4.0" validates (also
+    with p_bar null); `hardware` under "1.3.0", "1.4.0" without `hardware`, and malformed
+    `hardware` objects are rejected.
 
 Usage: python -I tests/diff/cert_schema.py --cqr <path to cqr>   (after `lake build`)
 """
@@ -141,6 +145,35 @@ def main():
                       "evaluator; not kernel-checked")),
         "front_end free text": mutated(lambda c: c["trust_boundary"].update(front_end="verified")),
         "missing front_end": mutated(lambda c: c["trust_boundary"].pop("front_end")),
+    })
+    hw = {"profile": "ibm_kyiv", "profile_hash": "0" * 64,
+          "components": {"w": {"required": 15, "budget": 127, "fits": True},
+                         "d": {"required": 230, "budget": 200, "fits": False},
+                         "t": {"required": 72, "budget": None, "fits": True},
+                         "a": {"required": 7, "budget": 127, "fits": True}},
+          "fits": False, "G": 390, "p_bar": "1/100", "delta_hw": "2531/640", "vacuous": True,
+          "note": "routing, native gates and calibration are outside the trust boundary"}
+
+    def with_hw(f=lambda h: None, version="1.4.0"):
+        def g(c):
+            h = copy.deepcopy(hw)
+            f(h)
+            c.update(schema_version=version, hardware=h)
+        return mutated(g)
+
+    validator.validate(with_hw())
+    validator.validate(with_hw(lambda h: h.update(p_bar=None, delta_hw=None, vacuous=None)))
+    print("ok:   schema v1.4.0: an envelope with `hardware` validates (also without p_bar)")
+    bad.update({
+        "hardware under 1.3.0": with_hw(version="1.3.0"),
+        "1.4.0 without hardware": mutated(lambda c: c.update(schema_version="1.4.0")),
+        "hardware without note": with_hw(lambda h: h.pop("note")),
+        "hardware note free text": with_hw(lambda h: h.update(note="calibrated")),
+        "hardware float delta_hw": with_hw(lambda h: h.update(delta_hw="3.95")),
+        "hardware component without budget": with_hw(lambda h: h["components"]["d"].pop("budget")),
+        "hardware extra component": with_hw(lambda h: h["components"].update(
+            x={"required": 1, "budget": 1, "fits": True})),
+        "hardware short profile hash": with_hw(lambda h: h.update(profile_hash="abc")),
     })
     for label, c in bad.items():
         if validator.is_valid(c):

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CQRV hardware profile, schema v1.0.0",
+  "description": "Report §3.1.3, §3.3.2–3.3.3 (ρNISQ, Table 3.5); DECISIONS.md 2026-10-26 (Stage 11b, decision 1). Read by `cqr certify --profile` (CQRV.Certify.Profile, which enforces the same rules). Every figure is a natural number (durations in ns) or null; null means the source gives no figure or the component is not limiting (Table 3.5's native T-count). Every numeric field has a non-empty `source` entry saying where the figure comes from (a citation or a report section); no figure is invented. The figures are declared, not calibration data: routing, native gates and calibration are outside the trust boundary (§5.3.1).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "name", "source", "budget", "t_gate_ns", "t_T_ns", "t1_ns",
+               "p_bar"],
+  "$defs": {
+    "optNat": {"oneOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
+    "cite": {"type": "string", "minLength": 1}
+  },
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+    "note": {"type": "string"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["w", "d", "t", "a", "t_gate_ns", "t_T_ns", "t1_ns", "p_bar"],
+      "properties": {
+        "w": {"$ref": "#/$defs/cite"}, "d": {"$ref": "#/$defs/cite"},
+        "t": {"$ref": "#/$defs/cite"}, "a": {"$ref": "#/$defs/cite"},
+        "t_gate_ns": {"$ref": "#/$defs/cite"}, "t_T_ns": {"$ref": "#/$defs/cite"},
+        "t1_ns": {"$ref": "#/$defs/cite"}, "p_bar": {"$ref": "#/$defs/cite"}
+      }
+    },
+    "budget": {
+      "description": "Report §3.3.2: the budget b of the fibre-membership test r ≤ b; null = not limiting (not compared).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["w", "d", "t", "a"],
+      "properties": {
+        "w": {"$ref": "#/$defs/optNat"}, "d": {"$ref": "#/$defs/optNat"},
+        "t": {"$ref": "#/$defs/optNat"}, "a": {"$ref": "#/$defs/optNat"}
+      }
+    },
+    "t_gate_ns": {"description": "typical two-qubit gate duration t_gate of ρNISQ", "$ref": "#/$defs/optNat"},
+    "t_T_ns": {"description": "T-gate duration t_T of ρNISQ", "$ref": "#/$defs/optNat"},
+    "t1_ns": {"description": "coherence time T1 from which the depth budget is derived", "$ref": "#/$defs/optNat"},
+    "p_bar": {
+      "description": "Mean per-operation error p̄ of δ_hw ≤ δ + G·p̄ (§3.3.3), an exact unsigned decimal in [0, 1], or null.",
+      "oneOf": [{"type": "string", "pattern": "^(0(\\.[0-9]+)?|1(\\.0+)?)$"}, {"type": "null"}]
+    }
+  }
+}

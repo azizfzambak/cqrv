@@ -6,6 +6,7 @@ public import CQRV.Certify.FrontEnd
 public import CQRV.DSL.Basic
 public import CQRV.Matching.Basic
 public import CQRV.Synthesis.Basic
+public import CQRV.Grades.Profile
 
 /-!
 # CQRV.Certify.Certificate
@@ -26,7 +27,10 @@ reviewer decisions 2 and 3).
   and the axiom audit (`CQRV.Certify.Audit`). Schema v1.1.0 (Stage 8b) adds `theorem`,
   `obligations` and the machine fields of `reference_configuration`; v1.2.0 (Stage 8b review)
   adds `trust_boundary.front_end` (`frontEndTrust`); v1.3.0 (Stage 9b, decision 1) lets it be
-  the exhaustive-validation wording (`frontEndValidatedText n`, `CQRV.Certify.FrontEnd`).
+  the exhaustive-validation wording (`frontEndValidatedText n`, `CQRV.Certify.FrontEnd`);
+  v1.4.0 (Stage 11b, decision 5) adds the optional object `hardware` (`cqr certify --profile`).
+  A certificate without `hardware` is written exactly as before, `schema_version` "1.3.0"
+  included (it is valid under both); one with `hardware` says "1.4.0".
 -/
 
 @[expose] public section
@@ -200,18 +204,42 @@ structure Certificate where
   obligations : List String
   /-- Stage 9b: the declared front-end boundary (`FrontEndCheck.trustText`) -/
   frontEnd : String
+  /-- Stage 11b: the check against a declared hardware profile (`--profile`) -/
+  hardware : Option HardwareCheck := none
   deriving Repr
 
-/-- The schema version written to `schema_version` (semver). -/
+/-- The schema version written to `schema_version` (semver) by a certificate without
+`hardware`: unchanged since Stage 9b, so those certificates stay byte-identical. -/
 def schemaVersion : String := "1.3.0"
+
+/-- The schema version of a certificate with `hardware` (Stage 11b, decision 5). -/
+def schemaVersionHardware : String := "1.4.0"
+
+/-- The trust-boundary note of the `hardware` object (§5.3.1). -/
+def hardwareNote : String :=
+  "routing, native gates and calibration are outside the trust boundary"
+
+/-- Report §3.3.2–3.3.3, §9.5.3 — the `hardware` object (schema v1.4.0). -/
+def hardwareJson (h : HardwareCheck) : Json :=
+  let ratOpt : Option Rat → Json := fun | some q => Json.str (toString q) | none => Json.null
+  Json.mkObj
+    [("profile", Json.str h.profile), ("profile_hash", Json.str h.profileHash),
+     ("components", Json.mkObj (h.components.map fun c => (c.key, Json.mkObj
+        [("required", c.required),
+         ("budget", match c.budget with | some b => b | none => Json.null),
+         ("fits", Json.bool c.fits)]))),
+     ("fits", Json.bool h.fits), ("G", h.G), ("p_bar", ratOpt h.pBar),
+     ("delta_hw", ratOpt h.deltaHw),
+     ("vacuous", match h.vacuous with | some v => Json.bool v | none => Json.null),
+     ("note", Json.str hardwareNote)]
 
 /-- Report §9.5.3 — the JSON envelope (`docs/certificate.schema.json`). -/
 def Certificate.toJson (c : Certificate) : Json :=
   let str (s : String) : Json := Json.str s
   let ratStr (q : Rat) : Json := Json.str (toString q)
   let optStr : Option String → Json := fun | some s => str s | none => Json.null
-  Json.mkObj
-    [("schema_version", str schemaVersion),
+  Json.mkObj <|
+    [("schema_version", str (if c.hardware.isSome then schemaVersionHardware else schemaVersion)),
      ("pattern", str c.pattern),
      ("instance", Json.mkObj [("n", c.n), ("M", c.M), ("r", c.r)]),
      ("spec", Json.mkObj [("epsilon", ratStr c.epsilon), ("delta", ratStr c.delta),
@@ -245,7 +273,8 @@ def Certificate.toJson (c : Certificate) : Json :=
      ("theorem", optStr c.theoremName),
      ("axioms", Json.arr (c.axioms.map str).toArray),
      ("obligations", Json.arr (c.obligations.map str).toArray),
-     ("status", str c.status.name)]
+     ("status", str c.status.name)] ++
+    (c.hardware.map fun h => [("hardware", hardwareJson h)]).getD []
 
 /-- Report §6.2.4, §6.3.2 — the restoration conjunct as stated in the certificate. -/
 def restorationText : String := "AncRestore: all ancillae |0…0⟩ on density operators"

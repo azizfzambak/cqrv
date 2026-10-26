@@ -151,6 +151,54 @@ def xorNet : Network := ⟨2, #[.input 0, .input 1, .xor 0 1], [2]⟩
 #guard symDiff [] [.anc 1, .data 3, .anc 0] == [.data 3, .anc 0, .anc 1]
 example : symDiff [.anc 1, .data 0] [.data 2] = [.data 0, .data 2, .anc 1] := by decide +kernel
 
+/-! ## Hardware profiles (Stage 11b, §3.3.2–3.3.3)
+
+`profileOfJson` on inline profile texts (the file `profiles/ibm_kyiv.json` itself is read by
+`tests/diff/certify_check.py` through `cqr certify --profile ibm_kyiv`). -/
+
+/-- The source entries of a profile, all eight fields. -/
+def sourceAll : String :=
+  "{\"w\":\"x\",\"d\":\"x\",\"t\":\"x\",\"a\":\"x\",\"t_gate_ns\":\"x\",\"t_T_ns\":\"x\",\
+    \"t1_ns\":\"x\",\"p_bar\":\"x\"}"
+
+/-- A profile text with the given budget `d`, `p_bar` and `source`. -/
+def profileText (d pBar : String) (src : String := sourceAll) : String :=
+  "{\"schema_version\":\"1.0.0\",\"name\":\"p\",\"source\":" ++ src ++
+    ",\"budget\":{\"w\":127,\"d\":" ++ d ++ ",\"t\":null,\"a\":127},\"t_gate_ns\":500,\
+    \"t_T_ns\":null,\"t1_ns\":100000,\"p_bar\":" ++ pBar ++ "}"
+
+/-- Parse a profile text. -/
+def readProfile (s : String) : Except String Profile := Lean.Json.parse s >>= profileOfJson
+
+#guard match readProfile (profileText "200" "\"0.01\"") with
+  | .ok p => p.budget == ⟨some 127, some 200, none, some 127⟩ && p.pBar == some (1 / 100) &&
+      p.tGateNs == some 500 && p.tTNs == none && p.t1Ns == some 100000
+  | .error _ => false
+#guard match readProfile (profileText "null" "null") with
+  | .ok p => p.budget.d == none && p.pBar == none
+  | .error _ => false
+-- rejected: p̄ > 1, p̄ as a number, a negative budget, a missing source entry, an unknown key
+#guard (readProfile (profileText "200" "\"1.5\"")).toBool == false
+#guard (readProfile (profileText "200" "0.01")).toBool == false
+#guard (readProfile (profileText "-1" "\"0.01\"")).toBool == false
+#guard (readProfile (profileText "200" "\"0.01\"" "{\"w\":\"x\"}")).toBool == false
+#guard (readProfile ((profileText "200" "\"0.01\"").replace "\"name\"" "\"x\":1,\"name\"")).toBool
+  == false
+#guard profilePath "ibm_kyiv" == "profiles/ibm_kyiv.json"
+#guard profilePath "my/kyiv.json" == "my/kyiv.json"
+
+/-- The Grover hardware check against `p` (G = 390, δ = 7/128). -/
+def groverHw : Option HardwareCheck := (readProfile (profileText "200" "\"0.01\"")).toOption.map
+  fun p => HardwareCheck.of p "h" ⟨15, 230, 72, 7⟩ (7 / 128) 390
+
+#guard groverHw.map (hardwareJson · |>.compress) == some
+  ("{\"G\":390,\"components\":{\"a\":{\"budget\":127,\"fits\":true,\"required\":7},\
+    \"d\":{\"budget\":200,\"fits\":false,\"required\":230},\
+    \"t\":{\"budget\":null,\"fits\":true,\"required\":72},\
+    \"w\":{\"budget\":127,\"fits\":true,\"required\":15}},\"delta_hw\":\"2531/640\",\
+    \"fits\":false,\"note\":\"" ++ hardwareNote ++ "\",\"p_bar\":\"1/100\",\"profile\":\"p\",\
+    \"profile_hash\":\"h\",\"vacuous\":true}")
+
 /-! ## Axioms of the lemmas a certificate instantiates (§9.5.1) -/
 
 /-- info: 'CQRV.Certify.sin_sq_odd_mul' depends on axioms: [propext, Classical.choice, Quot.sound] -/

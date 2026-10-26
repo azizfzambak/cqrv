@@ -18,6 +18,7 @@ Layout: see CLAUDE.md. Obligations: `docs/SORRIES.md`. Decisions: `docs/DECISION
 ```bash
 lake exe cqr certify examples/grover_pred_037.cqr --report
 lake exe cqr certify examples/simple_alu_x0_1.cqr --solutions 30 --report   # M from the harness
+lake exe cqr certify examples/grover_pred_037.cqr --profile ibm_kyiv  # + declared hardware budget
 scripts/ci_local.sh                                                         # local CI
 ```
 
