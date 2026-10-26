@@ -10,6 +10,8 @@ kernel-checked, axioms exactly `propext`, `Classical.choice`, `Quot.sound`, meas
 exact δ, front end exhaustively validated (`examples/certs/`, with run reports). Acceptance is
 the output of `scripts/ci_local.sh` (CI is not run remotely). Summary, open obligations, trust
 boundaries and the report errata: `docs/M2_REPORT.md`.
+Current state (Stages 0–12a, one page: machine-checked results, certificates, trust
+boundaries, open items): `docs/PROJECT_STATUS.md`.
 
 Layout: see CLAUDE.md. Obligations: `docs/SORRIES.md`. Decisions: `docs/DECISIONS.md`.
 
