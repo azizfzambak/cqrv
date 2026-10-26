@@ -43,6 +43,7 @@ The chain-shaped diffusion of the earlier stages, (15, 230, 72, 7), is kept as `
 |---|---|
 | Diamond norm and the domination lemma ‖Λ₁ρ − Λ₂ρ‖₁ ≤ ‖Λ₁ − Λ₂‖⋄, to instantiate Theorem 3.3b concretely | Phase III proof |
 | Restoration proof for the few-ancilla MCZ: Stage 12b measured Khattar–Gidney §5.3 + relative-phase Toffolis (`--shape few:log`, **unproved**): Grover (10, 172, 96, 2) vs tree (15, 134, 72, 7); v2 (10, 16, 28, 2) not reproduced (`docs/MCZ_NOTES.md`) | Stage 12c, reviewer's choice |
+| Planned SORRIES.md row (Stage 12c): restoration of the KG §5.3 MCZ (relative-phase Toffoli pairs), proof shape (i)–(iv) recorded there; candidate B stays `--shape few:log`, unproved, the tree stays the certified default | Stage 12c proof (planned) |
 | `synthesizeOracle_succeeds` (synthesis succeeds on every well-formed one-output network) | planned row |
 | Theorem 3.1 in categorical form; `toNetwork` well-formedness proof | documented gaps |
 | Remote CI (only `scripts/ci_local.sh` has run) | engineering, reviewer's choice |

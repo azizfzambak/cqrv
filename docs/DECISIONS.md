@@ -661,3 +661,9 @@ Decision:
 Why: needed to implement the task; the task leaves these open.
 Rejected: (2) inventing a truncated timestep not in the text; (3) a 7-T Toffoli on conditionally clean targets (exact but 3 T more per gate, and not the relative-phase construction the v2 text named).
 Report §: 6.1.4, 6.2.2, 8.2, 9.5.2.
+
+## 2026-10-26 — Stage 12b review: candidate B recorded, the tree stays the certified default, 12c planned (reviewer decision)
+Decision: (1) Stage 12b accepted. Candidate B — Khattar–Gidney 2025 §5.3 (2 clean ancillae) with 4-T relative-phase Toffoli pairs — gives Grover r⋆ = 2 for grover_pred_037 (w, d, t, a) = (10, 172, 96, 2), which fits the declared ibm_kyiv depth budget (172 ≤ 200). It is **unproved** and available only as `cqr synthesize --diffusion n --shape few:log` / `cqr synthesize <file> --grover --shape few:log`; every output says "unproved". (2) The balanced-tree diffusion (Stage 12a, (15, 134, 72, 7)) stays the certified default of `cqr certify` and `cqr emit`; no certificate, generator or proof file changes. (3) The v2 claim (10, 16, 28, 2) is recorded as not reproduced by the surveyed constructions (w and a reached by B, t and d not), not as a lower bound. (4) Stage 12c is planned as a SORRIES.md row (Status planned, no `sorry` in code): restoration of the KG §5.3 MCZ, with the four-part proof shape (i) `rtof = D · Toffoli`, (ii) the diagonal-commutation cancellation lemma, (iii) KG Theorem 5.1 as a classical basis-state invariant, (iv) the 6b-2 basis-vector route extended to monomial gates plus `ancRestore_of_kraus` for the two MBU pairs.
+Why: reviewer decision; the measurements and the citations of the Stage 12b entries.
+Rejected: making `few:log` the default (worse t and d than the tree; unproved); candidate A for 12c (exceeds the Kyiv depth budget, 238 > 200).
+Report §: 6.2, 9.5.2, 3.1.4 (Table 3.3), 3.3.3 / Table 3.5.
