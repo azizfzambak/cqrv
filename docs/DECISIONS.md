@@ -684,3 +684,9 @@ Decision: (1) **Classical step per instance.** `mczFew_ancRestore_of_classical` 
 Why: reviewer decisions 1–5 of the Stage 12d task.
 Rejected: a `DiffusionShape.fewLog` constructor (falsifies proved shape-general statements); changing `substeps` to an exposed sort (edits a 12b definition, rejected in 12c); the restoration hypothesis at a single `a` (the Grover register is `max(oracle, diffusion)`; a widening lemma for `AncRestore` on density operators is not available); deciding `∀ x : Reg n` through Mathlib's `Fintype` instance (`Finset.pi` / multiset quotients are slow in the kernel; `allRegs` is a plain recursion); certifying `few:ladder` (not asked; label says not certified).
 Report §: 5.1.3, 6.2, 6.3.2, 8.2, 8.2.4, 8.4, 3.1.4 / Table 3.3, 9.5.1.
+
+## 2026-10-27 — Stage 12d review: kernel times of the per-instance classical step accepted
+Decision: (1) The per-instance classical step of a `--shape few:log` certificate (`classical_step : fewCheck n a₀ (plan n .logDepth) = true` by `decide +kernel`, 2ⁿ inputs) is accepted for every n ≤ 12 (the front-end limit) at its measured kernel cost (Lean profiler "type checking", single run, `LEAN_NUM_THREADS=4`, i9-13900H): **n = 8: 1.53 s, n = 10: 8.13 s, n = 12: 40.9 s**; 41 s at n = 12 is not "too slow" in the sense of the Stage 12d stop condition. The planned all-n theorem (KG Theorem 5.1, SORRIES.md row, status planned) would remove this per-instance cost: with it, `mczFew_ancRestore_of_classical`'s hypothesis is discharged once for every n and a certificate needs no 2ⁿ enumeration. (2) No `DiffusionShape.fewLog`: accepted. (3) The restoration hypothesis `∀ a, Dc.nAnc ≤ a → AncRestore n a Dc (diffU n)` of `grover_parametric_lemma_diff`: accepted.
+Why: reviewer decisions of the Stage 12d review.
+Rejected: —
+Report §: 8.4, 9.5.1, 5.1.3.

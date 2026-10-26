@@ -32,6 +32,8 @@ AncRestore n a emitted (groverOp (Network.pred net n) ^ r * hadamardU n)`, under
 
 Post-M2 note (2026-10-26, Stage 12a): the diffusion's MCZ is now a balanced AND tree (same 7 / 5 ANDs, ⌈log₂ n⌉ levels); both certificates were regenerated: grover_pred_037 (15, 230, 72, 7) → (15, 134, 72, 7), now within the declared ibm_kyiv depth budget 200 (δ_hw still vacuous, G·p̄ = 3.90); simple_alu_x0_1 (16, 145, 60, 10) → (16, 121, 60, 10); δ, G and predicate hashes unchanged, new circuit / proof hashes in DECISIONS.md (2026-10-26, Stage 12a); the chain values below stay machine-checked as `grover_pred_037_certified_statement_chain`.
 
+Post-M2 note (2026-10-27, Stage 12d): a third certificate, `examples/certs/grover_pred_037_few/` (`cqr certify --shape few:log`: the 2-ancilla diffusion, Khattar–Gidney 2025 §5.3 with Maslov 2016 relative-phase Toffoli pairs), is `certified (conditional on: solution_count = 32)` with grade (10, 172, 96, 2), δ = 7/128, kernel check 6.76 s kernel / 16.37 s wall, ibm_kyiv fits all budgets (δ_hw ≤ 2467/640, vacuous); its classical KG step is checked per instance by `decide +kernel` (1.53 s / 8.13 s / 40.9 s at n = 8 / 10 / 12; DECISIONS.md 2026-10-26 and 2026-10-27, Stage 12d); the tree certificates above are unchanged.
+
 | | `grover_pred_037` (Chapter 8) | `simple_alu_x0_1` (second predicate, Table 9.2) |
 |---|---|---|
 | Predicate | x0 ∧ x3 ∧ x7, n = 8 | RevLib Simple ALU (`simple_alu_234.src`), bit 1 of x0, n = 6: `if op = k` chain, XOR chain |
