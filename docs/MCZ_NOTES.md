@@ -47,3 +47,12 @@ The Grover a = 2 comes from the oracle of grover_pred_037, (10, 27, 8, 2).
 * w = 10, a = 2: reached by B (and w = 9, a = 1 by A); only the t and d components of the v2
   claim are unreachable with these constructions. This is a statement about the surveyed
   constructions, not a lower-bound theorem.
+
+## Stage 12c — candidate B proved for n = 8
+
+`CQRV/Grover/MczFew.lean`: `mczFew_ancRestore_8` (`mczFew 8 .logDepth` restores `anc[0]`, `anc[1]`
+and applies the phase oracle of x₀ ∧ … ∧ x₇, on density operators) and `diffusionFew_ancRestore_8`
+(the `few:log` diffusion applies 2|s⟩⟨s| − I). The relative phases cancel pair by pair for every
+target value: D(x, y, z ⊕ xy) · D(x, y, z) = 1 (`rtofPhase_pair`), so the cancellation needs no
+"conditionally clean" hypothesis. KG correctness is proved for n = 8 by `decide +kernel` (both
+variants); all n is a planned SORRIES.md row. `cqr certify` still uses the tree (Stage 12d).
