@@ -1,7 +1,8 @@
-"""Certificate JSON schema v1.4.0 (report §8.4.2, §8.4.4, §9.5.3; Stage 8a, reviewer
+"""Certificate JSON schema v1.5.0 (report §8.4.2, §8.4.4, §9.5.3; Stage 8a, reviewer
 decisions 2 and 3; Stage 8b: theorem, obligations, machine fields; Stage 8b review:
 trust_boundary.front_end; Stage 9b: front_end after the exhaustive front-end validation;
-Stage 11b: the optional object `hardware`, present iff schema_version is "1.4.0").
+Stage 11b: the optional object `hardware`, present iff schema_version is "1.4.0"; Stage 12d:
+the optional field `diffusion_shape`, present iff schema_version is "1.5.0").
 
 Builds the Stage 8a certificate of examples/grover_pred_037.cqr in Lean (scripts/CertifyTool.lean
 `sample`: no kernel check, no axiom audit) and checks that
@@ -20,6 +21,9 @@ Builds the Stage 8a certificate of examples/grover_pred_037.cqr in Lean (scripts
   * Stage 11b: the sample with a `hardware` object and schema_version "1.4.0" validates (also
     with p_bar null); `hardware` under "1.3.0", "1.4.0" without `hardware`, and malformed
     `hardware` objects are rejected.
+  * Stage 12d: diffusion_shape "few:log" with schema_version "1.5.0" validates, with and
+    without `hardware`; diffusion_shape under "1.3.0" / "1.4.0", "1.5.0" without it, and
+    diffusion_shape "tree" or free text are rejected.
 
 Usage: python -I tests/diff/cert_schema.py --cqr <path to cqr>   (after `lake build`)
 """
@@ -174,6 +178,24 @@ def main():
         "hardware extra component": with_hw(lambda h: h["components"].update(
             x={"required": 1, "budget": 1, "fits": True})),
         "hardware short profile hash": with_hw(lambda h: h.update(profile_hash="abc")),
+    })
+
+    def with_shape(shape="few:log", version="1.5.0", hardware=False):
+        def g(c):
+            if hardware:
+                c.update(hardware=copy.deepcopy(hw))
+            c.update(schema_version=version, diffusion_shape=shape)
+        return mutated(g)
+
+    validator.validate(with_shape())
+    validator.validate(with_shape(hardware=True))
+    print("ok:   schema v1.5.0: diffusion_shape few:log validates (with and without hardware)")
+    bad.update({
+        "diffusion_shape under 1.3.0": with_shape(version="1.3.0"),
+        "diffusion_shape under 1.4.0": with_shape(version="1.4.0", hardware=True),
+        "1.5.0 without diffusion_shape": mutated(lambda c: c.update(schema_version="1.5.0")),
+        "diffusion_shape tree": with_shape(shape="tree"),
+        "diffusion_shape free text": with_shape(shape="few:ladder"),
     })
     for label, c in bad.items():
         if validator.is_valid(c):

@@ -549,6 +549,247 @@ end
 /-- Report §9.1.1 (Stage 12c item 6) — the diffusion with candidate B for n = 8 is well formed. -/
 theorem diffusionFew8_WF : (diffusionCircuit 8 mczFew8).WF := by decide +kernel
 
+/-! ## Stage 12d — per-instance certification of candidate B
+
+Report §5.1.3 (per-request work is specialization and a kernel check), §6.2, §8.2 — Stage 12d
+decision 1 (DECISIONS.md 2026-10-26, Stage 12d): the restoration of `mczFew n v` for general `n`
+and variant with the classical KG fact as an **explicit hypothesis**
+(`mczFew_ancRestore_of_classical`); a certificate for a request with `n` data qubits proves the
+hypothesis for that `n` by `decide +kernel` on `fewCheck` (`2ⁿ` inputs, `fewCheck_sound`). The
+all-n theorem (KG Theorem 5.1) stays a planned SORRIES.md row. -/
+
+namespace FewSchedule
+
+/-- `MczFew.doubling` with `substepsK` (kernel-evaluable; equal by `doubling_eq`). -/
+def doublingK (n : ℕ) : List Op :=
+  ((List.range n).filter fun i => i + 2 ^ (i + 1) ≤ n).flatMap fun i =>
+    substepsK i ((List.range (2 ^ i)).map (i + ·)) ((List.range (2 ^ i + 1)).map (i + 2 ^ i + ·))
+
+/-- `MczFew.plan` with `doublingK` for `doubling`: the same schedule, evaluable by the kernel
+(`plan_eq_planK`). -/
+def planK (n : ℕ) : MczVariant → List Step × List Qubit
+  | .ladder => plan n .ladder
+  | .logDepth =>
+    let data := (List.range n).map Qubit.data
+    if n ≤ 2 then ([], data) else
+    let qs := Qubit.anc 0 :: data
+    let d := doublingK n
+    let A₁ := d.foldl applyOp (true :: List.replicate n false)
+    let (g, A₂) := greedy qs.length A₁
+    let (s₂, us) := accumulate (.anc 1) (unmarkedQubits qs A₂)
+    (stepsOf qs (d ++ g) ++ s₂, us)
+
+theorem plan_eq_planK (n : ℕ) (v : MczVariant) : plan n v = planK n v := by
+  cases v
+  · rfl
+  · simp only [plan, planK, doubling_eq, doublingK]
+
+end FewSchedule
+
+/-- `mczFew` with `FewSchedule.planK` for `plan`: the same circuit (`mczFew_eq_K`), evaluable by
+the kernel. Generated certificates name the few-ancilla MCZ as `okPayload (mczFewK n .logDepth)`. -/
+def mczFewK (n : ℕ) (v : MczVariant) : Except DSL.Diagnostic Circuit := do
+  if n == 0 then Diffusion.fail .unsupportedNetwork "the MCZ needs at least one data qubit"
+  let (steps, us) := FewSchedule.planK n v
+  if us.length == 0 || us.length > 2 then
+    Diffusion.fail .unsupportedNetwork
+      s!"few:{v.name}: {us.length} qubits left unmarked for n = {n}"
+  return ⟨n, steps.flatMap computeGates ++ phase us ++ uncomputeAll 0 steps.reverse⟩
+
+theorem mczFew_eq_K (n : ℕ) (v : MczVariant) : mczFew n v = mczFewK n v := by
+  simp only [mczFew, mczFewK, FewSchedule.plan_eq_planK]
+
+/-- `f x` for every `x : Reg n`, by recursion on `n` (`Fin.cons`): the exhaustive check over
+the `2ⁿ` inputs, evaluable by the kernel. -/
+def allRegs : (n : ℕ) → (Reg n → Bool) → Bool
+  | 0, f => f Fin.elim0
+  | n + 1, f => allRegs n (fun x => f (Fin.cons false x)) && allRegs n (fun x => f (Fin.cons true x))
+
+theorem allRegs_spec : ∀ (n : ℕ) (f : Reg n → Bool), allRegs n f = true → ∀ x, f x = true
+  | 0, f, h, x => by
+    have hx : x = Fin.elim0 := funext fun i => i.elim0
+    rw [hx]
+    exact h
+  | n + 1, f, h, x => by
+    simp only [allRegs, Bool.and_eq_true] at h
+    have hct : Fin.cons (x 0) (Fin.tail x) = x := Fin.cons_self_tail x
+    cases hx : x 0
+    · rw [hx] at hct
+      have h' := allRegs_spec n _ h.1 (Fin.tail x)
+      rwa [hct] at h'
+    · rw [hx] at hct
+      have h' := allRegs_spec n _ h.2 (Fin.tail x)
+      rwa [hct] at h'
+
+/-- Report §6.1.4, KG Theorem 5.1 for one `n` (Stage 12d decision 1) — the per-instance check of
+a schedule `p = (steps, us)` on `Reg n × Reg a`: every step passes the qubit checks, the qubits of
+the final phase are in the register, and for each of the `2ⁿ` inputs every AND target is clean
+when computed and the qubits of the final phase multiply to `x₀ ∧ … ∧ x_{n−1}`. -/
+def fewCheck (n a : ℕ) (p : List Step × List Qubit) : Bool :=
+  p.1.all (stepOk n a) && p.2.all (·.inRange n a) &&
+    allRegs n fun x =>
+      stepsPre p.1 ((x, fun _ => false) : Reg n × Reg a) &&
+        (p.2.all (·.get (runSteps p.1 ((x, fun _ => false) : Reg n × Reg a))) == allOnes x)
+
+/-- Report §6.1.4 (Stage 12d decision 1) — what `fewCheck` establishes for `plan n v`: the
+hypotheses of `mczFew_ancRestore_of_classical`, the classical KG fact among them. -/
+theorem fewCheck_sound {n a : ℕ} {v : MczVariant} (h : fewCheck n a (plan n v) = true) :
+    (plan n v).1.all (stepOk n a) = true ∧ (plan n v).2.all (·.inRange n a) = true ∧
+      ∀ x : Reg n, stepsPre (plan n v).1 ((x, fun _ => false) : Reg n × Reg a) = true ∧
+        phaseBit a n v x = allOnes x := by
+  simp only [fewCheck, Bool.and_eq_true] at h
+  obtain ⟨⟨h1, h2⟩, h3⟩ := h
+  refine ⟨h1, h2, fun x => ?_⟩
+  have hx := allRegs_spec n _ h3 x
+  simp only [Bool.and_eq_true, beq_iff_eq] at hx
+  exact ⟨hx.1, by simpa only [phaseBit, mid] using hx.2⟩
+
+/-! ### Widening the ancilla register -/
+
+section Widen
+
+variable {n a a' : ℕ}
+
+theorem inRange_mono (h : a ≤ a') {q : Qubit} (hq : q.inRange n a = true) :
+    q.inRange n a' = true := by
+  cases q <;> simp only [Qubit.inRange, decide_eq_true_eq] at hq ⊢ <;> omega
+
+theorem stepOk_mono (h : a ≤ a') {st : Step} (hok : stepOk n a st = true) :
+    stepOk n a' st = true := by
+  obtain ⟨x, y, t, cl⟩ := st
+  obtain ⟨hx, hy, ht, hxy, hxt, hyt⟩ := stepOk_spec hok
+  simp [stepOk, inRange_mono h hx, inRange_mono h hy, inRange_mono h ht, hxy, hxt, hyt]
+
+/-- Two basis states, of ancilla widths `a` and `a'`, that agree on the qubits of `Reg n × Reg a`. -/
+def Agree (n a : ℕ) {a' : ℕ} (s : Reg n × Reg a) (s' : Reg n × Reg a') : Prop :=
+  ∀ q : Qubit, q.inRange n a = true → q.get s = q.get s'
+
+theorem agree_init (x : Reg n) :
+    Agree n a ((x, fun _ => false) : Reg n × Reg a) ((x, fun _ => false) : Reg n × Reg a') := by
+  intro q _
+  cases q <;> simp [Qubit.get]
+
+theorem agree_stepRun (h : a ≤ a') {st : Step} (hok : stepOk n a st = true)
+    {s : Reg n × Reg a} {s' : Reg n × Reg a'} (hs : Agree n a s s') :
+    Agree n a (stepRun st s) (stepRun st s') := by
+  obtain ⟨x, y, t, cl⟩ := st
+  obtain ⟨hx, hy, ht, -, -, -⟩ := stepOk_spec hok
+  intro q hq
+  by_cases hqt : q = t
+  · rw [hqt]
+    cases cl <;> simp only [stepRun] <;>
+      rw [Qubit.get_set_self _ ht, Qubit.get_set_self _ (inRange_mono h ht)] <;>
+      simp only [hs x hx, hs y hy, hs t ht]
+  · cases cl <;> simp only [stepRun] <;> rw [Qubit.get_set_ne hqt, Qubit.get_set_ne hqt, hs q hq]
+
+theorem agree_runSteps (h : a ≤ a') : ∀ (steps : List Step) (s : Reg n × Reg a)
+    (s' : Reg n × Reg a'), steps.all (stepOk n a) = true → Agree n a s s' →
+    stepsPre steps s = stepsPre steps s' ∧ Agree n a (runSteps steps s) (runSteps steps s')
+  | [], _, _, _, hs => ⟨rfl, hs⟩
+  | st :: rest, s, s', hok, hs => by
+    simp only [List.all_cons, Bool.and_eq_true] at hok
+    obtain ⟨h1, h2⟩ := agree_runSteps h rest _ _ hok.2 (agree_stepRun h hok.1 hs)
+    refine ⟨?_, h2⟩
+    simp only [stepsPre, h1]
+    congr 1
+    obtain ⟨x, y, t, cl⟩ := st
+    obtain ⟨-, -, ht, -⟩ := stepOk_spec hok.1
+    cases cl <;> simp [stepPre, hs t ht]
+
+theorem all_get_congr {us : List Qubit} (hus : us.all (·.inRange n a) = true)
+    {s : Reg n × Reg a} {s' : Reg n × Reg a'} (hs : Agree n a s s') :
+    us.all (·.get s) = us.all (·.get s') := by
+  induction us with
+  | nil => rfl
+  | cons q us ih =>
+    simp only [List.all_cons, Bool.and_eq_true] at hus
+    simp only [List.all_cons]
+    rw [hs q hus.1, ih hus.2]
+
+end Widen
+
+/-! ### The restoration of `mczFew` from the classical fact -/
+
+/-- `∑_c ‖(√2)⁻¹^k‖² = 1` over the `2^k` branches of `k` measured bits. -/
+theorem sum_branches_invSqrtTwo (nb k : ℕ) (hk : nb = k) :
+    ∑ _c : Fin nb → Bool, ‖((Real.sqrt 2)⁻¹ : ℂ) ^ k‖ ^ 2 = 1 := by
+  subst hk
+  simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fun, Fintype.card_bool,
+    Fintype.card_fin, nsmul_eq_mul, norm_pow, norm_inv, Complex.norm_real, Real.norm_eq_abs,
+    abs_of_nonneg (Real.sqrt_nonneg 2)]
+  rw [← pow_mul, inv_pow, pow_mul', Real.sq_sqrt (by norm_num)]
+  push_cast
+  exact mul_inv_cancel₀ (by positivity)
+
+open scoped Kronecker in
+/-- Report §6.2.1, §6.3.2, §8.2 (Stage 12d decision 1) — **`mczFew_ancRestore_of_classical`**:
+for every `n` and variant, if `mczFew n v` is synthesized and well formed, measures one bit per
+AND, its steps pass the qubit checks on `Reg n × Reg a₀`, and the **classical KG fact** holds
+on `Reg n × Reg a₀` (every AND target clean when computed; the qubits of the final phase multiply
+to `x₀ ∧ … ∧ x_{n−1}`, for every input `x`), then on every register `a ≥ a₀` it restores its
+ancillae and applies the phase oracle of `P_all`, on density operators. The classical fact is a
+hypothesis; `fewCheck_sound` supplies it for one `n` by kernel evaluation. -/
+theorem mczFew_ancRestore_of_classical {n a₀ : ℕ} {v : MczVariant} {C : Circuit}
+    (hC : mczFew n v = .ok C) (hWF : C.WF) (hnb : C.nBits = nAnd (plan n v).1)
+    (hok : (plan n v).1.all (stepOk n a₀) = true)
+    (hus : (plan n v).2.all (·.inRange n a₀) = true)
+    (hcl : ∀ x : Reg n, stepsPre (plan n v).1 ((x, fun _ => false) : Reg n × Reg a₀) = true ∧
+      phaseBit a₀ n v x = allOnes x)
+    {a : ℕ} (ha : a₀ ≤ a) : AncRestore n a C (phaseOracle allOnes) := by
+  have hok' : (plan n v).1.all (stepOk n a) = true :=
+    List.all_eq_true.mpr fun st hst => stepOk_mono ha (List.all_eq_true.mp hok st hst)
+  have hcl' : ∀ x : Reg n,
+      stepsPre (plan n v).1 ((x, fun _ => false) : Reg n × Reg a) = true ∧
+        phaseBit a n v x = allOnes x := by
+    intro x
+    obtain ⟨h1, h2⟩ := agree_runSteps ha (plan n v).1 _ _ hok (agree_init x)
+    obtain ⟨hp, hb⟩ := hcl x
+    refine ⟨by rw [← h1]; exact hp, ?_⟩
+    rw [← hb]
+    simp only [phaseBit, mid]
+    exact (all_get_congr hus h2).symm
+  refine ancRestore_of_kraus hWF _ (fun _ => ((Real.sqrt 2)⁻¹ : ℂ) ^ nAnd (plan n v).1)
+    (sum_branches_invSqrtTwo _ _ hnb) fun c => ?_
+  apply kraus_mul_ancProj
+  intro x
+  obtain ⟨hpre, hbit⟩ := hcl' x
+  rw [mczFew_kraus_basis hC hok' c x hpre, hbit]
+
+/-- `diffusionFew n v` is the V1 diffusion circuit around `mczFew n v`. -/
+theorem diffusionFew_ok_of {n : ℕ} {v : MczVariant} {C : Circuit} (hC : mczFew n v = .ok C) :
+    diffusionFew n v = .ok (diffusionCircuit n C) := by
+  simp only [diffusionFew, hC]
+  rfl
+
+/-- Report §8.2, §6.2.4 (Stage 12d decision 1) — the few-ancilla diffusion restores its ancillae
+and applies `U_s = 2|s⟩⟨s| − I` on every register `a ≥ D.nAnc`, given the hypotheses of
+`mczFew_ancRestore_of_classical` at some `a₀ ≤ C.nAnc` (`diffusion_ancRestore`). -/
+theorem diffusionFew_ancRestore_of_classical {n a₀ : ℕ} {v : MczVariant} {C D : Circuit}
+    (hC : mczFew n v = .ok C) (hWF : C.WF) (hnb : C.nBits = nAnd (plan n v).1)
+    (hok : (plan n v).1.all (stepOk n a₀) = true)
+    (hus : (plan n v).2.all (·.inRange n a₀) = true)
+    (hcl : ∀ x : Reg n, stepsPre (plan n v).1 ((x, fun _ => false) : Reg n × Reg a₀) = true ∧
+      phaseBit a₀ n v x = allOnes x)
+    (ha₀ : a₀ ≤ C.nAnc) (hD : diffusionFew n v = .ok D) :
+    ∀ a, D.nAnc ≤ a → AncRestore n a D (diffU n) := by
+  rw [diffusionFew_ok_of hC] at hD
+  obtain rfl := (Except.ok.inj hD).symm
+  intro a ha
+  have hle : C.nAnc ≤ (diffusionCircuit n C).nAnc := by
+    rw [diffusionCircuit, nAnc_append, nAnc_append]
+    exact le_max_of_le_left (le_max_right _ _)
+  exact diffusion_ancRestore C hWF.bitsOk
+    (mczFew_ancRestore_of_classical hC hWF hnb hok hus hcl (ha₀.trans (hle.trans ha)))
+
+/-- Report §3.2.4 (Stage 12d decision 3) — `groverCircuitFew` is `groverCircuitOf` the oracle and
+the few-ancilla diffusion: `H^{⊗n}` then `r` copies of `oracle ; diffusionFew n v`, by the
+same shifted `Circuit.append` as `groverCircuit`. -/
+theorem groverCircuitFew_ok_of {P : Network} {n r : ℕ} {v : MczVariant} {oc C : Circuit}
+    (hP : P.nInputs = n) (ho : synthesizeOracle P = .ok oc) (hC : mczFew n v = .ok C) :
+    groverCircuitFew P n r v = .ok (groverCircuitOf oc (diffusionCircuit n C) n r) := by
+  simp [groverCircuitFew, groverIterationFew, hP, ho, diffusionFew_ok_of hC, groverCircuitOf,
+    bind, Except.bind, pure, Except.pure]
+
 end CQRV.Grover
 
 end

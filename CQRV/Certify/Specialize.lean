@@ -1,6 +1,7 @@
 module
 
 public import CQRV.Grover.Instance
+public import CQRV.Grover.MczFew
 public import CQRV.Certify.Certificate
 
 /-!
@@ -17,6 +18,10 @@ Report §5.1.3 (per-request work = proof specialization + kernel checking), §8.
 * `grover_certificate`: `grover_parametric_lemma` with `GroverParams` built from an oracle
   certificate and the solution count `hM_card` as a **hypothesis** (§5.2.4, never decided);
   δ, grade and ancilla count are side conditions the certificate discharges by `decide +kernel`.
+* `grover_certificate_few` (Stage 12d): the same conclusion for the few-ancilla diffusion
+  (`cqr certify --shape few:log`), from `grover_parametric_lemma_diff` and
+  `diffusionFew_ancRestore_of_classical`; the classical KG fact for the request's `n` is the
+  side condition `fewCheck n a₀ (plan n .logDepth) = true`, discharged by `decide +kernel`.
 -/
 
 @[expose] public section
@@ -127,6 +132,39 @@ theorem grover_certificate {n M r a : ℕ} {δ : ℝ} {g : Grade} (O : OracleCer
       AncRestore n a C (groverOp O.P ^ r * hadamardU n) := by
   let gp : GroverParams := ⟨n, M, hM_pos, O, hM_card⟩
   obtain ⟨h1, h2⟩ := grover_parametric_lemma gp D r hC
+  have hs : ((solutionFraction n M : ℚ) : ℝ) = Real.sin gp.θ ^ 2 := by
+    rw [gp.sin_θ_eq, Real.sq_sqrt (by positivity), solutionFraction]
+    push_cast
+    rfl
+  rw [sin_sq_odd_mul _ _ hs r, ← Rat.cast_one, ← Rat.cast_sub, ← groverDelta, hδ, hg] at h1
+  rw [ha] at h2
+  exact ⟨h1, h2⟩
+
+/-- Report §5.1.3, §8.4.1, §8.4.4 (Stage 12d decisions 1, 2, 4) — **the certificate lemma for the
+few-ancilla diffusion** (`cqr certify --shape few:log`): the conclusion of `grover_certificate`
+for `C = groverCircuitFew O.N n r .logDepth`, via `grover_parametric_lemma_diff`. The MCZ `Cm`
+and the diffusion `Dc` are the synthesized ones; their well-formedness, the bit count, the
+ancilla bound and the classical KG fact for this `n` (`hchk`, through `fewCheck_sound`) are side
+conditions the generated certificate discharges by `decide +kernel`; `hM_card` stays a
+hypothesis. -/
+theorem grover_certificate_few {n M r a a₀ : ℕ} {δ : ℝ} {g : Grade} (O : OracleCert n)
+    {Cm Dc C : Circuit} (hM_pos : 1 ≤ M) (hm : mczFew n .logDepth = .ok Cm) (hWF : Cm.WF)
+    (hnb : Cm.nBits = nAnd (MczFew.plan n .logDepth).1)
+    (hchk : fewCheck n a₀ (MczFew.plan n .logDepth) = true) (ha₀ : a₀ ≤ Cm.nAnc)
+    (hD : diffusionFew n .logDepth = .ok Dc) (hDWF : Dc.WF)
+    (hC : groverCircuitFew O.N n r .logDepth = .ok C) (hδ : ((groverDelta r n M : ℚ) : ℝ) = δ)
+    (hg : Synthesis.grade C = g) (ha : C.nAnc = a)
+    (hM_card : (Finset.univ.filter fun x => O.P x = true).card = M) :
+    RealizesExact (SearchSpec O.P) (basisPOVM n) (groverChannel n C) δ g ∧
+      AncRestore n a C (groverOp O.P ^ r * hadamardU n) := by
+  let gp : GroverParams := ⟨n, M, hM_pos, O, hM_card⟩
+  obtain ⟨hok, hus, hcl⟩ := fewCheck_sound hchk
+  have hDr := diffusionFew_ancRestore_of_classical hm hWF hnb hok hus hcl ha₀ hD
+  have hDeq : Dc = diffusionCircuit n Cm := Except.ok.inj (hD.symm.trans (diffusionFew_ok_of hm))
+  have hCeq : C = groverCircuitOf O.C Dc n r := by
+    rw [groverCircuitFew_ok_of O.hn O.hC hm, ← hDeq] at hC
+    exact (Except.ok.inj hC).symm
+  obtain ⟨h1, h2⟩ := grover_parametric_lemma_diff gp Dc hDWF.bitsOk hDr r hCeq
   have hs : ((solutionFraction n M : ℚ) : ℝ) = Real.sin gp.θ ^ 2 := by
     rw [gp.sin_θ_eq, Real.sq_sqrt (by positivity), solutionFraction]
     push_cast

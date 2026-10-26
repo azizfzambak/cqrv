@@ -893,6 +893,55 @@ def DiffusionCert.mk' (n : ℕ) {C : Circuit} (hC : synthesizeOracle (allNet n) 
   hN := rfl
   hPred := allNet_pred (allNet_ok_ne_zero hC)
 
+/-! ## Stage 12d — the Grover circuit over any certified diffusion -/
+
+/-- Report §3.2.4, §8.2 (Stage 12d decision 2) — the Grover circuit built from an oracle circuit
+`oc` and a diffusion circuit `Dc`: `H^{⊗n}` then `r` copies of `oc ; Dc`, by the shifted
+`Circuit.append` (the shape of `groverCircuit` and `groverCircuitFew`). -/
+def groverCircuitOf (oc Dc : Circuit) (n r : ℕ) : Circuit :=
+  (List.replicate r (oc.append Dc)).foldl Circuit.append ⟨n, Diffusion.onAll .h n⟩
+
+/-- Report §8.2, §6.2.4 (Stage 12d decision 2) — one Grover iteration over any diffusion circuit
+`Dc` that restores its ancillae with `U_s`: the iteration restores them with `G = U_s U_P`. -/
+theorem iteration_ancRestore_diff {n a : ℕ} (O : OracleCert n) (Dc : Circuit)
+    (hDb : Dc.bitsOk = true) (hDr : AncRestore n a Dc (diffU n)) (hO : O.C.nAnc ≤ a) :
+    AncRestore n a (O.C.append Dc) (groverOp O.P) :=
+  AncRestore.comp O.hWF.bitsOk hDb (O.ancRestore hO) hDr
+
+/-- Report §8.2.4, §8.3.3 (Stage 12d decision 2) — **the restoration conjunct over any certified
+diffusion**: if `Dc` respects the bit discipline and restores its ancillae with `U_s` on every
+register `a ≥ Dc.nAnc`, the Grover circuit `groverCircuitOf O.C Dc n r` on
+`Reg n × Reg C.nAnc` restores its ancillae and applies `G^r H^{⊗n}`. The 7a / 12a proof of
+`grover_ancRestore_shape`, with the diffusion's restoration fact as a parameter. -/
+theorem grover_ancRestore_diff {n r : ℕ} (O : OracleCert n) (Dc : Circuit)
+    (hDb : Dc.bitsOk = true) (hDr : ∀ a, Dc.nAnc ≤ a → AncRestore n a Dc (diffU n))
+    {C : Circuit} (hC : C = groverCircuitOf O.C Dc n r) :
+    AncRestore n C.nAnc C (groverOp O.P ^ r * hadamardU n) := by
+  subst hC
+  cases r with
+  | zero => simpa [groverCircuitOf] using ancRestore_hLayer n _
+  | succ k =>
+    set it := O.C.append Dc with hit_def
+    set Cf := groverCircuitOf O.C Dc n (k + 1) with hCf
+    have hle : it.nAnc ≤ Cf.nAnc := by
+      have hsplit : Cf = ((List.replicate k it).foldl Circuit.append
+          (⟨n, Diffusion.onAll .h n⟩ : Circuit)).append it := by
+        rw [hCf, groverCircuitOf, List.replicate_succ', List.foldl_append, List.foldl_cons,
+          List.foldl_nil]
+      rw [hsplit, nAnc_append _ it]
+      exact Nat.le_max_right _ _
+    have hO : O.C.nAnc ≤ Cf.nAnc := by
+      refine le_trans ?_ hle
+      rw [hit_def, nAnc_append]
+      exact le_max_left _ _
+    have hD : Dc.nAnc ≤ Cf.nAnc := by
+      refine le_trans ?_ hle
+      rw [hit_def, nAnc_append]
+      exact le_max_right _ _
+    have hitb : it.bitsOk = true := Circuit.bitsOk_append O.hWF.bitsOk hDb
+    exact (ancRestore_foldl _ _ _ _ (bitsOk_dataLayer _ _ (onAll_h_unitary n)) hitb
+      (ancRestore_hLayer n _) (iteration_ancRestore_diff O Dc hDb (hDr _ hD) hO) (k + 1)).2
+
 /-! ## Stage 12a — the diffusion shape: tree (default) and chain -/
 
 /-- The MCZ of either shape is synthesized only for `n ≥ 1`. -/
@@ -924,33 +973,19 @@ theorem grover_ancRestore_shape {n r : ℕ} (O : OracleCert n) (s : DiffusionSha
   obtain ⟨oc, d, hoc, hd, rfl⟩ := groverIteration_ok_shape hit
   obtain rfl : oc = O.C := Except.ok.inj (hoc.symm.trans O.hC)
   obtain ⟨hn, mcz, hmcz, rfl⟩ := diffusion_ok_shape hd
+
   have hmb : mcz.bitsOk = true := (DiffusionCert.ofShape s n hmcz).mcz.hWF.bitsOk
-  cases r with
-  | zero => simpa using ancRestore_hLayer n _
-  | succ k =>
-    set it := O.C.append (diffusionCircuit n mcz) with hit_def
-    set Cf := (List.replicate (k + 1) it).foldl Circuit.append
-      (⟨n, Diffusion.onAll .h n⟩ : Circuit) with hCf
-    have hle : it.nAnc ≤ Cf.nAnc := by
-      have hsplit : Cf = ((List.replicate k it).foldl Circuit.append
-          (⟨n, Diffusion.onAll .h n⟩ : Circuit)).append it := by
-        rw [hCf, List.replicate_succ', List.foldl_append, List.foldl_cons, List.foldl_nil]
-      rw [hsplit, nAnc_append _ it]
-      exact Nat.le_max_right _ _
-    have hO : O.C.nAnc ≤ Cf.nAnc := by
-      refine le_trans ?_ hle
-      rw [hit_def, nAnc_append]
-      exact le_max_left _ _
-    have hD : mcz.nAnc ≤ Cf.nAnc := by
-      refine le_trans ?_ hle
-      rw [hit_def, nAnc_append, diffusionCircuit, nAnc_append, nAnc_append]
-      exact le_max_of_le_right (le_max_of_le_left (le_max_right _ _))
-    have hitb : it.bitsOk = true :=
-      Circuit.bitsOk_append O.hWF.bitsOk (Circuit.bitsOk_append (Circuit.bitsOk_append
-        (bitsOk_dataLayer _ _ (pre_unitary n)) hmb)
-        (bitsOk_dataLayer _ _ (post_unitary n)))
-    exact (ancRestore_foldl _ _ _ _ (bitsOk_dataLayer _ _ (onAll_h_unitary n)) hitb
-      (ancRestore_hLayer n _) (iteration_ancRestore O (DiffusionCert.ofShape s n hmcz) hn hO hD) (k + 1)).2
+  have hDb : (diffusionCircuit n mcz).bitsOk = true :=
+    Circuit.bitsOk_append (Circuit.bitsOk_append (bitsOk_dataLayer _ _ (pre_unitary n)) hmb)
+      (bitsOk_dataLayer _ _ (post_unitary n))
+  refine grover_ancRestore_diff O _ hDb (fun a ha => ?_) rfl
+  have hD : mcz.nAnc ≤ a := by
+    refine le_trans ?_ ha
+    rw [diffusionCircuit, nAnc_append, nAnc_append]
+    exact le_max_of_le_left (le_max_right _ _)
+  have hm := (DiffusionCert.ofShape s n hmcz).mcz.ancRestore hD
+  rw [(DiffusionCert.ofShape s n hmcz).P_eq hn] at hm
+  exact diffusion_ancRestore mcz hmb hm
 
 /-- Report §8.2.4, §8.3.3 — **the restoration conjunct of `grover_parametric_lemma`**: the
 Grover circuit `H^{⊗n} ; (U_P ; D_n)^r` (V1 diffusion, synthesized by `groverCircuit`) on

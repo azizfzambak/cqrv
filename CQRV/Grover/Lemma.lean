@@ -448,6 +448,26 @@ theorem terminal_measurement (gp : GroverParams) (r : ℕ) :
       Real.sin φ ^ 2 / (Real.sqrt gp.M) ^ 2 by ring, gp.sqrtM_sq]
   · rw [ite_eq_right hx, ite_eq_right hx]
 
+/-- Report §8.2.4, §8.3.2, §6.3.2 (Stage 12d decision 2) — the realization conjunct from the
+restoration conjunct: any circuit `C` that restores its ancillae with `G^r H^{⊗n}` on
+`Reg n × Reg C.nAnc` realizes the search spec with `δ = 1 − sin²((2r+1)θ)` within its measured
+grade. The 7b proof of `grover_realizes`, with the restoration fact as a parameter: the
+replacement channel ignores its input, `AncRestore.traced` gives the data state
+`G^r H^{⊗n} |0⟩⟨0| (G^r H^{⊗n})ᴴ`, then `terminal_measurement`. -/
+theorem grover_realizes_of_ancRestore (gp : GroverParams) (r : ℕ) {C : Circuit}
+    (hR : AncRestore gp.n C.nAnc C (groverOp gp.oracle.P ^ r * hadamardU gp.n)) :
+    RealizesExact (SearchSpec gp.oracle.P) (basisPOVM gp.n) (groverChannel gp.n C)
+      (1 - Real.sin ((2 * r + 1) * gp.θ) ^ 2) (Synthesis.grade C) := by
+  refine ⟨le_rfl, fun u _ => ?_⟩
+  have hchan : (groverChannel gp.n C).chan (encode u) =
+      (groverOp gp.oracle.P ^ r * hadamardU gp.n) ◃ ancZero gp.n := by
+    simp only [groverChannel, GradedChannel.traceAnc, CPTPMap.compose_eq,
+      CPTPMap.replacement_apply, CPTPMap.traceRight_eq_MState_traceRight]
+    exact hR.traced (ancZero gp.n)
+  rw [hchan]
+  change _ ≤ prob _ (fun x => gp.oracle.P x = true)
+  rw [terminal_measurement, sub_sub_cancel]
+
 /-- Report §8.2.4, §8.3.2, §6.3.2 — **the realization conjunct**: the Grover channel of the
 synthesized circuit `(0, 1 − sin²((2r+1)θ))`-realizes the search spec under the basis POVM,
 within its own measured grade (decision 1). The grade part is `le_rfl`; for the probability
@@ -459,16 +479,8 @@ of Definition 2.2 inside `RealizesExact`, so no separate composition step is nee
 theorem grover_realizes (gp : GroverParams) (D : DiffusionCert gp.n) (r : ℕ) {C : Circuit}
     (hC : groverCircuit gp.oracle.N gp.n r = .ok C) :
     RealizesExact (SearchSpec gp.oracle.P) (basisPOVM gp.n) (groverChannel gp.n C)
-      (1 - Real.sin ((2 * r + 1) * gp.θ) ^ 2) (Synthesis.grade C) := by
-  refine ⟨le_rfl, fun u _ => ?_⟩
-  have hchan : (groverChannel gp.n C).chan (encode u) =
-      (groverOp gp.oracle.P ^ r * hadamardU gp.n) ◃ ancZero gp.n := by
-    simp only [groverChannel, GradedChannel.traceAnc, CPTPMap.compose_eq,
-      CPTPMap.replacement_apply, CPTPMap.traceRight_eq_MState_traceRight]
-    exact (grover_ancRestore gp.oracle D hC).traced (ancZero gp.n)
-  rw [hchan]
-  change _ ≤ prob _ (fun x => gp.oracle.P x = true)
-  rw [terminal_measurement, sub_sub_cancel]
+      (1 - Real.sin ((2 * r + 1) * gp.θ) ^ 2) (Synthesis.grade C) :=
+  grover_realizes_of_ancRestore gp r (grover_ancRestore gp.oracle D hC)
 
 /-- Report §5.2.4, §8.2.4, §8.3.1, §8.3.4 Figure 8.1 ("Parametric theorem: Realization ∧
 Restoration", est. 50 lines) — **the Grover parametric lemma**: for every `r` (decision 2), the
@@ -487,16 +499,8 @@ theorem grover_parametric_lemma (gp : GroverParams) (D : DiffusionCert gp.n) (r 
 theorem grover_realizes_shape (gp : GroverParams) (s : DiffusionShape) (r : ℕ) {C : Circuit}
     (hC : groverCircuit gp.oracle.N gp.n r none s = .ok C) :
     RealizesExact (SearchSpec gp.oracle.P) (basisPOVM gp.n) (groverChannel gp.n C)
-      (1 - Real.sin ((2 * r + 1) * gp.θ) ^ 2) (Synthesis.grade C) := by
-  refine ⟨le_rfl, fun u _ => ?_⟩
-  have hchan : (groverChannel gp.n C).chan (encode u) =
-      (groverOp gp.oracle.P ^ r * hadamardU gp.n) ◃ ancZero gp.n := by
-    simp only [groverChannel, GradedChannel.traceAnc, CPTPMap.compose_eq,
-      CPTPMap.replacement_apply, CPTPMap.traceRight_eq_MState_traceRight]
-    exact (grover_ancRestore_shape gp.oracle s hC).traced (ancZero gp.n)
-  rw [hchan]
-  change _ ≤ prob _ (fun x => gp.oracle.P x = true)
-  rw [terminal_measurement, sub_sub_cancel]
+      (1 - Real.sin ((2 * r + 1) * gp.θ) ^ 2) (Synthesis.grade C) :=
+  grover_realizes_of_ancRestore gp r (grover_ancRestore_shape gp.oracle s hC)
 
 /-- Report §5.2.4, §8.3.4 Figure 8.1 (Stage 12a) — the Grover parametric lemma for either
 diffusion shape `s` (`.tree`, the default, or `.chain`, the Stage 5b construction): same
@@ -518,6 +522,23 @@ theorem grover_parametric_lemma' (gp : GroverParams) (r : ℕ)
         (1 - Real.sin ((2 * r + 1) * gp.θ) ^ 2) (Synthesis.grade C) ∧
       AncRestore gp.n C.nAnc C (groverOp gp.oracle.P ^ r * hadamardU gp.n) :=
   grover_parametric_lemma_shape gp .tree r hC
+
+/-- Report §5.2.4, §8.2.4, §8.3.4 Figure 8.1 (Stage 12d decision 2) — **the Grover parametric
+lemma over any certified diffusion**: for an oracle certificate, any diffusion circuit `Dc` that
+respects the bit discipline and restores its ancillae with `U_s = 2|s⟩⟨s| − I` (on every
+register `a ≥ Dc.nAnc`), and the Grover circuit `C` built from them (`groverCircuitOf`), the
+conclusion of `grover_parametric_lemma`: realization with `δ = 1 − sin²((2r+1)θ)` within the
+measured grade, and restoration with `G^r H^{⊗n}`. `grover_parametric_lemma` and
+`grover_parametric_lemma_shape` are its instances at the V1 diffusions (through
+`grover_ancRestore_diff`); `cqr certify --shape few:log` applies it to the few-ancilla diffusion. -/
+theorem grover_parametric_lemma_diff (gp : GroverParams) (Dc : Circuit)
+    (hDb : Dc.bitsOk = true) (hDr : ∀ a, Dc.nAnc ≤ a → AncRestore gp.n a Dc (diffU gp.n))
+    (r : ℕ) {C : Circuit} (hC : C = groverCircuitOf gp.oracle.C Dc gp.n r) :
+    RealizesExact (SearchSpec gp.oracle.P) (basisPOVM gp.n) (groverChannel gp.n C)
+        (1 - Real.sin ((2 * r + 1) * gp.θ) ^ 2) (Synthesis.grade C) ∧
+      AncRestore gp.n C.nAnc C (groverOp gp.oracle.P ^ r * hadamardU gp.n) :=
+  have hR := grover_ancRestore_diff gp.oracle Dc hDb hDr hC
+  ⟨grover_realizes_of_ancRestore gp r hR, hR⟩
 
 /-! ## The instance trig fact (decision 3) -/
 

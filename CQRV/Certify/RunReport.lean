@@ -84,6 +84,8 @@ structure RunData where
   certified : Bool
   /-- Stage 11b: the check against `--profile` -/
   hardware : Option HardwareCheck := none
+  /-- Stage 12d: the diffusion of `circuit` (`--shape few:log`) -/
+  diffusionShape : CertDiffusion := .tree
   deriving Inhabited
 
 /-- `(w, d, t, a)` -/
@@ -165,8 +167,13 @@ def RunData.rows (d : RunData) : List ReportRow :=
       resources := s!"T after the first measurement: oracle {tAfterFirstMeasure d.oracle}, \
         diffusion {tAfterFirstMeasure d.diffusion}; {G.midCircuitMeasurements} MBU measurements, \
         {G.classicallyControlled} classically controlled gates; a = {d.circuit.grade.a}",
-      note := "AncRestore n a emitted (groverOp P ^ r * hadamardU n), on density operators \
-        (Lemma 6.3.2 per oracle call, DiffusionCert for the MCZ)" },
+      note := match d.diffusionShape with
+        | .tree => "AncRestore n a emitted (groverOp P ^ r * hadamardU n), on density operators \
+            (Lemma 6.3.2 per oracle call, DiffusionCert for the MCZ)"
+        | .fewLog => s!"AncRestore n a emitted (groverOp P ^ r * hadamardU n), on density \
+            operators (Lemma 6.3.2 per oracle call; few-ancilla MCZ by \
+            mczFew_ancRestore_of_classical, its classical KG step checked for n = {d.n} \
+            (2^{d.n} inputs, fewCheck) by `decide +kernel`)" },
     { stage := "7. Certificate Gen", input := "Proof + grade",
       output := s!"{d.certPath}, certificate.json (theorem {d.theoremName})",
       verification := .kernelChecked,

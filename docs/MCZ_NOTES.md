@@ -56,3 +56,17 @@ and applies the phase oracle of x₀ ∧ … ∧ x₇, on density operators) and
 target value: D(x, y, z ⊕ xy) · D(x, y, z) = 1 (`rtofPhase_pair`), so the cancellation needs no
 "conditionally clean" hypothesis. KG correctness is proved for n = 8 by `decide +kernel` (both
 variants); all n is a planned SORRIES.md row. `cqr certify` still uses the tree (Stage 12d).
+
+## Stage 12d — candidate B certified per instance
+
+`cqr certify <file> --shape few:log` certifies the Grover circuit with the B diffusion
+(`groverCircuitFew … .logDepth`) through `grover_parametric_lemma_diff`; the restoration of
+`mczFew n .logDepth` is `mczFew_ancRestore_of_classical` (general n) with the classical KG fact
+as a hypothesis, which each certificate proves for its own n by `decide +kernel` on `fewCheck`
+(2ⁿ inputs). Kernel time of that step: n = 8: 1.53 s, n = 10: 8.13 s, n = 12: 40.9 s.
+grover_pred_037 (`examples/certs/grover_pred_037_few/`): `certified (conditional on:
+solution_count = 32)`, grade (10, 172, 96, 2), Kyiv fits all budgets (d = 172 ≤ 200), δ_hw =
+2467/640 (vacuous); kernel check 6.76 s kernel / 16.37 s wall (median of 5). The tree stays the
+default of `cqr certify` / `cqr emit`. Status labels: `few:log` "restoration proved (Stage 12c);
+certified per instance via `cqr certify --shape few:log` (Stage 12d)"; `few:ladder` "classical
+step checked at n = 8, restoration not certified".

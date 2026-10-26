@@ -79,4 +79,77 @@ info: 'CQRV.Grover.diffusionFew_ancRestore_8' depends on axioms: [propext, Class
 #guard_msgs in
 #print axioms diffusionFew8_WF
 
+
+/-! ## Stage 12d — per-instance certification (report §5.1.3, §8.2)
+
+`fewCheck` (the classical KG step of one `n`) evaluated by the compiler for n = 1..12 (the
+front-end limit) at the register `a₀ = 2` the certificates use; the kernel evaluates it for the
+certificate's own `n` (`decide +kernel`, below for n = 8). A register without `anc[1]` fails the
+qubit check for n ≥ 6 (candidate B uses two ancillae there). -/
+
+#guard (List.range 12).all fun k => fewCheck (k + 1) 2 (FewSchedule.planK (k + 1) .logDepth)
+#guard (List.range 12).all fun k => plan (k + 1) .logDepth == FewSchedule.planK (k + 1) .logDepth
+#guard (List.range 12).all fun k =>
+  (mczFew (k + 1) .logDepth).toOption == (mczFewK (k + 1) .logDepth).toOption
+#guard !fewCheck 8 1 (FewSchedule.planK 8 .logDepth)
+#guard (mczFewK 8 .logDepth).toOption == some mczFew8
+
+example : fewCheck 8 2 (plan 8 .logDepth) = true := by
+  rw [FewSchedule.plan_eq_planK]
+  decide +kernel
+
+/-! ## Axioms (Stage 12d) -/
+
+/--
+info: 'CQRV.Grover.FewSchedule.plan_eq_planK' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms FewSchedule.plan_eq_planK
+
+/-- info: 'CQRV.Grover.mczFew_eq_K' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms mczFew_eq_K
+
+/--
+info: 'CQRV.Grover.fewCheck_sound' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in
+#print axioms fewCheck_sound
+
+/--
+info: 'CQRV.Grover.mczFew_ancRestore_of_classical' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms mczFew_ancRestore_of_classical
+
+/--
+info: 'CQRV.Grover.diffusionFew_ancRestore_of_classical' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms diffusionFew_ancRestore_of_classical
+
+/--
+info: 'CQRV.Grover.groverCircuitFew_ok_of' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in
+#print axioms groverCircuitFew_ok_of
+
+/--
+info: 'CQRV.Grover.grover_ancRestore_diff' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms grover_ancRestore_diff
+
+/--
+info: 'CQRV.Grover.grover_realizes_of_ancRestore' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms grover_realizes_of_ancRestore
+
+/--
+info: 'CQRV.Grover.grover_parametric_lemma_diff' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms grover_parametric_lemma_diff
+
 end CQRV.Tests.MczFewCorrect

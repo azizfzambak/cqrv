@@ -32,13 +32,15 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   [--layers]` — the Grover diffusion on `n` data qubits (report §8.2; Stage 5b): V1
   (straight-line MCZ) without `--amax`, V2 (Bennett MCZ, chain only) with it. The MCZ network is
   the balanced AND tree unless `--shape chain` (Stage 12a). `--shape few:<variant>` (Stage 12b)
-  uses the few-ancilla MCZ `mczFew` (no `--amax`); its output carries `status` = "unproved: …"
-  (no restoration proof; `cqr certify` never uses it). Prints `{name, n, shape, schedule,
-  grade}`; `--json`/`--layers` as above.
+  uses the few-ancilla MCZ `mczFew` (no `--amax`); its output carries `status` =
+  `MczVariant.status` (Stage 12d: `few:log` "restoration proved (Stage 12c); certified per
+  instance via `cqr certify --shape few:log` (Stage 12d)", `few:ladder` "classical step checked
+  at n = 8, restoration not certified"). Prints `{name, n, shape, schedule, grade}`;
+  `--json`/`--layers` as above.
 * `cqr synthesize <file> --grover [--shape tree|chain|few:ladder|few:log] [--iterations r]
   [--solutions M] [--json] [--layers]` — the Grover circuit `H^{⊗n}` then `r` iterations of
   oracle ⊕ diffusion V1 (report §3.2.4, §8; tree diffusion by default, Stage 12a; a `few:` shape
-  is labelled "unproved", Stage 12b).
+  carries its `status`, Stage 12b / 12d).
   Default `r = r⋆ = ⌊π/(4θ)⌋`, `sin²θ = M/2ⁿ` (M from ℰ or `--solutions`). Prints the grades of
   the oracle, the diffusion, one iteration (measured, and the ⊕ of the two measured parts) and
   the full circuit, and `r_star`; `--json` adds `circuit` and `iteration_circuit` (one line).
@@ -84,7 +86,7 @@ def usage : String :=
     "  synthesize <file> --grover [--shape tree|chain|few:ladder|few:log] [--iterations r] [--solutions M] [--json] [--layers]\n" ++
     "  check <file> --truth-table\n" ++
     "  certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k] [--report]\n" ++
-    "          [--profile name|path]\n" ++
+    "          [--profile name|path] [--shape tree|few:log]\n" ++
     "  emit <file> --format qir|qasm [--iterations r] [--solutions M] [--oracle]\n"
 
 /-- Report §4.2.2 — parse and surface-check a source file; also returns the position of the
@@ -213,7 +215,7 @@ def runSynthesize (path : String) (aMax : Option Nat) (json layers : Bool) : IO 
       return 0
 
 /-- The `--shape` of the CLI: a proved diffusion shape (Stage 12a) or a few-ancilla MCZ variant
-(Stage 12b, unproved). -/
+(Stage 12b; status per variant, Stage 12d). -/
 inductive ShapeArg where
   | std (s : DiffusionShape)
   | few (v : MczVariant)
@@ -225,11 +227,18 @@ def shapeName : ShapeArg → String
   | .std .chain => "chain"
   | .few v => s!"few:{v.name}"
 
-/-- The `status` field of a few-ancilla shape (Stage 12b decision 4: "unproved" in all output);
-empty for the proved shapes, whose output is unchanged. -/
+/-- The `status` field of a few-ancilla shape (Stage 12b decision 4; Stage 12d decision 5:
+`MczVariant.status` of the variant); empty for the V1 shapes, whose output is unchanged. -/
 def shapeStatus : ShapeArg → List (String × Lean.Json)
   | .std _ => []
-  | .few _ => [("status", Lean.toJson MczVariant.status)]
+  | .few v => [("status", Lean.toJson v.status)]
+
+/-- The diffusion `cqr certify --shape` accepts (Stage 12d decision 3): the tree (default) or
+`few:log`; `chain` and `few:ladder` have no certificate path (usage error). -/
+def certDiffusionOf : ShapeArg → Option CertDiffusion
+  | .std .tree => some .tree
+  | .few .logDepth => some .fewLog
+  | _ => none
 
 /-- Parse a `--shape` value. -/
 def shapeOf : String → Option ShapeArg
@@ -422,9 +431,12 @@ unless given) → front-end validation (Stage 9b) → generate `Cert.lean` → k
 (`lake env lean`) → axiom audit → write `certificate.json`, `<name>.qir`, `<name>.qasm` (from the
 same circuit) and, with `--report`, `run_report.md` / `run_report.json` → status line.
 `--bench k` repeats the kernel check `k + 1` times and records the median of the last `k`.
-`--profile` (Stage 11b): the hardware check; the profile is read before anything is written. -/
+`--profile` (Stage 11b): the hardware check; the profile is read before anything is written.
+`--shape few:log` (Stage 12d): the Grover circuit with the few-ancilla diffusion
+(`groverCircuitFew … .logDepth`), certified by `grover_certificate_few`. -/
 def runCertify (path : String) (solutions iters : Option Nat) (out : Option String)
-    (bench : Option Nat) (report : Bool) (profile : Option String) : IO UInt32 := do
+    (bench : Option Nat) (report : Bool) (profile : Option String)
+    (diff : CertDiffusion := .tree) : IO UInt32 := do
   let src ← IO.FS.readFile path
   match ← frontEnd path, ← signature path solutions with
   | .error d, _ | _, .error d => IO.println d.toJson.compress; return 1
@@ -436,7 +448,7 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
         pure (", ".intercalate (σs.map fun (m, b) => s!"{m.name} ↦ {b.toJson.compress}"),
           ds.map fun d => s!"{d.cond.render}: {d.render}")
       | r => return (← printNoMatch "certify" t r false)
-    let gi ← match groverInstance tp sig iters with
+    let gi ← match groverInstance tp sig iters diff with
       | .ok gi => pure gi
       | .error (.diagnostic d) => IO.println d.toJson.compress; return 1
       | .error (.usage msg) => IO.eprintln s!"cqr certify: {msg}"; return 2
@@ -495,7 +507,7 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
       HardwareCheck.of p h base.grade base.delta base.gateCounts.total
     let cert := { base with
       proofHash := some (proofHash text cfg.lean cfg.mathlib cfg.physlib), axioms := last.axioms,
-      status, theoremName := some q.theoremName, obligations, hardware := hw }
+      status, theoremName := some q.theoremName, obligations, hardware := hw, diffusion := diff }
     -- compact, keys sorted (canonical, as `circuit_hash` and `CertifyTool sample`)
     IO.FS.writeFile (file "certificate.json") (cert.toJson.compress ++ "\n")
     IO.FS.writeFile (file s!"{tp.name}.qir") (emitQIR tp.name gi.circuit)
@@ -504,7 +516,9 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
       | .certified => s!"certified (conditional on: solution_count = {M})"
       | _ => s!"certificate with tracked obligations: {", ".intercalate obligations}"
     if report then
-      let dif ← match diffusion gi.n none with
+      let dif ← match (match diff with
+          | .tree => diffusion gi.n none
+          | .fewLog => diffusionFew gi.n .logDepth) with
         | .ok c => pure c
         | .error d => IO.println d.toJson.compress; return 1
       let rd : RunData :=
@@ -513,7 +527,7 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
           diffusion := dif, circuit := gi.circuit, n := gi.n, M, r := gi.r, delta := q.delta,
           frontEnd := fe, theoremName := q.theoremName, certPath, timing,
           axioms := last.axioms, statusLine, certified := status == .certified,
-          hardware := hw }
+          hardware := hw, diffusionShape := diff }
       IO.FS.writeFile (file "run_report.md") rd.toMarkdown
       IO.FS.writeFile (file "run_report.json") (rd.toJson.pretty ++ "\n")
     let kms := match timing.kernelMs with | some k => s!", {secs k} kernel" | none => ""
@@ -560,8 +574,15 @@ def main (args : List String) : IO UInt32 := do
     | some (k, j, l) => runSynthesize file k j l
     | none => IO.eprint usage; return 2
   | "certify" :: file :: flags =>
-    match certifyFlags flags with
-    | some (m, r, o, b, p, h) => runCertify file m r o b p h
+    match shapeFlag flags with
+    | some (sh, flags) =>
+      match certDiffusionOf sh, certifyFlags flags with
+      | some dif, some (m, r, o, b, p, h) => runCertify file m r o b p h dif
+      | none, _ =>
+        IO.eprintln s!"cqr certify: --shape {shapeName sh} has no certificate path \
+          (certified: tree, few:log)"
+        return 2
+      | _, none => IO.eprint usage; return 2
     | none => IO.eprint usage; return 2
   | "emit" :: file :: flags =>
     match emitFlags flags with

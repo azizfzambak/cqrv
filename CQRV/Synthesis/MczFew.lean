@@ -8,8 +8,10 @@ public import CQRV.Synthesis.Diffusion
 Report §3.1.4 / Table 3.3, §6.1.4 (v2's "multi-controlled Z decomposed with 2 clean ancilla",
 v3 erratum 8), §6.2, §9.5.2 — Stage 12b: an n-qubit multi-controlled Z with **at most two clean
 ancillae**, from the literature (DECISIONS.md 2026-10-26, Stage 12b; `docs/MCZ_NOTES.md`).
-**Unproved**: no restoration proof exists for these circuits; they are reachable only through
-`cqr synthesize … --shape few:<variant>`, never through `cqr certify`.
+Status (`MczVariant.status`): `logDepth` — restoration proved (Stage 12c); certified per instance via `cqr certify --shape few:log` (Stage 12d): the restoration is proved for every
+`n` given the classical KG fact (`mczFew_ancRestore_of_classical`, `CQRV.Grover.MczFew`), which a
+certificate checks for its own `n`; `ladder` — classical step checked at n = 8, restoration not certified (`cqr synthesize … --shape
+few:ladder` only).
 
 Both variants solve Khattar–Gidney's "Problem 1" (arXiv:2407.17966, *Quantum* 9, 1752 (2025),
 §5.1): an array `A[0..n]`, `A[0] = 1` (the clean ancilla), `A[i] = 0` (data qubit `x[i−1]`); an
@@ -25,7 +27,8 @@ PRA 93, 022311 (2016), §B: 4 T, 3 CNOT, 2 H, the counts of his Fig. 3) instead 
 `D · Toffoli` with `D` diagonal on its three qubits; the uncompute is the same gate list (it is
 self-inverse), and everything between a compute and its uncompute restores those three qubits,
 so `D` commutes with it and cancels (Maslov 2016, Proposition 1 and Corollary 2). This is an
-argument, not a proof: the harness (`tests/diff/mcz_diff.py`) decides correctness.
+argument, not a proof here; the proof is `CQRV.Grover.MczFew` (Stage 12c: `rtof_basis`,
+`rtofPhase_pair`), and the harness (`tests/diff/mcz_diff.py`) checks the circuits independently.
 
 * `MczVariant.ladder` — KG §5.2: the greedy schedule (rightmost marked `t` with two unmarked to
   its right; leftmost such pair). One clean ancilla, `n − 2` operations, linear depth.
@@ -57,9 +60,12 @@ def MczVariant.source : MczVariant → String
   | .ladder => "Khattar-Gidney 2024 §5.2 + Maslov 2016 RTOF"
   | .logDepth => "Khattar-Gidney 2024 §5.3 + Maslov 2016 RTOF"
 
-/-- Every few-ancilla MCZ is labelled with this in all output (Stage 12b decision 4). -/
-def MczVariant.status : String :=
-  "unproved: no restoration proof (Stage 12b); not available to cqr certify"
+/-- The status label of a few-ancilla MCZ in all output (Stage 12b decision 4; Stage 12d
+decision 5: per variant). -/
+def MczVariant.status : MczVariant → String
+  | .ladder => "classical step checked at n = 8, restoration not certified"
+  | .logDepth =>
+    "restoration proved (Stage 12c); certified per instance via `cqr certify --shape few:log` (Stage 12d)"
 
 namespace MczFew
 
@@ -189,7 +195,8 @@ end MczFew
 open MczFew
 
 /-- Report §6.1.4, §3.1.4 (Stage 12b decision 2) — the few-ancilla MCZ on `x[0..n)`,
-`n ≥ 1`: the compute steps of `plan`, the phase, the steps in reverse. **Unproved.** -/
+`n ≥ 1`: the compute steps of `plan`, the phase, the steps in reverse. Status:
+`MczVariant.status` (`logDepth` certified per instance, Stage 12d). -/
 def mczFew (n : Nat) (v : MczVariant) : Except Diagnostic Circuit := do
   if n == 0 then fail .unsupportedNetwork "the MCZ needs at least one data qubit"
   let (steps, us) := plan n v
@@ -198,7 +205,7 @@ def mczFew (n : Nat) (v : MczVariant) : Except Diagnostic Circuit := do
   return ⟨n, steps.flatMap computeGates ++ phase us ++ uncomputeAll 0 steps.reverse⟩
 
 /-- Report §8.2 (Stage 12b decision 2) — `D_n = H^{⊗n} X^{⊗n} · mczFew n v · X^{⊗n} H^{⊗n}`,
-as `diffusionWith`, with the few-ancilla MCZ. **Unproved.** -/
+as `diffusionWith`, with the few-ancilla MCZ (status: `MczVariant.status`). -/
 def diffusionFew (n : Nat) (v : MczVariant) : Except Diagnostic Circuit := do
   let mcz ← mczFew n v
   let pre : Circuit := ⟨n, onAll .h n ++ onAll .x n⟩
@@ -206,7 +213,7 @@ def diffusionFew (n : Nat) (v : MczVariant) : Except Diagnostic Circuit := do
   return (pre.append mcz).append post
 
 /-- Report §8.2, §3.2.4 — one Grover iteration with the few-ancilla diffusion (as
-`groverIteration`). **Unproved.** -/
+`groverIteration`; status: `MczVariant.status`). -/
 def groverIterationFew (P : Network) (n : Nat) (v : MczVariant) : Except Diagnostic Circuit := do
   if P.nInputs != n then
     fail .unsupportedNetwork s!"the predicate has {P.nInputs} inputs, the diffusion {n}"
@@ -215,7 +222,8 @@ def groverIterationFew (P : Network) (n : Nat) (v : MczVariant) : Except Diagnos
   return oracle.append d
 
 /-- Report §3.2.4 — `H^{⊗n}` then `r` iterations with the few-ancilla diffusion (as
-`groverCircuit`). **Unproved.** -/
+`groverCircuit`; status: `MczVariant.status`). With `.logDepth` it is the circuit of
+`cqr certify --shape few:log` (Stage 12d). -/
 def groverCircuitFew (P : Network) (n r : Nat) (v : MczVariant) : Except Diagnostic Circuit := do
   let it ← groverIterationFew P n v
   return (List.replicate r it).foldl Circuit.append ⟨n, onAll .h n⟩

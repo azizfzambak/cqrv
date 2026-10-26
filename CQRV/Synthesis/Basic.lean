@@ -19,6 +19,6 @@ pebbleChain      : Nat → Nat → Except String (List Move)       -- decision 3
 grade            : Circuit → Grade                             -- decision 4 scheduler
 diffusion        : Nat → Option Nat → Except Diagnostic Circuit -- §8.2, Stage 5b
 groverCircuit    : Network → Nat → Nat → … → Except Diagnostic Circuit -- §3.2.4, Stage 5b
-mczFew           : Nat → MczVariant → Except Diagnostic Circuit   -- §6.1.4, Stage 12b (unproved)
+mczFew           : Nat → MczVariant → Except Diagnostic Circuit   -- §6.1.4, Stage 12b; status per variant (12d)
 ```
 -/

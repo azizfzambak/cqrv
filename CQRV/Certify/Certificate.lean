@@ -30,7 +30,10 @@ reviewer decisions 2 and 3).
   the exhaustive-validation wording (`frontEndValidatedText n`, `CQRV.Certify.FrontEnd`);
   v1.4.0 (Stage 11b, decision 5) adds the optional object `hardware` (`cqr certify --profile`).
   A certificate without `hardware` is written exactly as before, `schema_version` "1.3.0"
-  included (it is valid under both); one with `hardware` says "1.4.0".
+  included (it is valid under both); one with `hardware` says "1.4.0". v1.5.0 (Stage 12d,
+  decision 5) adds the optional field `diffusion_shape` (`"tree"` when omitted): only a
+  certificate of `cqr certify --shape few:log` carries it (`"few:log"`) and says "1.5.0", so
+  the tree certificates stay byte-identical.
 -/
 
 @[expose] public section
@@ -174,6 +177,19 @@ def gateCounts (C : Circuit) : GateCounts :=
     classicallyControlled := count fun | .ifBit _ _ => true | _ => false
     terminalMeasurements := C.nData }
 
+/-- Report §8.2, §8.4.1 (Stage 12d decision 3) — the diffusion of a certified Grover circuit: the
+V1 balanced-tree diffusion (the default, `groverCircuit`) or the few-ancilla diffusion with
+candidate B (`groverCircuitFew … .logDepth`, `cqr certify --shape few:log`). -/
+inductive CertDiffusion where
+  | tree
+  | fewLog
+  deriving Repr, DecidableEq, Inhabited
+
+/-- The `--shape` / `diffusion_shape` name of a certified diffusion. -/
+def CertDiffusion.name : CertDiffusion → String
+  | .tree => "tree"
+  | .fewLog => "few:log"
+
 /-- Report §8.4.2, §8.4.4, §9.5.3 — the certificate record, schema v1.0.0. -/
 structure Certificate where
   pattern : String
@@ -206,6 +222,8 @@ structure Certificate where
   frontEnd : String
   /-- Stage 11b: the check against a declared hardware profile (`--profile`) -/
   hardware : Option HardwareCheck := none
+  /-- Stage 12d: the diffusion, written only when it is not the tree (`diffusion_shape`) -/
+  diffusion : CertDiffusion := .tree
   deriving Repr
 
 /-- The schema version written to `schema_version` (semver) by a certificate without
@@ -214,6 +232,9 @@ def schemaVersion : String := "1.3.0"
 
 /-- The schema version of a certificate with `hardware` (Stage 11b, decision 5). -/
 def schemaVersionHardware : String := "1.4.0"
+
+/-- The schema version of a certificate with `diffusion_shape` (Stage 12d, decision 5). -/
+def schemaVersionDiffusion : String := "1.5.0"
 
 /-- The trust-boundary note of the `hardware` object (§5.3.1). -/
 def hardwareNote : String :=
@@ -239,7 +260,8 @@ def Certificate.toJson (c : Certificate) : Json :=
   let ratStr (q : Rat) : Json := Json.str (toString q)
   let optStr : Option String → Json := fun | some s => str s | none => Json.null
   Json.mkObj <|
-    [("schema_version", str (if c.hardware.isSome then schemaVersionHardware else schemaVersion)),
+    [("schema_version", str (if c.diffusion != .tree then schemaVersionDiffusion
+        else if c.hardware.isSome then schemaVersionHardware else schemaVersion)),
      ("pattern", str c.pattern),
      ("instance", Json.mkObj [("n", c.n), ("M", c.M), ("r", c.r)]),
      ("spec", Json.mkObj [("epsilon", ratStr c.epsilon), ("delta", ratStr c.delta),
@@ -274,7 +296,8 @@ def Certificate.toJson (c : Certificate) : Json :=
      ("axioms", Json.arr (c.axioms.map str).toArray),
      ("obligations", Json.arr (c.obligations.map str).toArray),
      ("status", str c.status.name)] ++
-    (c.hardware.map fun h => [("hardware", hardwareJson h)]).getD []
+    (c.hardware.map fun h => [("hardware", hardwareJson h)]).getD [] ++
+    (if c.diffusion != .tree then [("diffusion_shape", str c.diffusion.name)] else [])
 
 /-- Report §6.2.4, §6.3.2 — the restoration conjunct as stated in the certificate. -/
 def restorationText : String := "AncRestore: all ancillae |0…0⟩ on density operators"
@@ -317,6 +340,8 @@ structure GroverInstance where
   r : Nat
   oracle : Circuit
   circuit : Circuit
+  /-- Stage 12d: the diffusion of `circuit` -/
+  diffusion : CertDiffusion := .tree
 
 /-- Why no Grover instance was built: a diagnostic (front end, match, synthesis), or a usage
 error (no `r` and no `M` to compute `r⋆`). -/
@@ -326,9 +351,10 @@ inductive InstanceError where
 
 /-- Report §4.2.4, §8 — match the signature against the library (it must match `Grover`), then
 synthesize the oracle and the Grover circuit with `r` iterations (default `r⋆` from `M`, in
-`Float`: it only chooses `r`). `sig` already carries `--solutions`. -/
-def groverInstance (tp : TypedProgram) (sig : SigmaIn) (iters : Option Nat) :
-    Except InstanceError GroverInstance := do
+`Float`: it only chooses `r`). `sig` already carries `--solutions`. Stage 12d: with
+`diff = .fewLog` the circuit is `groverCircuitFew N n r .logDepth` (candidate B). -/
+def groverInstance (tp : TypedProgram) (sig : SigmaIn) (iters : Option Nat)
+    (diff : CertDiffusion := .tree) : Except InstanceError GroverInstance := do
   let (entry, facts) ← match matchLibrary library sig.toTerm.normalize with
     | .matched e _ ds => pure (e, ds)
     | _ => throw (.diagnostic (Diagnostic.at .matching .noMatchingPattern ⟨1, 1⟩
@@ -341,11 +367,15 @@ def groverInstance (tp : TypedProgram) (sig : SigmaIn) (iters : Option Nat) :
         (from ℰ or --solutions M) to compute r⋆")
   let res : Except Diagnostic (Network × Circuit × Circuit) := do
     let N ← toNetwork tp
-    return (N, ← synthesizeOracle N, ← groverCircuit N n r)
+    let o ← synthesizeOracle N
+    let C ← match diff with
+      | .tree => groverCircuit N n r
+      | .fewLog => groverCircuitFew N n r .logDepth
+    return (N, o, C)
   match res with
   | .error d => throw (.diagnostic d)
   | .ok (N, o, C) => return { entry, facts, net := N, n, M := sig.solutionCount, r, oracle := o,
-                               circuit := C }
+                               circuit := C, diffusion := diff }
 
 /-- Report §8.4.2 — the Stage 8a certificate of a source text (no kernel check, no audit):
 front end, ℰ, match, synthesis at `r` (default `r⋆`), exact `δ`, and (Stage 9b) the front-end

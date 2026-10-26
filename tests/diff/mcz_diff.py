@@ -1,6 +1,8 @@
 """Differential test of the few-ancilla MCZ (report §3.1.4 Table 3.3, §6.1.4, §6.2, §8.2;
-CLAUDE.md rule 9; Stage 12b decision 3). The circuits are **unproved**; this harness is the only
-evidence of their correctness (DECISIONS.md 2026-10-26, Stage 12b).
+CLAUDE.md rule 9; Stage 12b decision 3). Stage 12b: the circuits were unproved and this harness
+was the only evidence of their correctness (DECISIONS.md 2026-10-26, Stage 12b); since Stage 12c /
+12d the restoration of `few:log` is proved in Lean and certified per instance, and this harness
+is the independent check (CLAUDE.md rule 9).
 
   (0) gadgets — Maslov's relative-phase Toffoli (`MczFew.rtof`, the 9-gate list below) equals
       D . Toffoli with D diagonal and D != I (the relative phase is real, so the compute /
@@ -9,7 +11,7 @@ evidence of their correctness (DECISIONS.md 2026-10-26, Stage 12b).
       variants: for a random complex |psi> on the n data qubits, **every measurement branch**
       must end in (2|s><s| - I)|psi> (x) |0...0> up to a global phase (so the data register is
       exact and the ancillae are back in |0>; `alloc`/`free` assert |0> in every branch); the
-      output must say "unproved"; a <= 2;
+      output must carry the variant's `status` label (STATUS, Stage 12d); a <= 2;
   (n) negative controls — (i) the D_8 diffusion of each variant with the *uncompute* copy of one
       relative-phase Toffoli replaced by an exact Toffoli (the relative phase D is then not
       cancelled: only correct up to a phase on part of the state) must be rejected; (ii) with
@@ -36,6 +38,9 @@ from grover_diff import (bits_of, check_all_branches, check_full, cqr_json,  # n
 
 MAX_DATA = 10
 VARIANTS = ["few:ladder", "few:log"]
+# The `status` label of each variant in the CLI output (MczVariant.status, Stage 12d decision 5).
+STATUS = {"few:ladder": "classical step checked at n = 8, restoration not certified",
+          "few:log": "restoration proved (Stage 12c); certified per instance via `cqr certify --shape few:log` (Stage 12d)"}
 
 
 def rtof(a, b, t):
@@ -130,7 +135,7 @@ def main():
             try:
                 res = cqr_json(cqr, ["--diffusion", str(n), "--shape", v])
                 assert res["shape"] == v, res["shape"]
-                assert res.get("status", "").startswith("unproved"), res.get("status")
+                assert res.get("status") == STATUS[v], res.get("status")
                 circ = res["circuit"]
                 assert circ["n_data"] == n, circ["n_data"]
                 g = res["grade"]
@@ -179,7 +184,7 @@ def main():
     for v in VARIANTS:
         try:
             res = cqr_json(cqr, [grover, "--grover", "--shape", v])
-            assert res.get("status", "").startswith("unproved"), res.get("status")
+            assert res.get("status") == STATUS[v], res.get("status")
             psi = sv._random_state(n, rng)
             b = check_all_branches(res["iteration_circuit"], psi, u_s(n) @ (signs * psi))
             g = res["grades"]["iteration"]
@@ -190,7 +195,7 @@ def main():
             print(f"FAIL (b) Grover iteration ({v}): {e}")
         try:
             res = check_full(cqr, "(c) grover_pred_037", grover, [], n, pred, 2, exact_c, v, rng)
-            assert res.get("status", "").startswith("unproved"), res.get("status")
+            assert res.get("status") == STATUS[v], res.get("status")
         except (AssertionError, RuntimeError, sv.RestorationError) as e:
             ok = False
             print(f"FAIL (c) full Grover ({v}): {e}")

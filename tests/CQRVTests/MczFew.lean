@@ -8,9 +8,9 @@ meta import CQRV.Synthesis.Basic
 /-!
 # Tests for `CQRV.Synthesis.MczFew` (report §3.1.4 Table 3.3, §6.1.4, §8.2; Stage 12b)
 
-The few-ancilla MCZ is **unproved**: these are regression values of its schedule and measured
-grades; semantic correctness is checked only by `tests/diff/mcz_diff.py` (every measurement
-branch, n = 1..10). DECISIONS.md 2026-10-26 (Stage 12b) records the table and the citations.
+These are regression values of the few-ancilla MCZ's schedule and measured grades; the
+restoration proof is `CQRV.Grover.MczFew` (Stage 12c / 12d, tests in `MczFewCorrect.lean`) and the
+independent semantic check `tests/diff/mcz_diff.py` (every measurement branch, n = 1..10). DECISIONS.md 2026-10-26 (Stage 12b) records the table and the citations.
 -/
 
 namespace CQRV.Tests.MczFew
@@ -79,6 +79,8 @@ def valid (A : List Bool) (ops : List Op) : Bool :=
   some true
 -- The proved default is unchanged (12a): certify still uses the tree.
 #guard gradeOf (groverNet >>= (groverCircuit · 8 2)) == some ⟨15, 134, 72, 7⟩
-#guard MczVariant.status.startsWith "unproved"
+#guard MczVariant.ladder.status == "classical step checked at n = 8, restoration not certified"
+#guard MczVariant.logDepth.status ==
+  "restoration proved (Stage 12c); certified per instance via `cqr certify --shape few:log` (Stage 12d)"
 
 end CQRV.Tests.MczFew

@@ -15,8 +15,12 @@
 #                                injected sorry → sorryAx, native_decide → its auxiliary axiom,
 #                                search_while → Stage 4 hint); Stage 11b: without --profile
 #                                certificate.json byte-identical to the committed one outside
-#                                reference_configuration; --profile ibm_kyiv: Grover exceeds
-#                                depth, ALU fits all, δ_hw vacuous for both, `hardware` recomputed
+#                                reference_configuration; --profile ibm_kyiv: Grover and ALU
+#                                fit all (tree, Stage 12a), δ_hw vacuous for both, `hardware`
+#                                recomputed; Stage 12d: --shape few:log (grade (10, 172, 96, 2),
+#                                schema v1.5.0, Kyiv fits), the committed
+#                                examples/certs/grover_pred_037_few, and a few:log Cert.lean
+#                                with the classical step for a wrong n → kernel check fails
 #   tests/diff/profile_schema.py profiles/*.json against docs/profile.schema.json; ibm_kyiv =
 #                                report Table 3.5 / §3.3.3; mutated profiles rejected by the
 #                                schema and by `cqr certify --profile` (Stage 11b)

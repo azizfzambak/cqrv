@@ -17,7 +17,12 @@ CLAUDE.md rule 9; Stage 5b; Stage 12a: both diffusion shapes).
   (d) the same for the second predicate examples/simple_alu_x0_1.cqr (M = 30 from the SyReC
       reference of benchmark_diff.py, r* = 1): success probability exactly 1215/2048, both
       shapes. scripts/diff_benchmark.sh checks every branch of the ALU oracle and 512 sampled
-      branches of its iteration and full circuit.
+      branches of its iteration and full circuit;
+  (e) Stage 12d: the Grover circuit that `cqr certify --shape few:log` certifies (oracle and the
+      few-ancilla diffusion, candidate B; `cqr synthesize <file> --grover --shape few:log`) for
+      grover_pred_037 at r* = 2: one sampled branch as (c), ancillae end in |0...0>, success
+      probability exactly 121/128 (every branch of one iteration and of the diffusion:
+      tests/diff/mcz_diff.py).
 
 Branches are enumerated depth first (`statevector.iter_ir_branches`). P is evaluated here,
 never taken from the synthesizer.
@@ -195,6 +200,13 @@ def main():
         except (AssertionError, RuntimeError, sv.RestorationError) as e:
             ok = False
             print(f"FAIL (c) full Grover ({sh}): {e}")
+
+    # (e) the certified few-ancilla Grover circuit of grover_pred_037 (Stage 12d): 121/128.
+    try:
+        check_full(cqr, "(e) grover_pred_037", grover, [], n, pred, 2, exact_c, "few:log", rng)
+    except (AssertionError, RuntimeError, sv.RestorationError) as e:
+        ok = False
+        print(f"FAIL (e) full Grover (few:log): {e}")
 
     # (d) full Grover of simple_alu_x0_1 at r* = 1 (M = 30 from the SyReC reference):
     # exactly 1215/2048.

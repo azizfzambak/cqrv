@@ -50,7 +50,18 @@ Runs the built `cqr` from the project root and checks
     the certificate equals the run without --profile (except schema_version "1.4.0"); Cert.lean,
     .qir, .qasm are byte-identical to the committed ones; the run report has the extra row
     "Hardware profile" with status "checked against declared profile (not a proof about
-    hardware)".
+    hardware)";
+  * --shape few:log (Stage 12d; few-ancilla diffusion, candidate B): grover_pred_037 without and
+    with --profile ibm_kyiv → exit 0, `certified (conditional on: solution_count = 32)`, schema
+    v1.5.0 with diffusion_shape "few:log" (hardware only with --profile), grade (10, 172, 96, 2),
+    delta 7/128, axioms exactly the standard three; Kyiv: `hardware profile ibm_kyiv: fits all
+    budgets; δ_hw ≤ 7/128 + 380·1/100 = 2467/640 (vacuous)` (d = 172 <= 200), every field of
+    `hardware` recomputed; Cert.lean has the classical step `fewCheck 8 2 (MczFew.plan 8
+    .logDepth)` by `decide +kernel`, applies `grover_certificate_few`, no native_decide / sorry /
+    treeNet; the committed examples/certs/grover_pred_037_few agrees (Cert.lean, .qir, .qasm
+    bytes; certificate.json outside reference_configuration; run report); negative test (d): the
+    committed few Cert.lean with the classical step stated for n = 7 → the kernel check fails;
+  * the tree certificates are unchanged by Stage 12d: the byte-identity checks above.
 
 Usage: python -I tests/diff/certify_check.py --cqr <path to cqr>   (after `lake build`)
 """
@@ -76,6 +87,7 @@ import reparse_qir  # noqa: E402
 
 SCHEMA = os.path.join(ROOT, "docs", "certificate.schema.json")
 EXAMPLE = os.path.join(ROOT, "examples", "certs", "grover_pred_037")
+EXAMPLE_FEW = os.path.join(ROOT, "examples", "certs", "grover_pred_037_few")
 NAME = "grover_pred_037"
 THEOREM = "CQRV.Cert.grover_pred_037.cert"
 STANDARD = ["propext", "Classical.choice", "Quot.sound"]
@@ -101,8 +113,10 @@ def check_report(d, cert):
     """The committed run report of a certificate directory agrees with its certificate.json."""
     rep = json.loads(read(os.path.join(d, "run_report.json")))
     md = read(os.path.join(d, "run_report.md"))
-    assert [r["stage"] for r in rep["rows"]] == STAGES, [r["stage"] for r in rep["rows"]]
-    assert all(r["verification"] in VERIFICATION for r in rep["rows"]), rep["rows"]
+    hw_rows = ["Hardware profile"] if "hardware" in cert else []
+    assert [r["stage"] for r in rep["rows"]] == STAGES + hw_rows, [r["stage"] for r in rep["rows"]]
+    assert all(r["verification"] in VERIFICATION for r in rep["rows"][:len(STAGES)]), rep["rows"]
+    assert all(r["verification"] == HW_STATUS for r in rep["rows"][len(STAGES):]), rep["rows"]
     status = "certified (conditional on: solution_count = {})".format(cert["instance"]["M"])
     assert rep["status"] == status and rep["certified"] is True, rep["status"]
     rows = {r["stage"]: r for r in rep["rows"]}
@@ -121,7 +135,8 @@ def check_report(d, cert):
     assert cert["trust_boundary"]["front_end"] in rows[STAGES[1]]["note"]
     assert [r["verification"] for r in rep["rows"][4:8]] == ["kernel-checked"] * 4
     assert rows["8. QIR Export"]["verification"] == "declared trust boundary"
-    assert md.count("\n| ") == 10 and all(st in md for st in STAGES), "run_report.md table"
+    assert md.count("\n| ") == 10 + len(hw_rows) and all(st in md for st in STAGES), \
+        "run_report.md table"
     return rep
 
 
@@ -148,11 +163,11 @@ def masked(text):
     return out
 
 
-def check_hardware(d, cert, plain, last_two, fits):
+def check_hardware(d, cert, plain, last_two, fits, version="1.4.0"):
     """The `hardware` object of a --profile run, recomputed; the rest equals `plain`."""
     prof = json.loads(read(KYIV))
     h = cert["hardware"]
-    assert cert["schema_version"] == "1.4.0", cert["schema_version"]
+    assert cert["schema_version"] == version, cert["schema_version"]
     assert h["profile"] == "ibm_kyiv" and h["note"] == HW_NOTE, h
     assert h["profile_hash"] == sha3(read(KYIV, "rb").replace(b"\r\n", b"\n")), "profile hash"
     names = {"w": "width", "d": "depth", "t": "T-count", "a": "ancilla"}
@@ -394,6 +409,55 @@ def main():
               "statuses, "
               "measured grade / delta / kernel time / axioms / G = certificate.json")
 
+        # --shape few:log (Stage 12d): the few-ancilla diffusion, candidate B
+        runs_few = {}
+        for label, extra in (("plain", []), ("kyiv", ["--profile", "ibm_kyiv", "--report"])):
+            out = os.path.join(tmp, "few_" + label)
+            rc, so, se = certify(args.cqr, src, out, "--shape", "few:log", *extra)
+            assert rc == 0, (rc, so, se)
+            runs_few[label] = (out, so)
+        out_p, so_p = runs_few["plain"]
+        assert so_p.rstrip("\n").split("\n")[-1] == \
+            "certified (conditional on: solution_count = 32)", so_p
+        fc, ftext = check_dir(out_p, validator)
+        assert fc["schema_version"] == "1.5.0" and fc["diffusion_shape"] == "few:log", fc
+        assert "hardware" not in fc
+        assert fc["status"] == "certified" and fc["obligations"] == [] and fc["axioms"] == STANDARD
+        assert fc["grade"] == {"w": 10, "d": 172, "t": 96, "a": 2}, fc["grade"]
+        assert fc["spec"]["delta"] == "7/128" and fc["instance"] == {"n": 8, "M": 32, "r": 2}
+        assert fc["theorem"] == THEOREM
+        for frag in ("theorem classical_step : fewCheck 8 2 (MczFew.plan 8 .logDepth) = true",
+                     "  grover_certificate_few oracle",
+                     "theorem emitted_ok : groverCircuitFew net 8 2 .logDepth = .ok emitted",
+                     "theorem diff_ok : diffusionFew 8 .logDepth = .ok diffCircuit",
+                     "theorem diff_WF : diffCircuit.WF := by decide +kernel"):
+            assert ftext.count(frag) == 1, frag
+        for bad_frag in ("native_decide", "sorry", "treeNet"):
+            assert bad_frag not in ftext, bad_frag
+        out_k, so_k = runs_few["kyiv"]
+        fk, _ = check_dir(out_k, validator)
+        line = check_hardware(out_k, fk, fc, so_k.rstrip("\n").split("\n")[-2:], fits=True,
+                              version="1.5.0")
+        assert line == ("hardware profile ibm_kyiv: fits all budgets; "
+                        "δ_hw ≤ 7/128 + 380·1/100 = 2467/640 (vacuous)"), line
+        assert fk["hardware"]["components"]["d"] == {"required": 172, "budget": 200, "fits": True}
+        exf, _ = check_dir(EXAMPLE_FEW, validator)
+        for f in ("Cert.lean", f"{NAME}.qir", f"{NAME}.qasm"):
+            assert read(os.path.join(out_k, f), "rb") == read(os.path.join(EXAMPLE_FEW, f), "rb"), \
+                f"committed few example differs: {f}"
+            assert read(os.path.join(out_p, f), "rb") == read(os.path.join(out_k, f), "rb"), f
+        assert without(fk, MACHINE) == without(exf, MACHINE), "committed few certificate.json"
+        assert masked(read(os.path.join(out_k, "certificate.json"))) == \
+            masked(read(os.path.join(EXAMPLE_FEW, "certificate.json"))), "few certificate.json"
+        assert exf["reference_configuration"]["kernel_check"]["runs"] == 5
+        check_report(EXAMPLE_FEW, exf)
+        print("ok:   --shape few:log: `certified (conditional on: solution_count = 32)` (exit 0); "
+              "schema v1.5.0, diffusion_shape few:log, grade (10, 172, 96, 2), delta 7/128, "
+              "axioms exactly the standard three; classical step fewCheck 8 2 by decide +kernel")
+        print("ok:   --shape few:log --profile ibm_kyiv: fits all budgets (d = 172 <= 200), "
+              "delta_hw = 7/128 + 380*1/100 = 2467/640 (vacuous); hardware recomputed; "
+              "committed examples/certs/grover_pred_037_few agrees (bytes, JSON, run report)")
+
         # XOR predicate: certified since Stage 9a (Lemma 6.3.2 for XOR, `lemma_6_3_2_xor`)
         out = os.path.join(tmp, "xor")
         rc, so, se = certify(args.cqr, os.path.join("tests", "certify", "xor_pred.cqr"), out,
@@ -460,6 +524,21 @@ def main():
             assert rc == 3 and line and "FAILED" in line[0] and expect in line[0], (rc, so, se)
             assert "certified (" not in so
             print(f"ok:   {label}: {line[0].replace(path, 'Cert.lean (temp copy)')}")
+
+        # (d) few:log: the classical step stated for a wrong n → the kernel check fails
+        fbase = read(os.path.join(EXAMPLE_FEW, "Cert.lean"))
+        step = "theorem classical_step : fewCheck 8 2 (MczFew.plan 8 .logDepth) = true"
+        assert fbase.count(step) == 1
+        d = os.path.join(tmp, "few_wrong_n")
+        os.makedirs(d, exist_ok=True)
+        path = os.path.join(d, "Cert.lean")
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(fbase.replace(step, step.replace("8", "7")))
+        rc, so, se = run(["lake", "env", "lean", "--run",
+                          os.path.join("scripts", "CertifyTool.lean"), "audit", path, THEOREM])
+        assert rc == 1 and "certified (" not in so and ": pass" not in so, (rc, so, se)
+        print("ok:   (d) few:log Cert.lean with the classical step for n = 7: kernel check fails "
+              "(exit 1)")
 
         # (c) search_while: outside the fragment, the Stage 4 hint
         rc, so, se = certify(args.cqr, os.path.join("examples", "search_while.cqr"),

@@ -146,6 +146,27 @@ def xorNet : Network := ⟨2, #[.input 0, .input 1, .xor 0 1], [2]⟩
 #guard groverReq.all fun q =>
   ((renderCert { q with net := xorNet }).splitOn "def oracle : OracleCert 8 where").length == 2
 #guard (groverCert.splitOn "hXor").length == 1
+-- Stage 12d: `--shape few:log` — the few-ancilla Grover circuit, its own template
+def groverReqFew : Option CertRequest :=
+  match parse groverSrc >>= check with
+  | .ok tp =>
+    match groverInstance tp (extract tp) none .fewLog with
+    | .ok gi => some (CertRequest.ofInstance tp.name groverSrc gi 32)
+    | .error _ => none
+  | .error _ => none
+
+def groverCertFew : String := (groverReqFew.map renderCert).getD ""
+
+#guard groverReqFew.map (fun q => (q.grade, q.nAnc, q.diffusion)) ==
+  some (⟨10, 172, 96, 2⟩, 2, .fewLog)
+#guard (groverCertFew.splitOn "native_decide").length == 1
+#guard (groverCertFew.splitOn "sorry").length == 1
+#guard (groverCertFew.splitOn "theorem classical_step : fewCheck 8 2 (MczFew.plan 8 .logDepth) = true").length == 2
+#guard (groverCertFew.splitOn "theorem emitted_ok : groverCircuitFew net 8 2 .logDepth = .ok emitted").length == 2
+#guard (groverCertFew.splitOn "theorem diff_ok : diffusionFew 8 .logDepth = .ok diffCircuit").length == 2
+#guard (groverCertFew.splitOn "  grover_certificate_few oracle").length == 2
+#guard (groverCertFew.splitOn "(7 / 128 : ℝ) ⟨10, 172, 96, 2⟩").length == 2
+#guard (groverCertFew.splitOn "treeNet").length == 1
 
 /-! ## `symDiff` by structural insertion sort (kernel-evaluable, Stage 8b) -/
 
@@ -210,5 +231,11 @@ def groverHw : Option HardwareCheck := (readProfile (profileText "200" "\"0.01\"
 /-- info: 'CQRV.Certify.grover_certificate' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms grover_certificate
+
+/--
+info: 'CQRV.Certify.grover_certificate_few' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms grover_certificate_few
 
 end CQRV.Tests.Certify
