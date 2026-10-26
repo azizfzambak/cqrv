@@ -16,7 +16,8 @@ CLAUDE.md rule 9; Stage 5b; Stage 12a: both diffusion shapes).
       to 1e-9;
   (d) the same for the second predicate examples/simple_alu_x0_1.cqr (M = 30 from the SyReC
       reference of benchmark_diff.py, r* = 1): success probability exactly 1215/2048, both
-      shapes. Every branch of the ALU circuit is checked by scripts/diff_benchmark.sh.
+      shapes. scripts/diff_benchmark.sh checks every branch of the ALU oracle and 512 sampled
+      branches of its iteration and full circuit.
 
 Branches are enumerated depth first (`statevector.iter_ir_branches`). P is evaluated here,
 never taken from the synthesizer.

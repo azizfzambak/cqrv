@@ -51,9 +51,10 @@ is test-only: nothing here is part of the trusted pipeline.
   Driver: `scripts/diff_frontend.sh` (CI). `benchmark_diff.py` is the second worked predicate
   `examples/simple_alu_x0_1.cqr` (RevLib Simple ALU, bit 1 of x0): reference from the SyReC
   integer semantics, M = 30 by enumeration (test oracle only), check / extract / match /
-  synthesize, the oracle, one Grover iteration and the full r* = 1 circuit in **every**
-  measurement branch, success probability = 1215/2048 = 1 − δ exactly. Driver:
-  `scripts/diff_benchmark.sh` (CI, ~4 min). `certify_check.py` now also certifies
+  synthesize, the oracle in **every** measurement branch (1024), one Grover iteration and the
+  full r* = 1 circuit on 512 distinct fixed-seed sampled branches each (Stage 12a review;
+  `--all-branches` enumerates them all, ~45 min), success probability = 1215/2048 = 1 − δ
+  exactly. Driver: `scripts/diff_benchmark.sh` (CI, a few minutes). `certify_check.py` now also certifies
   `simple_alu_x0_1`, checks schema v1.3.0 (`front_end` after the exhaustive validation) and the
   committed run reports of both examples (stage 1 as rows 1a parser / surface checker and 1b typed
   AST → network since the Stage 9b review).

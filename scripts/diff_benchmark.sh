@@ -4,8 +4,9 @@
 # Runs tests/diff/benchmark_diff.py against the built `cqr` executable on
 # examples/simple_alu_x0_1.cqr (RevLib Simple ALU, bit 1 of x0): reference from the SyReC
 # semantics, M by enumeration (test oracle only), check / extract / match / synthesize, the
-# oracle, one Grover iteration and the full Grover circuit in every measurement branch, success
-# probability = sin^2((2r*+1) theta) = 1 - delta exactly. Runtime ~4 min.
+# oracle in every measurement branch, one Grover iteration and the full Grover circuit on 512
+# fixed-seed sampled branches (`--all-branches`: every branch, ~45 min), success
+# probability = sin^2((2r*+1) theta) = 1 - delta exactly. Runtime a few minutes.
 #
 # Usage (after `lake build`):  scripts/diff_benchmark.sh [--seed S]
 #   PYTHON=.venv/Scripts/python.exe scripts/diff_benchmark.sh   # local Windows venv

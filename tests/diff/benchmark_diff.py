@@ -14,8 +14,10 @@ x1 ^ x2][op] mod 2^w`, bit 1, never from the DSL transcription or the synthesize
       F₁ ↦ 6, F₂ ↦ M), `cqr synthesize` (grade) and `--layers` (the dump has d layers);
   (2) the oracle: in **every** measurement branch, on a random complex |psi>, the output is
       U_P|psi> (x) |0...0>_anc up to a global phase of the branch;
-  (3) one Grover iteration = U_s U_P on a random |psi>, every branch;
-  (4) the full Grover circuit at r = r* from |0...0>, **every** branch: the ancillae end in
+  (3) one Grover iteration = U_s U_P on a random |psi>, on 512 distinct branches drawn with a
+      fixed seed (Stage 12a review; `--all-branches` enumerates every branch, ~45 min);
+  (4) the full Grover circuit at r = r* from |0...0>, on 512 distinct sampled branches (every
+      branch with `--all-branches`): the ancillae end in
       |0...0> and the success probability sum_{P(x)=1} |amp|^2 equals sin^2((2r*+1) theta),
       sin^2 theta = M/64, to 1e-9, and equals the exact rational 1 - delta (Chebyshev
       polynomial in s = M/N, Fraction arithmetic; the value the certificate states).
@@ -43,6 +45,8 @@ TOL = 1e-9
 # Measured values of this predicate (regression; any change must be explained in DECISIONS.md).
 EXPECT_ORACLE = {"w": 16, "d": 80, "t": 40, "a": 10}
 EXPECT_CIRCUIT = {"w": 16, "d": 121, "t": 60, "a": 10}  # tree diffusion (Stage 12a; chain: d = 145)
+# Stage 12a review: (3) and (4) check this many distinct branches, drawn with a fixed seed.
+SAMPLE = 512
 
 
 def alu_bit(op, x1, x2, w, k=1):
@@ -117,10 +121,54 @@ def every_branch(circ, psi, want_data):
     return count
 
 
+def sampled_branches(circ, psi, k, rng):
+    """Stage 12a review: up to k distinct branches of `sv.iter_ir_branches`, each measurement
+    outcome drawn uniformly among the outcomes of non-negligible probability (fixed-seed rng),
+    state renormalized after each projection; same per-gate checks (`sv._step`). Stops after
+    8k draws if the circuit has fewer than k branches. Yields `(bits, state)` (norm 1)."""
+    gates, seen = circ["gates"], set()
+    for _ in range(8 * k):
+        if len(seen) >= k:
+            return
+        s, bits = sv._embed(circ, psi), {}
+        s.amp = s.amp / np.sqrt(s.norm2())
+        for j, g in enumerate(gates):
+            if g["op"] == "measure":
+                outs = [(b, s.copy().project(g["q"][0], b)) for b in (0, 1)]
+                outs = [(b, t) for b, t in outs if t.norm2() > sv.PROB_EPS]
+                b, s = outs[int(rng.integers(len(outs)))]
+                s.amp = s.amp / np.sqrt(s.norm2())
+                bits = {**bits, g["c"]: b}
+            else:
+                sv._step(j, g, bits, s)
+        key = tuple(sorted(bits.items()))
+        if key not in seen:
+            seen.add(key)
+            yield bits, s
+
+
+def check_branches(circ, psi, want_data, all_branches, rng):
+    """(3): every branch (`every_branch`) or SAMPLE distinct sampled branches end in
+    want_data (x) |0..0>_anc up to a phase. Returns (branches checked, label)."""
+    if all_branches:
+        return every_branch(circ, psi, want_data), "every branch"
+    n_anc = circ["n_anc"]
+    want = np.zeros(2 ** (circ["n_data"] + n_anc), dtype=complex)
+    want[:: 2**n_anc] = want_data
+    count = 0
+    for bits, s in sampled_branches(circ, psi, SAMPLE, rng):
+        overlap = abs(np.vdot(want, s.amp))
+        assert overlap >= 1 - TOL, f"branch {bits}: overlap {overlap:.12f} != 1"
+        count += 1
+    return count, "distinct sampled branches"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cqr", required=True)
     ap.add_argument("--seed", type=int, default=20261025)
+    ap.add_argument("--all-branches", action="store_true",
+                    help="(3), (4): enumerate every branch instead of sampling (slow, ~45 min)")
     args = ap.parse_args()
     exe = os.path.abspath(args.cqr)
     sys.stdout.reconfigure(encoding="utf-8")
@@ -175,8 +223,9 @@ def main():
     assert res["grades"]["circuit"] == EXPECT_CIRCUIT, res["grades"]
     try:
         psi = sv._random_state(n, rng)
-        b = every_branch(res["iteration_circuit"], psi, u_s(n) @ (signs * psi))
-        print(f"(3) Grover iteration U_s U_P: pass in every branch ({b} branches)")
+        b, how = check_branches(res["iteration_circuit"], psi, u_s(n) @ (signs * psi),
+                                args.all_branches, rng)
+        print(f"(3) Grover iteration U_s U_P: pass ({b} {how})")
     except (AssertionError, sv.RestorationError) as e:
         ok = False
         print(f"FAIL (3) Grover iteration: {e}")
@@ -194,7 +243,9 @@ def main():
         e0[0] = 1
         good = [x for x in range(2**n) if reference(data_bits(x))]
         count, total, worst = 0, 0.0, 0.0
-        for bits, s in sv.iter_ir_branches(circ, e0):
+        branches = (sv.iter_ir_branches(circ, e0) if args.all_branches
+                    else sampled_branches(circ, e0, SAMPLE, rng))
+        for bits, s in branches:
             nrm = s.norm2()
             total += nrm
             data = s.amp.reshape(2**n, 2 ** circ["n_anc"])
@@ -204,8 +255,10 @@ def main():
             worst = max(worst, abs(p - float(p_exact)))
             assert worst <= TOL, f"branch {bits}: success probability {p!r} != {p_exact}"
             count += 1
-        assert abs(total - 1) <= TOL, f"branch probabilities sum to {total}"
-        print(f"(4) full Grover r* = {r}: every branch ({count}) restores the ancillae; success "
+        if args.all_branches:
+            assert abs(total - 1) <= TOL, f"branch probabilities sum to {total}"
+        how = "every branch" if args.all_branches else "distinct sampled branches"
+        print(f"(4) full Grover r* = {r}: {count} {how} restore the ancillae; success "
               f"probability = sin^2(3 theta) = {p_exact} = {float(p_exact):.12f} exactly "
               f"(max |diff| over branches {worst:.2e}); delta = {delta}")
     except (AssertionError, sv.RestorationError) as e:
