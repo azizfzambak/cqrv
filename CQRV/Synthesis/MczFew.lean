@@ -97,6 +97,16 @@ def greedyStep (A : List Bool) : Option Op := do
 def applyOp (A : List Bool) (o : Op) : List Bool :=
   ((A.set o.1 false).set o.2.1 true).set o.2.2 true
 
+/-- KG Problem 1 (§5.1) — the operation `o = (t, x, y)` is valid on `A`: `t < x < y`,
+`A[t] = 1`, `A[x] = A[y] = 0` (Stage 13a; the test-file check of Stage 12b, moved here). -/
+def validOp (A : List Bool) (o : Op) : Bool :=
+  o.1 < o.2.1 && o.2.1 < o.2.2 && A.getD o.1 false && !A.getD o.2.1 true && !A.getD o.2.2 true
+
+/-- KG Problem 1 — every operation of `ops` is valid on the array it is applied to. -/
+def valid : List Bool → List Op → Bool
+  | _, [] => true
+  | A, o :: ops => validOp A o && valid (applyOp A o) ops
+
 /-- KG §5.2 — the greedy schedule from `A` (at most `fuel` operations; each removes one
 unmarked index, so `A.length` suffices). Returns the operations and the final array. -/
 def greedy : Nat → List Bool → List Op × List Bool

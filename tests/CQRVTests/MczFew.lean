@@ -35,11 +35,8 @@ def gradeOf (c : Except Diagnostic Circuit) : Option Grade := (c.map grade).toOp
 #guard doubling 10 == [(0, 1, 2), (2, 4, 5), (1, 2, 3), (5, 7, 8), (4, 9, 10), (3, 5, 6), (2, 3, 4)]
 #guard (doubling 36).foldl applyOp (true :: List.replicate 36 false) ==
   List.replicate 5 false ++ List.replicate 32 true  -- five timesteps fit n = 36: the paper's i = 5
--- Every operation is valid for Problem 1 (t < x < y, A[t] = 1, A[x] = A[y] = 0).
-def valid (A : List Bool) (ops : List Op) : Bool :=
-  (ops.foldl (fun (ok, A) o =>
-    (ok && o.1 < o.2.1 && o.2.1 < o.2.2 && A.getD o.1 false && !A.getD o.2.1 true &&
-      !A.getD o.2.2 true, applyOp A o)) (true, A)).1
+-- Every operation is valid for Problem 1 (t < x < y, A[t] = 1, A[x] = A[y] = 0): `MczFew.valid`,
+-- moved to `CQRV.Synthesis.MczFew` in Stage 13a and proved for every n in `CQRV.Grover.MczFewAll`.
 #guard (List.range 40).all fun n => valid (true :: List.replicate n false) (doubling n)
 -- Plans: D₈ ladder = 1 AND + 5 rtof, CZ(anc[0], x[0]); log = 2 ANDs + 4 rtof, CZ(anc[1], x[3]).
 #guard ((plan 8 .ladder).1.map (·.2.2.2), (plan 8 .ladder).2) ==

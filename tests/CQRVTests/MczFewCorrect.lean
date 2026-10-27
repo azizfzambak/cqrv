@@ -152,4 +152,90 @@ info: 'CQRV.Grover.grover_parametric_lemma_diff' depends on axioms: [propext, Cl
 #guard_msgs in
 #print axioms grover_parametric_lemma_diff
 
+/-! ## Stage 13a — KG Theorem 5.1 for every n (`CQRV.Grover.MczFewAll`)
+
+The index-model pieces on small values, then the all-n theorems used at sizes no per-instance
+check reaches (`fewCheck` enumerates `2ⁿ` inputs). -/
+
+-- One sub-step of timestep `i` is `subOps (i + 2^i) (2^{i−1})` (`substeps_succ_interval`).
+#guard KG.subOps 4 2 == [(3, 5, 6), (2, 7, 8)]
+#guard timestep 1 == KG.subOps 3 1 ++ [(1, 2, 3)]
+#guard timestep 2 == KG.subOps 6 2 ++ KG.subOps 4 1 ++ [(2, 3, 4)]
+-- The greedy shapes `F(j, r) = 0 (10)^j 1 1 0^r`, `B(j, r) = 0 (10)^j 0 1^r` (L4).
+#guard KG.arr 7 (KG.fF 2) == [false, true, false, true, false, true, true]
+#guard KG.arr 7 (KG.fB 1) == [false, true, false, false, true, true, true]
+#guard (greedy 9 (true :: List.replicate 8 false)).2 == KG.arr 9 (KG.fB 0)
+#guard (List.range 40).all fun k =>
+  ((List.range (k + 4)).filter fun i => !(greedy (k + 4) (true :: List.replicate (k + 3) false)).2.getD i true).length == 2
+
+example : ∃ C, mczFew 12 .logDepth = .ok C := mczFew_logDepth_ok (by decide)
+
+example {C : Circuit} (h : mczFew 1000 .logDepth = .ok C) : AncRestore 1000 2 C (phaseOracle allOnes) :=
+  mczFew_logDepth_ancRestore h
+
+example {D : Circuit} (h : diffusionFew 64 .logDepth = .ok D) : AncRestore 64 D.nAnc D (diffU 64) :=
+  diffusionFew_logDepth_ancRestore h D.nAnc le_rfl
+
+/-! ## Axioms (Stage 13a) -/
+
+/-- info: 'CQRV.Grover.KG.inv_step' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms KG.inv_step
+
+/-- info: 'CQRV.Grover.KG.sim' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms KG.sim
+
+/--
+info: 'CQRV.Grover.KG.substeps_spec' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms KG.substeps_spec
+
+/--
+info: 'CQRV.Grover.KG.doubling_spec' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms KG.doubling_spec
+
+/-- info: 'CQRV.Grover.KG.greedy_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms KG.greedy_spec
+
+/--
+info: 'CQRV.Grover.KG.logDepth_classical' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms KG.logDepth_classical
+
+/--
+info: 'CQRV.Grover.KG.mczFew_logDepth_WF' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms KG.mczFew_logDepth_WF
+
+/--
+info: 'CQRV.Grover.KG.greedy_init_two' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms KG.greedy_init_two
+
+/--
+info: 'CQRV.Grover.mczFew_logDepth_ancRestore' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms mczFew_logDepth_ancRestore
+
+/--
+info: 'CQRV.Grover.mczFew_logDepth_ok' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms mczFew_logDepth_ok
+
+/--
+info: 'CQRV.Grover.diffusionFew_logDepth_ancRestore' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms diffusionFew_logDepth_ancRestore
+
 end CQRV.Tests.MczFewCorrect
