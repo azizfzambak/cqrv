@@ -1,6 +1,6 @@
 # CQRV — project status (2026-10-28)
 
-One-page state of the repository after Stages 0–13b. The specification is report v3
+One-page state of the repository after Stages 0–13c. The specification is report v3
 (`docs/cqrv_report_revised_v3.docx`, tracked changes over v2, errata appendix). Details:
 `docs/M2_REPORT.md` (milestone M2, frozen, with post-M2 notes), `docs/DECISIONS.md` (every decision),
 `docs/SORRIES.md` (obligations). Toolchain: Lean 4.35.0, Mathlib v4.35.0, Physlib 96a6bc5.
@@ -10,7 +10,7 @@ One-page state of the repository after Stages 0–13b. The specification is repo
 | Result | Report § |
 |---|---|
 | Grover parametric lemma — realization ∧ ancilla restoration, every `r` (`grover_parametric_lemma`, `grover_parametric_lemma'`) | §8.2–8.3, Fig. 8.1 |
-| Lemma 6.3.2 for every network the synthesizer accepts, XOR and `if` included (`lemma_6_3_2_xor`); every synthesized oracle is well formed (`synthesizeOracle_WF`) | §6.3.2, §6.2.4 |
+| Lemma 6.3.2 for every network the synthesizer accepts, XOR and `if` included (`lemma_6_3_2_xor`); every synthesized oracle is well formed (`synthesizeOracle_WF`), and synthesis succeeds on every well-formed one-output network (`synthesizeOracle_succeeds`, Stage 13c) | §6.3.2, §6.2.4 |
 | MBU correctness on density operators (`mbu_channel_correct`); Gidney's TempLogicalAND on any register | §6.2.2 |
 | Theorem 3.3a, measured composition, ε = 0 and general ε (`measured_composition_exact`, `measured_composition`) | §2.3.2 |
 | Theorem 3.3b, coherent composition, for any channel distance dominating twice the trace distance (`coherent_composition`), and with the diamond distance `diamondDist` and its domination lemma (`coherent_composition_diamond`, `diamond_dominates`, Stage 13b); trace-distance triangle, data processing, measurement bound | §2.3.2, §9.3 |
@@ -42,7 +42,6 @@ The chain-shaped diffusion of the earlier stages, (15, 230, 72, 7), is kept as `
 
 | Item | Kind |
 |---|---|
-| `synthesizeOracle_succeeds` (synthesis succeeds on every well-formed one-output network) | planned row |
 | Theorem 3.1 in categorical form; `toNetwork` well-formedness proof | documented gaps |
 | Remote CI (only `scripts/ci_local.sh` has run) | engineering, reviewer's choice |
 

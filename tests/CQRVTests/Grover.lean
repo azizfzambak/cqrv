@@ -188,4 +188,33 @@ example (hM : (Finset.univ.filter (fun x => grover037Oracle.P x = true)).card = 
 example (hM : (Finset.univ.filter (fun x => grover037Oracle.P x = true)).card = 32) :=
   grover_parametric_lemma' (grover037Params hM) 2 grover037Circuit_ok
 
+/-! ## Stage 13c — `synthesizeOracle_succeeds` and the constructors without `hC` -/
+
+/-- info: 'CQRV.synthesizeOracle_succeeds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms synthesizeOracle_succeeds
+
+/-- info: 'CQRV.cone_closed' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms cone_closed
+
+/-- info: 'CQRV.prepare_succeeds' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms prepare_succeeds
+
+/-- info: 'CQRV.Grover.OracleCert.ofWF' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms OracleCert.ofWF
+
+/-- info: 'CQRV.Grover.DiffusionCert.ofN' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms DiffusionCert.ofN
+
+-- `h1` is needed: a well-formed network with no output, on which synthesis fails.
+example : (⟨1, #[.input 0], []⟩ : Network).WF := by decide
+example : (synthesizeOracle ⟨1, #[.input 0], []⟩).toBool = false := by decide
+-- The constructors without a synthesis hypothesis.
+example : OracleCert 8 := OracleCert.ofWF groverNet (by decide) rfl
+example : DiffusionCert 8 := DiffusionCert.ofN 8 (by decide)
+
 end CQRV.Tests.Grover

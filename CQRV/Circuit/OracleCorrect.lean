@@ -26,7 +26,11 @@ generalized in Stage 9a; basis-vector route of DECISIONS.md, Stage 6b-2):
   traced form and the Grover instance;
 * `synthesizeOracle_WF` (Stage 11a): `N.WF → synthesizeOracle N = .ok C → C.WF`, by the qubit
   invariant `InvQ` carried alongside `Inv` and the bit discipline of the uncompute blocks
-  (`bitsOk_uncBlocks`); so `C.WF` no longer needs a per-instance check.
+  (`bitsOk_uncBlocks`); so `C.WF` no longer needs a per-instance check;
+* `synthesizeOracle_succeeds` (Stage 13c): `N.WF → N.outputs.length = 1 → ∃ C,
+  synthesizeOracle N = .ok C`, by the cone-closure invariant `ConeInv` (`cone_closed`) and the
+  forward invariant `SuccInv` of the fold (a value for every marked node; linear parts
+  duplicate-free and sorted by `Qubit.key`, `KeySorted`), with `prepare_succeeds`.
 
 The synthesizer is unchanged: the AND records exist only in the invariant (existentially).
 -/
@@ -1386,6 +1390,400 @@ theorem synthesizeOracle_WF {N : Network} {C : Circuit} (hN : N.WF)
     rw [hnb, hgates, bitsOkFrom_append_list, bitsOkFrom_append_list,
       bitsOkFrom_quiet (cmpBlocks_quiet hperm 0), bitsOkFrom_quiet (phaseFlip_quiet pp), hw]
     simpa using (bitsOk_uncBlocks hperm 0 recs.length le_rfl).1
+
+/-! ## Stage 13c — `synthesizeOracle_succeeds` -/
+
+/-! ### Item 3 — the cone is closed under operands -/
+
+/-- Report §6.1.2 — the operands of a node (earlier node indices). -/
+def Synthesis.Node.operands : Node → List ℕ
+  | .not i => [i]
+  | .and i j | .xor i j => [i, j]
+  | _ => []
+
+/-- Report §6.1.2 — in a well-formed network every operand of node `k` is a node below `k`. -/
+theorem Network.WF.operand_lt {N : Network} (hN : N.WF) {k : ℕ} (hk : k < N.nodes.size) :
+    ∀ i ∈ N.nodes[k].operands, i < k := by
+  unfold Network.WF Network.wf at hN
+  rw [Bool.and_eq_true] at hN
+  have := List.all_eq_true.mp hN.1 k (List.mem_range.mpr hk)
+  rw [Array.getElem?_eq_getElem hk] at this
+  intro i hi
+  cases h : N.nodes[k] <;> rw [h] at this hi <;> simp [Node.operands] at this hi
+  · omega
+  · rcases hi with rfl | rfl <;> omega
+  · rcases hi with rfl | rfl <;> omega
+
+/-- Report §6.1.2 — every output index is a node of a well-formed network. -/
+theorem Network.WF.output_lt {N : Network} (hN : N.WF) {o : ℕ} (ho : o ∈ N.outputs) :
+    o < N.nodes.size := by
+  unfold Network.WF Network.wf at hN
+  rw [Bool.and_eq_true] at hN
+  simpa using List.all_eq_true.mp hN.2 o ho
+
+theorem Array.getD_set!_true (mark : Array Bool) (i j : ℕ) :
+    (mark.set! i true).getD j false = (mark.getD j false || (i == j && decide (i < mark.size))) := by
+  rw [Array.getD_eq_getD_getElem?, Array.getD_eq_getD_getElem?, Array.set!_eq_setIfInBounds,
+    Array.getElem?_setIfInBounds]
+  by_cases hij : i = j
+  · subst hij
+    by_cases hi : i < mark.size <;> simp [hi]
+  · simp [hij]
+
+/-- One step of `Oracle.cone` (its fold body, verbatim). -/
+def coneStep (N : Network) (mark : Array Bool) (k : ℕ) : Array Bool :=
+  if !mark.getD k false then mark else
+  match N.nodes[k]? with
+  | some (.not i) => mark.set! i true
+  | some (.and i j) | some (.xor i j) => (mark.set! i true).set! j true
+  | _ => mark
+
+theorem coneStep_size (N : Network) (mark : Array Bool) (k : ℕ) :
+    (coneStep N mark k).size = mark.size := by
+  unfold coneStep
+  split
+  · rfl
+  · split <;> simp
+
+/-- `coneStep` only raises marks, and only at the operands of node `k`. -/
+theorem coneStep_getD (N : Network) (mark : Array Bool) {k : ℕ} (hk : k < N.nodes.size)
+    (j : ℕ) : (coneStep N mark k).getD j false =
+      (mark.getD j false || (mark.getD k false && decide (j ∈ N.nodes[k].operands) &&
+        decide (j < mark.size))) := by
+  unfold coneStep
+  by_cases hm : mark.getD k false = true
+  · simp only [hm, Bool.not_true, Bool.false_eq_true, ↓reduceIte, Array.getElem?_eq_getElem hk,
+      Bool.true_and]
+    cases N.nodes[k] with
+    | not i =>
+      simp only [Node.operands, Array.getD_set!_true, List.mem_singleton]
+      rw [Bool.eq_iff_iff]
+      simp only [Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq]
+      constructor
+      · rintro (hx | ⟨rfl, h⟩) <;> simp_all
+      · rintro (hx | ⟨rfl, h⟩) <;> simp_all
+    | and i i' =>
+      simp only [Node.operands, Array.getD_set!_true, Array.size_set!, List.mem_cons,
+        List.not_mem_nil, or_false]
+      rw [Bool.eq_iff_iff]
+      simp only [Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq]
+      constructor
+      · rintro ((hx | ⟨rfl, h⟩) | ⟨rfl, h⟩) <;> simp_all
+      · rintro (hx | ⟨rfl | rfl, h⟩) <;> simp_all
+    | xor i i' =>
+      simp only [Node.operands, Array.getD_set!_true, Array.size_set!, List.mem_cons,
+        List.not_mem_nil, or_false]
+      rw [Bool.eq_iff_iff]
+      simp only [Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq]
+      constructor
+      · rintro ((hx | ⟨rfl, h⟩) | ⟨rfl, h⟩) <;> simp_all
+      · rintro (hx | ⟨rfl | rfl, h⟩) <;> simp_all
+    | input _ => simp [Node.operands]
+    | const _ => simp [Node.operands]
+  · simp only [Bool.not_eq_true] at hm
+    simp [hm]
+
+/-- The invariant of the cone fold after the nodes `≥ m` were scanned: the size, `out` marked,
+and every scanned marked node has its operands marked. -/
+def ConeInv (N : Network) (out m : ℕ) (mark : Array Bool) : Prop :=
+  mark.size = N.nodes.size ∧ mark.getD out false = true ∧
+    ∀ k, m ≤ k → (hk : k < N.nodes.size) → mark.getD k false = true →
+      ∀ i ∈ N.nodes[k].operands, mark.getD i false = true
+
+theorem coneInv_step {N : Network} (hN : N.WF) {out m : ℕ} (hm : m < N.nodes.size)
+    {mark : Array Bool} (h : ConeInv N out (m + 1) mark) : ConeInv N out m (coneStep N mark m) := by
+  obtain ⟨hsize, hout, hcl⟩ := h
+  have hops := Network.WF.operand_lt hN hm
+  -- marks at indices `≥ m` are unchanged
+  have hkeep : ∀ j, m ≤ j → (coneStep N mark m).getD j false = mark.getD j false := by
+    intro j hj
+    rw [coneStep_getD N mark hm]
+    have : j ∉ N.nodes[m].operands := fun hj' => by have := hops j hj'; omega
+    simp [this]
+  have hmono : ∀ j, mark.getD j false = true → (coneStep N mark m).getD j false = true := by
+    intro j hj
+    rw [coneStep_getD N mark hm, hj, Bool.true_or]
+  refine ⟨by rw [coneStep_size, hsize], hmono _ hout, fun k hk hkn hmk i hi => ?_⟩
+  rcases Nat.lt_or_ge m k with hlt | hge
+  · rw [hkeep k (by omega)] at hmk
+    exact hmono i (hcl k hlt hkn hmk i hi)
+  · obtain rfl : k = m := by omega
+    rw [hkeep k le_rfl] at hmk
+    have hik : i < k := hops i hi
+    rw [coneStep_getD N mark hkn, hmk]
+    simp [hi, hsize, show i < N.nodes.size by omega]
+
+/-- Report §6.1.2 (Stage 13c item 3) — **the cone is closed**: in a well-formed network, the
+output is marked and every marked node has its operands marked. -/
+theorem cone_closed {N : Network} (hN : N.WF) {out : ℕ} (hout : out < N.nodes.size) :
+    ConeInv N out 0 (Oracle.cone N out) := by
+  have key : ∀ m, m ≤ N.nodes.size → ∀ mark, ConeInv N out m mark →
+      ConeInv N out 0 ((List.range m).reverse.foldl (coneStep N) mark) := by
+    intro m
+    induction m with
+    | zero => intro _ mark h; simpa using h
+    | succ m ih =>
+      intro hm mark h
+      rw [List.range_succ, List.reverse_append, List.reverse_singleton, List.singleton_append,
+        List.foldl_cons]
+      exact ih (by omega) _ (coneInv_step hN (by omega) h)
+  have h0 : ConeInv N out N.nodes.size ((Array.replicate N.nodes.size false).set! out true) :=
+    ⟨by simp, by simp [hout], fun k hk hkn => absurd hkn (by omega)⟩
+  exact key N.nodes.size le_rfl _ h0
+
+/-! ### Item 6 — linear parts are sorted -/
+
+/-- The comparator of `symDiff` (`Qubit.key`, lexicographic). -/
+def keyLe (p q : Qubit) : Bool :=
+  p.key.1 < q.key.1 || (p.key.1 == q.key.1 && p.key.2 ≤ q.key.2)
+
+theorem symDiff_eq_keyLe (a b : List Qubit) :
+    symDiff a b = ((a.filter (!b.contains ·)) ++ (b.filter (!a.contains ·))).foldr
+      (insertBy keyLe) [] := rfl
+
+theorem keyLe_total (p q : Qubit) : keyLe p q = false → keyLe q p = true := by
+  unfold keyLe; simp; omega
+
+theorem keyLe_trans {p q r : Qubit} : keyLe p q = true → keyLe q r = true → keyLe p r = true := by
+  unfold keyLe; simp; omega
+
+theorem keyLe_antisymm {p q : Qubit} : keyLe p q = true → keyLe q p = true → p = q := by
+  intro h1 h2
+  cases p <;> cases q <;> simp [keyLe, Qubit.key] at h1 h2 ⊢ <;>
+    exact Nat.le_antisymm (of_decide_eq_true h1) (of_decide_eq_true h2)
+
+/-- `KeySorted l`: the list is sorted by `keyLe` (the order of `symDiff`). -/
+def KeySorted (l : List Qubit) : Prop := l.Pairwise fun p q => keyLe p q = true
+
+theorem keySorted_insertBy (x : Qubit) :
+    ∀ l : List Qubit, KeySorted l → KeySorted (insertBy keyLe x l)
+  | [] => fun _ => by simp [insertBy, KeySorted]
+  | y :: ys => fun h => by
+    have ih := keySorted_insertBy x ys
+    unfold KeySorted at h ih ⊢
+    rw [List.pairwise_cons] at h
+    unfold insertBy
+    split
+    · rename_i hxy
+      refine List.pairwise_cons.mpr ⟨fun z hz => ?_, List.pairwise_cons.mpr h⟩
+      rcases List.mem_cons.mp hz with rfl | hz
+      exacts [hxy, keyLe_trans hxy (h.1 z hz)]
+    · rename_i hxy
+      refine List.pairwise_cons.mpr ⟨fun z hz => ?_, ih h.2⟩
+      rcases List.mem_cons.mp ((perm_insertBy keyLe x ys).mem_iff.mp hz) with rfl | hz
+      exacts [keyLe_total _ _ (by simpa using hxy), h.1 z hz]
+
+theorem keySorted_foldr_insertBy : ∀ l : List Qubit, KeySorted (l.foldr (insertBy keyLe) [])
+  | [] => List.Pairwise.nil
+  | x :: l => keySorted_insertBy x _ (keySorted_foldr_insertBy l)
+
+theorem symDiff_keySorted (a b : List Qubit) : KeySorted (symDiff a b) := by
+  rw [symDiff_eq_keyLe]; exact keySorted_foldr_insertBy _
+
+/-- Two sorted lists with the same elements are equal (`keyLe` is antisymmetric). -/
+theorem eq_of_perm_of_keySorted : ∀ {l₁ l₂ : List Qubit}, l₁.Perm l₂ → KeySorted l₁ → KeySorted l₂ →
+    l₁ = l₂
+  | [], l₂, hp, _, _ => List.Perm.nil_eq hp
+  | a :: t₁, [], hp, _, _ => absurd (List.Perm.nil_eq hp.symm) (List.cons_ne_nil a t₁).symm
+  | a :: t₁, b :: t₂, hp, h₁, h₂ => by
+    have ih := @eq_of_perm_of_keySorted t₁ t₂
+    unfold KeySorted at h₁ h₂ ih
+    rw [List.pairwise_cons] at h₁ h₂
+    have hab : a = b := by
+      have ha : a ∈ b :: t₂ := hp.mem_iff.mp (List.mem_cons_self ..)
+      have hb : b ∈ a :: t₁ := hp.mem_iff.mpr (List.mem_cons_self ..)
+      rcases List.mem_cons.mp ha with h | ha
+      · exact h
+      rcases List.mem_cons.mp hb with h | hb
+      · exact h.symm
+      exact keyLe_antisymm (h₁.1 b hb) (h₂.1 a ha)
+    subst hab
+    rw [ih hp.cons_inv h₁.2 h₂.2]
+
+/-! ### Items 5, 6 — `fold` and `prepare` -/
+
+theorem fold_eq_none {u v : Aff} (h : Oracle.fold u v = none) :
+    u.lin ≠ [] ∧ v.lin ≠ [] ∧ u.lin ≠ v.lin := by
+  unfold Oracle.fold at h
+  split_ifs at h with h1 h2 h3
+  simp only [List.isEmpty_iff] at h1 h2
+  exact ⟨h1, h2, by simpa using h3⟩
+
+/-- Report §6.1.2 (Stage 13c items 5, 6) — `prepare` succeeds on two operands that `fold` did not
+fold, when their linear parts are sorted and duplicate-free: the first operand is not constant
+(5), and the second has an atom other than the first pivot (6: otherwise both linear parts have
+the same elements, and being sorted, `u.lin = v.lin`, which `fold` folds). -/
+theorem prepare_succeeds {u v : Aff} (hf : Oracle.fold u v = none) (hnu : u.lin.Nodup)
+    (hnv : v.lin.Nodup) (hsu : KeySorted u.lin) (hsv : KeySorted v.lin) :
+    ∃ r, Oracle.prepare u v = .ok r := by
+  obtain ⟨hu, hv, hne⟩ := fold_eq_none hf
+  obtain ⟨pu, tu, hpu⟩ := List.exists_cons_of_ne_nil hu
+  -- the second pivot exists
+  suffices hS : (if v.lin.contains pu then pu :: symDiff (u.lin.erase pu) (v.lin.erase pu)
+      else v.lin).filter (· != pu) ≠ [] by
+    obtain ⟨pv, rest, hpv⟩ := List.exists_cons_of_ne_nil hS
+    unfold Oracle.prepare
+    simp only [hpu, pure_bind]
+    rw [hpu] at hpv
+    simp only [hpv]
+    exact ⟨_, rfl⟩
+  intro h0
+  rw [List.filter_eq_nil_iff] at h0
+  have h0' : ∀ q, q ∈ (if v.lin.contains pu then pu :: symDiff (u.lin.erase pu) (v.lin.erase pu)
+      else v.lin) → q = pu := fun q hq => by simpa using h0 q hq
+  by_cases hc : v.lin.contains pu = true
+  · simp only [hc, ↓reduceIte] at h0'
+    rw [List.contains_iff_mem] at hc
+    rw [hpu] at hnu hsu h0' hne
+    rw [List.erase_cons_head] at h0'
+    have hpt : pu ∉ tu := (List.nodup_cons.mp hnu).1
+    have hpB : pu ∉ v.lin.erase pu := fun h => ((hnv.mem_erase_iff).mp h).1 rfl
+    -- the symmetric difference is empty
+    have hsd : ∀ q, q ∉ symDiff tu (v.lin.erase pu) := fun q hq => by
+      have := h0' q (List.mem_cons_of_mem _ hq)
+      subst this
+      rcases mem_symDiff hq with h | h
+      exacts [hpt h, hpB h]
+    have hAB : ∀ q, q ∈ tu ↔ q ∈ v.lin.erase pu := fun q => by
+      have hp := symDiff_perm tu (v.lin.erase pu)
+      constructor
+      · intro hq
+        by_contra hB
+        exact hsd q (hp.mem_iff.mpr (List.mem_append_left _ (List.mem_filter.mpr
+          ⟨hq, by simpa [List.contains_iff_mem] using hB⟩)))
+      · intro hq
+        by_contra hA
+        exact hsd q (hp.mem_iff.mpr (List.mem_append_right _ (List.mem_filter.mpr
+          ⟨hq, by simpa [List.contains_iff_mem] using hA⟩)))
+    have hmem : ∀ q, q ∈ pu :: tu ↔ q ∈ v.lin := fun q => by
+      rw [List.mem_cons, hAB, hnv.mem_erase_iff]
+      by_cases hq : q = pu
+      · subst hq; simp [hc]
+      · simp [hq]
+    exact hne (eq_of_perm_of_keySorted ((List.perm_ext_iff_of_nodup hnu hnv).mpr hmem) hsu hsv)
+  · simp only [Bool.not_eq_true] at hc
+    simp only [hc, Bool.false_eq_true, ↓reduceIte] at h0'
+    obtain ⟨w, tw, hw⟩ := List.exists_cons_of_ne_nil hv
+    have hwv : w ∈ v.lin := by rw [hw]; exact List.mem_cons_self ..
+    have := h0' w hwv
+    subst this
+    rw [List.contains_iff_mem.mpr hwv] at hc
+    cases hc
+
+/-! ### Items 2–6 — the synthesizer's fold succeeds -/
+
+/-- The forward invariant of the synthesizer's fold after the nodes `< k`: one value per node,
+a value for every marked node, and every value has a sorted, duplicate-free linear part. -/
+def SuccInv (mark : Array Bool) (k : ℕ) (st : Oracle.St) : Prop :=
+  st.vals.size = k ∧
+    (∀ i < k, mark.getD i false = true → ∃ u, st.vals.getD i none = some u) ∧
+    ∀ i u, st.vals.getD i none = some u → u.lin.Nodup ∧ KeySorted u.lin
+
+theorem succInv_push {mark : Array Bool} {k : ℕ} {vals : Array (Option Aff)}
+    (h : SuccInv mark k { vals }) (e : Option Aff)
+    (hsome : mark.getD k false = true → ∃ u, e = some u)
+    (hgood : ∀ u, e = some u → u.lin.Nodup ∧ KeySorted u.lin) (st : Oracle.St)
+    (hst : st.vals = vals.push e) : SuccInv mark (k + 1) st := by
+  obtain ⟨hsize, hdef, hval⟩ := h
+  refine ⟨by simp [hst, hsize], fun i hi hm => ?_, fun i u hu => ?_⟩
+  · rw [hst, Array.getD_push_eq, hsize]
+    split_ifs with hik
+    · subst hik; exact hsome hm
+    · exact hdef i (by omega) hm
+  · rw [hst, Array.getD_push_eq, hsize] at hu
+    split_ifs at hu
+    · exact hgood u hu
+    · exact hval i u hu
+
+/-- Report §6.1.2 (Stage 13c items 2, 3, 5, 6) — one step of the synthesizer succeeds on a node
+of a well-formed network whose marks are closed, and keeps `SuccInv`. -/
+theorem step_succeeds {N : Network} (hN : N.WF) {out : ℕ} {mark : Array Bool}
+    (hcl : ConeInv N out 0 mark) {k : ℕ} (hk : k < N.nodes.size) {st : Oracle.St}
+    (h : SuccInv mark k st) : ∃ st', Oracle.step N mark st k = .ok st' ∧
+      SuccInv mark (k + 1) st' := by
+  have hst : SuccInv mark k { vals := st.vals } := h
+  obtain ⟨hsize, hdef, hval⟩ := h
+  unfold Oracle.step
+  by_cases hm : mark.getD k false = true
+  swap
+  · simp only [Bool.not_eq_true] at hm
+    simp only [hm, Bool.not_false, ↓reduceIte]
+    refine ⟨{ st with vals := st.vals.push none }, rfl,
+      succInv_push hst none (fun h => ?_) (fun u h => by cases h) _ rfl⟩
+    rw [hm] at h
+    cases h
+  simp only [hm, Bool.not_true, Bool.false_eq_true, ↓reduceIte, Array.getElem?_eq_getElem hk]
+  have hops : ∀ i ∈ N.nodes[k].operands, ∃ u, st.vals.getD i none = some u := fun i hi =>
+    hdef i (Network.WF.operand_lt hN hk i hi) (hcl.2.2 k (Nat.zero_le _) hk hm i hi)
+  generalize hnd : N.nodes[k] = nd at hops
+  cases nd with
+  | input i =>
+    exact ⟨_, rfl, succInv_push hst _ (fun _ => ⟨_, rfl⟩)
+      (fun u hu => by cases hu; simp [KeySorted]) _ rfl⟩
+  | const b =>
+    exact ⟨_, rfl, succInv_push hst _ (fun _ => ⟨_, rfl⟩)
+      (fun u hu => by cases hu; simp [KeySorted]) _ rfl⟩
+  | not i =>
+    obtain ⟨u, hu⟩ := hops i (by simp [Node.operands])
+    simp only [hu]
+    exact ⟨_, rfl, succInv_push hst _ (fun _ => ⟨_, rfl⟩)
+      (fun w hw => by cases hw; exact hval i u hu) _ rfl⟩
+  | xor i j =>
+    obtain ⟨u, hu⟩ := hops i (by simp [Node.operands])
+    obtain ⟨v, hv⟩ := hops j (by simp [Node.operands])
+    simp only [hu, hv, pure_bind]
+    exact ⟨_, rfl, succInv_push hst _ (fun _ => ⟨_, rfl⟩)
+      (fun w hw => by
+        cases hw
+        exact ⟨symDiff_nodup (hval i u hu).1 (hval j v hv).1, symDiff_keySorted _ _⟩) _ rfl⟩
+  | and i j =>
+    obtain ⟨u, hu⟩ := hops i (by simp [Node.operands])
+    obtain ⟨v, hv⟩ := hops j (by simp [Node.operands])
+    simp only [hu, hv, pure_bind]
+    cases hf : Oracle.fold u v with
+    | some r =>
+      refine ⟨{ st with vals := st.vals.push (some r) }, rfl,
+        succInv_push hst (some r) (fun _ => ⟨_, rfl⟩) (fun w hw => ?_) _ rfl⟩
+      cases hw
+      rcases fold_cases hf with rfl | rfl | rfl
+      exacts [hval i _ hu, hval j _ hv, by simp [KeySorted]]
+    | none =>
+      obtain ⟨⟨pre, pu, pv⟩, hp⟩ := prepare_succeeds hf (hval i u hu).1 (hval j v hv).1
+        (hval i u hu).2 (hval j v hv).2
+      simp only [hp]
+      exact ⟨_, rfl, succInv_push hst _ (fun _ => ⟨_, rfl⟩)
+        (fun w hw => by cases hw; simp [KeySorted]) _ rfl⟩
+
+theorem fold_succeeds {N : Network} (hN : N.WF) {out : ℕ} {mark : Array Bool}
+    (hcl : ConeInv N out 0 mark) :
+    ∀ m, m ≤ N.nodes.size → ∃ st,
+      (List.range m).foldlM (Oracle.step N mark) ({ vals := #[] } : Oracle.St) = .ok st ∧
+        SuccInv mark m st
+  | 0, _ => ⟨_, rfl, rfl, fun i hi => absurd hi (Nat.not_lt_zero _), fun i u hu => by simp at hu⟩
+  | m + 1, hm => by
+    obtain ⟨st₁, h₁, hinv⟩ := fold_succeeds hN hcl m (by omega)
+    obtain ⟨st₂, h₂, hinv₂⟩ := step_succeeds hN hcl (by omega) hinv
+    refine ⟨st₂, ?_, hinv₂⟩
+    rw [List.range_succ, List.foldlM_append, except_bind_eq_ok]
+    exact ⟨st₁, h₁, by simpa using h₂⟩
+
+/-- Report §6.1.2, §6.1.4, §6.3.2, §9.1.1 (Stage 13c) — **synthesis never fails on a well-formed
+one-output network**. Every failure point of `synthesizeOracle` is unreachable: the output count
+(`h1`), node indices (the fold runs over `List.range`), operands outside the cone (`cone_closed`
+with `SuccInv`), the output outside the cone (`cone` marks it, `N.WF`), and both `fail`s of
+`prepare` (`prepare_succeeds`: `fold` catches constants and equal linear parts, and linear parts
+are sorted by `Qubit.key`). The hypothesis `h1` is needed: `⟨1, #[.input 0], []⟩` is well formed
+and fails (no output). -/
+theorem synthesizeOracle_succeeds {N : Network} (hN : N.WF) (h1 : N.outputs.length = 1) :
+    ∃ C, synthesizeOracle N = .ok C := by
+  obtain ⟨out, hout⟩ := List.length_eq_one_iff.mp h1
+  have hlt : out < N.nodes.size := Network.WF.output_lt hN (by simp [hout])
+  have hcl := cone_closed hN hlt
+  obtain ⟨st, hst, -, hdef, -⟩ := fold_succeeds hN hcl N.nodes.size le_rfl
+  obtain ⟨p, hp⟩ := hdef out hlt hcl.2.1
+  unfold synthesizeOracle
+  simp only [hout, except_bind_eq_ok]
+  exact ⟨_, out, rfl, st, hst, by simp only [hp]; rfl⟩
 
 /-- Report §8, §6.3.2 — the `grover_pred_037` instance of Lemma 6.3.2: the synthesized Grover
 oracle on `x[0..8) × anc[0..2)` restores its ancillae and applies `(−1)^(x0 ∧ x3 ∧ x7)`.

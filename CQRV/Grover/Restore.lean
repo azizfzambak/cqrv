@@ -893,6 +893,29 @@ def DiffusionCert.mk' (n : ℕ) {C : Circuit} (hC : synthesizeOracle (allNet n) 
   hN := rfl
   hPred := allNet_pred (allNet_ok_ne_zero hC)
 
+/-- Report §5.2.4, §6.3.2 (Stage 13c) — the certified oracle of a well-formed one-output network,
+with no synthesis hypothesis: `synthesizeOracle_succeeds` rules out the error branch. Computable
+(a match on `synthesizeOracle N`, not `Classical.choose`). -/
+def OracleCert.ofWF (N : Network) (hN : N.WF) (h1 : N.outputs.length = 1) :
+    OracleCert N.nInputs :=
+  match hC : synthesizeOracle N with
+  | .ok _ => OracleCert.ofNetwork N hN hC
+  | .error _ => False.elim <| by
+    obtain ⟨C, h⟩ := synthesizeOracle_succeeds hN h1
+    rw [h] at hC
+    cases hC
+
+/-- Report §6 (`DiffusionCert(n)`), §8.2 (Stage 13c) — the MCZ certificate for every `n ≥ 1`
+without an `hC` argument: the MCZ of `P_all` is synthesized (`synthesizeOracle_succeeds` with
+`allNet_WF`). -/
+def DiffusionCert.ofN (n : ℕ) (hn : n ≠ 0) : DiffusionCert n :=
+  match hC : synthesizeOracle (allNet n) with
+  | .ok _ => DiffusionCert.mk' n hC
+  | .error _ => False.elim <| by
+    obtain ⟨C, h⟩ := synthesizeOracle_succeeds (allNet_WF hn) (by simp [allNet])
+    rw [h] at hC
+    cases hC
+
 /-! ## Stage 12d — the Grover circuit over any certified diffusion -/
 
 /-- Report §3.2.4, §8.2 (Stage 12d decision 2) — the Grover circuit built from an oracle circuit
