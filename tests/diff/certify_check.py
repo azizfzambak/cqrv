@@ -11,7 +11,8 @@ Runs the built `cqr` from the project root and checks
     and compared with hashes.circuit; the .qasm / .qir files re-parse to exactly that literal;
     hashes.proof is recomputed from Cert.lean and the pinned configuration;
   * reproducibility: a second run gives byte-identical Cert.lean / .qir / .qasm and the same JSON
-    except the timing field reference_configuration.kernel_check; the committed example
+    except the machine fields of reference_configuration (MACHINE, Stage 13a′ review; every hash
+    stays compared); the committed example
     examples/certs/grover_pred_037/ agrees with the run (JSON modulo the machine fields);
   * the second worked predicate examples/simple_alu_x0_1.cqr (RevLib Simple ALU, bit 1 of x0;
     Stage 9b): M = 30 recounted here from the SyReC semantics (benchmark_diff.reference),
@@ -191,7 +192,8 @@ def check_hardware(d, cert, plain, last_two, fits, version="1.4.0"):
     assert last_two == [status, line], (last_two, line)
     rest = {k: v for k, v in cert.items() if k not in ("hardware", "schema_version")}
     base = {k: v for k, v in plain.items() if k != "schema_version"}
-    assert without(rest, ["kernel_check"]) == without(base, ["kernel_check"]), "rest of the JSON"
+    # Run vs run: every machine field differs between runs (Stage 13a′ review), hashes do not.
+    assert without(rest, MACHINE) == without(base, MACHINE), "rest of the JSON"
     rep = json.loads(read(os.path.join(d, "run_report.json")))
     assert [r["stage"] for r in rep["rows"]] == STAGES + ["Hardware profile"], rep["rows"]
     row = rep["rows"][-1]
@@ -333,8 +335,8 @@ def main():
         cert2, _ = check_dir(runs[1], validator)
         for f in ("Cert.lean", f"{NAME}.qir", f"{NAME}.qasm"):
             assert read(os.path.join(runs[0], f), "rb") == read(os.path.join(runs[1], f), "rb"), f
-        assert without(cert, ["kernel_check"]) == without(cert2, ["kernel_check"])
-        print("ok:   second run byte-identical (Cert.lean, .qir, .qasm; JSON except kernel_check)")
+        assert without(cert, MACHINE) == without(cert2, MACHINE)
+        print("ok:   second run byte-identical (Cert.lean, .qir, .qasm; JSON except machine fields)")
         ex, _ = check_dir(EXAMPLE, validator)
         for f in ("Cert.lean", f"{NAME}.qir", f"{NAME}.qasm"):
             assert read(os.path.join(runs[0], f), "rb") == read(os.path.join(EXAMPLE, f), "rb"), \

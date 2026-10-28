@@ -27,7 +27,7 @@ One-page state of the repository after Stages 0–12b. The specification is repo
 | δ (exact) | 7/128 | 833/2048 |
 | Kernel check (i9-13900H, 4 threads) | 7.2 s | 6.4 s |
 | `--profile ibm_kyiv` (report Table 3.5 figures) | fits all budgets; δ_hw ≤ 2531/640 (vacuous) | fits all budgets; δ_hw ≤ 39493/10240 (vacuous) |
-| `--shape few:log` (2-ancilla diffusion, Stage 12d; `examples/certs/grover_pred_037_few`) | certified (conditional on: solution_count = 32); (10, 172, 96, 2); δ 7/128; kernel 6.8 s; ibm_kyiv fits all budgets, δ_hw ≤ 2467/640 (vacuous) | — (not requested) |
+| `--shape few:log` (2-ancilla diffusion, Stage 12d; `examples/certs/grover_pred_037_few`) | certified (conditional on: solution_count = 32) via the every-n theorem (`grover_certificate_few_all`, KG Theorem 5.1 for every n; Stage 13a, 13a′; no per-instance classical check); (10, 172, 96, 2); δ 7/128; kernel 22.6 s (slow regime; 5.9 s fast, DECISIONS.md 2026-10-28); ibm_kyiv fits all budgets, δ_hw ≤ 2467/640 (vacuous) | — (not requested) |
 
 The chain-shaped diffusion of the earlier stages, (15, 230, 72, 7), is kept as `*_chain` theorems.
 
@@ -43,7 +43,6 @@ The chain-shaped diffusion of the earlier stages, (15, 230, 72, 7), is kept as `
 | Item | Kind |
 |---|---|
 | Diamond norm and the domination lemma ‖Λ₁ρ − Λ₂ρ‖₁ ≤ ‖Λ₁ − Λ₂‖⋄, to instantiate Theorem 3.3b concretely | Phase III proof |
-| 2-ancilla MCZ (KG §5.3, candidate B): certified per instance since Stage 12d (§2); KG Theorem 5.1 for all n would replace the per-instance classical step (SORRIES row) | planned row |
 | `synthesizeOracle_succeeds` (synthesis succeeds on every well-formed one-output network) | planned row |
 | Theorem 3.1 in categorical form; `toNetwork` well-formedness proof | documented gaps |
 | Remote CI (only `scripts/ci_local.sh` has run) | engineering, reviewer's choice |

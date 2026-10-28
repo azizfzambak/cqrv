@@ -4,7 +4,7 @@
 #   tests/diff/certify_check.py  cqr certify examples/grover_pred_037.cqr: status line, schema
 #                                v1.3.0, grade, δ, axioms; circuit hash = SHA3 of the IR literal
 #                                of Cert.lean (hashlib); .qasm / .qir re-parse to the literal;
-#                                second run byte-identical (JSON except kernel_check); the
+#                                second run byte-identical (JSON except machine fields); the
 #                                committed examples/certs/grover_pred_037 agrees; the XOR
 #                                predicate tests/certify/xor_pred.cqr and the `if` predicate
 #                                tests/certify/if_pred.cqr are certified (Stage 9a, 9a review);
