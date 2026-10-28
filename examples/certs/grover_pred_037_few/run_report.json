@@ -50,12 +50,12 @@
    "T after the first measurement: oracle 0, diffusion 16; 8 MBU measurements, 16 classically controlled gates; a = 2",
    "output": "Restored circuit (AncRestore conjunct of `cert`)",
    "note":
-   "AncRestore n a emitted (groverOp P ^ r * hadamardU n), on density operators (Lemma 6.3.2 per oracle call; few-ancilla MCZ by mczFew_ancRestore_of_classical, its classical KG step checked for n = 8 (2^8 inputs, fewCheck) by `decide +kernel`)",
+   "AncRestore n a emitted (groverOp P ^ r * hadamardU n), on density operators (Lemma 6.3.2 per oracle call; few-ancilla MCZ by mczFew_logDepth_ancRestore, KG Theorem 5.1 for every n, Stage 13a; no per-instance classical check)",
    "input": "Oracle U_P and diffusion MCZ"},
   {"verification": "kernel-checked",
    "stage": "7. Certificate Gen",
    "resources":
-   "kernel 6.76 s, wall 16.37 s (median of 5 (first run excluded)); axioms: propext, Classical.choice, Quot.sound",
+   "kernel 22.60 s, wall 43.25 s (median of 5 (first run excluded)); axioms: propext, Classical.choice, Quot.sound",
    "output":
    "examples/certs/grover_pred_037_few/Cert.lean, certificate.json (theorem CQRV.Cert.grover_pred_037.cert)",
    "note":

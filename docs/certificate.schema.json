@@ -40,7 +40,7 @@
   "properties": {
     "schema_version": {"type": "string", "enum": ["1.3.0", "1.4.0", "1.5.0"]},
     "diffusion_shape": {
-      "description": "Report §8.2, §8.4.1 (Stage 12d): the diffusion of the certified Grover circuit when it is not the V1 balanced tree (omitted means \"tree\"): \"few:log\" = the few-ancilla MCZ of Khattar–Gidney 2025 §5.3 with Maslov 2016 relative-phase Toffoli pairs (at most 2 clean ancillae), certified by grover_certificate_few with the classical KG step checked for this n.",
+      "description": "Report §8.2, §8.4.1 (Stage 12d): the diffusion of the certified Grover circuit when it is not the V1 balanced tree (omitted means \"tree\"): \"few:log\" = the few-ancilla MCZ of Khattar–Gidney 2025 §5.3 with Maslov 2016 relative-phase Toffoli pairs (at most 2 clean ancillae), certified by grover_certificate_few_all (KG Theorem 5.1 for every n, Stage 13a; no per-instance classical check since Stage 13a′; Stage 12d certificates used grover_certificate_few with the classical KG step checked for their n).",
       "type": "string",
       "enum": ["few:log"]
     },

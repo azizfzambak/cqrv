@@ -20,7 +20,8 @@
 #                                recomputed; Stage 12d: --shape few:log (grade (10, 172, 96, 2),
 #                                schema v1.5.0, Kyiv fits), the committed
 #                                examples/certs/grover_pred_037_few, and a few:log Cert.lean
-#                                with the classical step for a wrong n → kernel check fails
+#                                with mcz_ok for a wrong n → kernel check fails (Stage 13a′:
+#                                no per-instance classical step, grover_certificate_few_all)
 #   tests/diff/profile_schema.py profiles/*.json against docs/profile.schema.json; ibm_kyiv =
 #                                report Table 3.5 / §3.3.3; mutated profiles rejected by the
 #                                schema and by `cqr certify --profile` (Stage 11b)

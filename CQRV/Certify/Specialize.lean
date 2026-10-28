@@ -2,6 +2,7 @@ module
 
 public import CQRV.Grover.Instance
 public import CQRV.Grover.MczFew
+public import CQRV.Grover.MczFewAll
 public import CQRV.Certify.Certificate
 
 /-!
@@ -22,6 +23,9 @@ Report §5.1.3 (per-request work = proof specialization + kernel checking), §8.
   (`cqr certify --shape few:log`), from `grover_parametric_lemma_diff` and
   `diffusionFew_ancRestore_of_classical`; the classical KG fact for the request's `n` is the
   side condition `fewCheck n a₀ (plan n .logDepth) = true`, discharged by `decide +kernel`.
+* `grover_certificate_few_all` (Stage 13a′): the same conclusion with only the request-specific
+  hypotheses; the KG step for every `n` is `diffusionFew_logDepth_ancRestore` (Stage 13a), so a
+  `--shape few:log` certificate checks no `2ⁿ` classical condition.
 -/
 
 @[expose] public section
@@ -172,6 +176,42 @@ theorem grover_certificate_few {n M r a a₀ : ℕ} {δ : ℝ} {g : Grade} (O : 
   rw [sin_sq_odd_mul _ _ hs r, ← Rat.cast_one, ← Rat.cast_sub, ← groverDelta, hδ, hg] at h1
   rw [ha] at h2
   exact ⟨h1, h2⟩
+
+/-- Report §5.1.3, §8.4.1, §8.4.4, §8.2 (Stage 13a′ decision 1) — **the certificate lemma for the
+few-ancilla diffusion, every `n`**: the conclusion of `grover_certificate_few` with only the
+request-specific hypotheses. KG Theorem 5.1 for every `n` (`diffusionFew_logDepth_ancRestore`,
+`KG.mczFew_logDepth_WF`, Stage 13a) replaces the side conditions `hWF`, `hnb`, `hchk`, `ha₀`, and
+`Dc.bitsOk` follows from the MCZ's well-formedness (`diffusionCircuit` appends data-only layers);
+no per-instance classical check. -/
+theorem grover_certificate_few_all {n M r a : ℕ} {δ : ℝ} {g : Grade} (O : OracleCert n)
+    {Dc C : Circuit} (hM_pos : 1 ≤ M) (hD : diffusionFew n .logDepth = .ok Dc)
+    (hC : groverCircuitFew O.N n r .logDepth = .ok C) (hδ : ((groverDelta r n M : ℚ) : ℝ) = δ)
+    (hg : Synthesis.grade C = g) (ha : C.nAnc = a)
+    (hM_card : (Finset.univ.filter fun x => O.P x = true).card = M) :
+    RealizesExact (SearchSpec O.P) (basisPOVM n) (groverChannel n C) δ g ∧
+      AncRestore n a C (groverOp O.P ^ r * hadamardU n) := by
+  let gp : GroverParams := ⟨n, M, hM_pos, O, hM_card⟩
+  cases hm : mczFew n .logDepth with
+  | error e => simp [diffusionFew, hm, bind, Except.bind] at hD
+  | ok Cm =>
+    have hDr := diffusionFew_logDepth_ancRestore hD
+    have hDeq : Dc = diffusionCircuit n Cm :=
+      Except.ok.inj (hD.symm.trans (diffusionFew_ok_of hm))
+    have hDb : Dc.bitsOk = true := by
+      rw [hDeq]
+      exact Circuit.bitsOk_append (Circuit.bitsOk_append (bitsOk_dataLayer _ _ (pre_unitary n))
+        (KG.mczFew_logDepth_WF hm).1.bitsOk) (bitsOk_dataLayer _ _ (post_unitary n))
+    have hCeq : C = groverCircuitOf O.C Dc n r := by
+      rw [groverCircuitFew_ok_of O.hn O.hC hm, ← hDeq] at hC
+      exact (Except.ok.inj hC).symm
+    obtain ⟨h1, h2⟩ := grover_parametric_lemma_diff gp Dc hDb hDr r hCeq
+    have hs : ((solutionFraction n M : ℚ) : ℝ) = Real.sin gp.θ ^ 2 := by
+      rw [gp.sin_θ_eq, Real.sq_sqrt (by positivity), solutionFraction]
+      push_cast
+      rfl
+    rw [sin_sq_odd_mul _ _ hs r, ← Rat.cast_one, ← Rat.cast_sub, ← groverDelta, hδ, hg] at h1
+    rw [ha] at h2
+    exact ⟨h1, h2⟩
 
 end CQRV.Certify
 

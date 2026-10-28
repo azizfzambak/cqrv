@@ -170,10 +170,10 @@ def RunData.rows (d : RunData) : List ReportRow :=
       note := match d.diffusionShape with
         | .tree => "AncRestore n a emitted (groverOp P ^ r * hadamardU n), on density operators \
             (Lemma 6.3.2 per oracle call, DiffusionCert for the MCZ)"
-        | .fewLog => s!"AncRestore n a emitted (groverOp P ^ r * hadamardU n), on density \
+        | .fewLog => "AncRestore n a emitted (groverOp P ^ r * hadamardU n), on density \
             operators (Lemma 6.3.2 per oracle call; few-ancilla MCZ by \
-            mczFew_ancRestore_of_classical, its classical KG step checked for n = {d.n} \
-            (2^{d.n} inputs, fewCheck) by `decide +kernel`)" },
+            mczFew_logDepth_ancRestore, KG Theorem 5.1 for every n, Stage 13a; no per-instance \
+            classical check)" },
     { stage := "7. Certificate Gen", input := "Proof + grade",
       output := s!"{d.certPath}, certificate.json (theorem {d.theoremName})",
       verification := .kernelChecked,

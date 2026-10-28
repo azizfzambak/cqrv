@@ -8,10 +8,10 @@ public import CQRV.Synthesis.Diffusion
 Report §3.1.4 / Table 3.3, §6.1.4 (v2's "multi-controlled Z decomposed with 2 clean ancilla",
 v3 erratum 8), §6.2, §9.5.2 — Stage 12b: an n-qubit multi-controlled Z with **at most two clean
 ancillae**, from the literature (DECISIONS.md 2026-10-26, Stage 12b; `docs/MCZ_NOTES.md`).
-Status (`MczVariant.status`): `logDepth` — restoration proved (Stage 12c); certified per instance via `cqr certify --shape few:log` (Stage 12d): the restoration is proved for every
-`n` given the classical KG fact (`mczFew_ancRestore_of_classical`, `CQRV.Grover.MczFew`), which a
-certificate checks for its own `n`; `ladder` — classical step checked at n = 8, restoration not certified (`cqr synthesize … --shape
-few:ladder` only).
+Status (`MczVariant.status`): `logDepth` — restoration proved for every `n` (Stage 13a:
+`mczFew_logDepth_ancRestore`, `CQRV.Grover.MczFewAll`); certified via `cqr certify --shape few:log`
+with no per-instance classical check (Stage 13a′); `ladder` — classical step checked at n = 8,
+restoration not certified (`cqr synthesize … --shape few:ladder` only).
 
 Both variants solve Khattar–Gidney's "Problem 1" (arXiv:2407.17966, *Quantum* 9, 1752 (2025),
 §5.1): an array `A[0..n]`, `A[0] = 1` (the clean ancilla), `A[i] = 0` (data qubit `x[i−1]`); an
@@ -61,11 +61,11 @@ def MczVariant.source : MczVariant → String
   | .logDepth => "Khattar-Gidney 2024 §5.3 + Maslov 2016 RTOF"
 
 /-- The status label of a few-ancilla MCZ in all output (Stage 12b decision 4; Stage 12d
-decision 5: per variant). -/
+decision 5: per variant; Stage 13a′ decision 3: `logDepth` proved for every `n`). -/
 def MczVariant.status : MczVariant → String
   | .ladder => "classical step checked at n = 8, restoration not certified"
   | .logDepth =>
-    "restoration proved (Stage 12c); certified per instance via `cqr certify --shape few:log` (Stage 12d)"
+    "restoration proved for every n (Stage 13a); certified via `cqr certify --shape few:log`"
 
 namespace MczFew
 
@@ -206,7 +206,7 @@ open MczFew
 
 /-- Report §6.1.4, §3.1.4 (Stage 12b decision 2) — the few-ancilla MCZ on `x[0..n)`,
 `n ≥ 1`: the compute steps of `plan`, the phase, the steps in reverse. Status:
-`MczVariant.status` (`logDepth` certified per instance, Stage 12d). -/
+`MczVariant.status` (`logDepth` proved for every `n`, Stage 13a). -/
 def mczFew (n : Nat) (v : MczVariant) : Except Diagnostic Circuit := do
   if n == 0 then fail .unsupportedNetwork "the MCZ needs at least one data qubit"
   let (steps, us) := plan n v

@@ -1,7 +1,7 @@
 """Differential test of the few-ancilla MCZ (report §3.1.4 Table 3.3, §6.1.4, §6.2, §8.2;
 CLAUDE.md rule 9; Stage 12b decision 3). Stage 12b: the circuits were unproved and this harness
 was the only evidence of their correctness (DECISIONS.md 2026-10-26, Stage 12b); since Stage 12c /
-12d the restoration of `few:log` is proved in Lean and certified per instance, and this harness
+12d the restoration of `few:log` is proved in Lean (for every n since Stage 13a), and this harness
 is the independent check (CLAUDE.md rule 9).
 
   (0) gadgets — Maslov's relative-phase Toffoli (`MczFew.rtof`, the 9-gate list below) equals
@@ -38,9 +38,10 @@ from grover_diff import (bits_of, check_all_branches, check_full, cqr_json,  # n
 
 MAX_DATA = 10
 VARIANTS = ["few:ladder", "few:log"]
-# The `status` label of each variant in the CLI output (MczVariant.status, Stage 12d decision 5).
+# The `status` label of each variant in the CLI output (MczVariant.status, Stage 12d decision 5;
+# Stage 13a′ decision 3).
 STATUS = {"few:ladder": "classical step checked at n = 8, restoration not certified",
-          "few:log": "restoration proved (Stage 12c); certified per instance via `cqr certify --shape few:log` (Stage 12d)"}
+          "few:log": "restoration proved for every n (Stage 13a); certified via `cqr certify --shape few:log`"}
 
 
 def rtof(a, b, t):

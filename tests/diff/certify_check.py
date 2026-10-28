@@ -56,11 +56,12 @@ Runs the built `cqr` from the project root and checks
     v1.5.0 with diffusion_shape "few:log" (hardware only with --profile), grade (10, 172, 96, 2),
     delta 7/128, axioms exactly the standard three; Kyiv: `hardware profile ibm_kyiv: fits all
     budgets; δ_hw ≤ 7/128 + 380·1/100 = 2467/640 (vacuous)` (d = 172 <= 200), every field of
-    `hardware` recomputed; Cert.lean has the classical step `fewCheck 8 2 (MczFew.plan 8
-    .logDepth)` by `decide +kernel`, applies `grover_certificate_few`, no native_decide / sorry /
-    treeNet; the committed examples/certs/grover_pred_037_few agrees (Cert.lean, .qir, .qasm
-    bytes; certificate.json outside reference_configuration; run report); negative test (d): the
-    committed few Cert.lean with the classical step stated for n = 7 → the kernel check fails;
+    `hardware` recomputed; Cert.lean applies `grover_certificate_few_all` (Stage 13a′: KG
+    Theorem 5.1 for every n, no per-instance classical check: no `fewCheck`, `classical_step`,
+    `mcz_WF`, `diff_WF`), no native_decide / sorry / treeNet; the committed
+    examples/certs/grover_pred_037_few agrees (Cert.lean, .qir, .qasm bytes; certificate.json
+    outside reference_configuration; run report); negative test (d): the committed few Cert.lean
+    with `mcz_ok` stated for n = 7 → the kernel check fails;
   * the tree certificates are unchanged by Stage 12d: the byte-identity checks above.
 
 Usage: python -I tests/diff/certify_check.py --cqr <path to cqr>   (after `lake build`)
@@ -426,13 +427,15 @@ def main():
         assert fc["grade"] == {"w": 10, "d": 172, "t": 96, "a": 2}, fc["grade"]
         assert fc["spec"]["delta"] == "7/128" and fc["instance"] == {"n": 8, "M": 32, "r": 2}
         assert fc["theorem"] == THEOREM
-        for frag in ("theorem classical_step : fewCheck 8 2 (MczFew.plan 8 .logDepth) = true",
-                     "  grover_certificate_few oracle",
+        for frag in ("  grover_certificate_few_all oracle (by decide) diff_ok emitted_ok",
                      "theorem emitted_ok : groverCircuitFew net 8 2 .logDepth = .ok emitted",
+                     "theorem mcz_ok : mczFew 8 .logDepth = .ok mczCircuit",
                      "theorem diff_ok : diffusionFew 8 .logDepth = .ok diffCircuit",
-                     "theorem diff_WF : diffCircuit.WF := by decide +kernel"):
+                     "no per-instance classical check"):
             assert ftext.count(frag) == 1, frag
-        for bad_frag in ("native_decide", "sorry", "treeNet"):
+        for bad_frag in ("native_decide", "sorry", "treeNet", "fewCheck", "classical_step",
+                         "mcz_WF", "mcz_nBits", "mcz_nAnc", "diff_WF",
+                         "grover_certificate_few oracle"):
             assert bad_frag not in ftext, bad_frag
         out_k, so_k = runs_few["kyiv"]
         fk, _ = check_dir(out_k, validator)
@@ -453,7 +456,7 @@ def main():
         check_report(EXAMPLE_FEW, exf)
         print("ok:   --shape few:log: `certified (conditional on: solution_count = 32)` (exit 0); "
               "schema v1.5.0, diffusion_shape few:log, grade (10, 172, 96, 2), delta 7/128, "
-              "axioms exactly the standard three; classical step fewCheck 8 2 by decide +kernel")
+              "axioms exactly the standard three; grover_certificate_few_all, no fewCheck")
         print("ok:   --shape few:log --profile ibm_kyiv: fits all budgets (d = 172 <= 200), "
               "delta_hw = 7/128 + 380*1/100 = 2467/640 (vacuous); hardware recomputed; "
               "committed examples/certs/grover_pred_037_few agrees (bytes, JSON, run report)")
@@ -525,9 +528,10 @@ def main():
             assert "certified (" not in so
             print(f"ok:   {label}: {line[0].replace(path, 'Cert.lean (temp copy)')}")
 
-        # (d) few:log: the classical step stated for a wrong n → the kernel check fails
+        # (d) few:log: `mcz_ok` stated for a wrong n → the kernel check fails (Stage 13a′; the
+        # Stage 12d test mutated the classical step, which the certificate no longer has)
         fbase = read(os.path.join(EXAMPLE_FEW, "Cert.lean"))
-        step = "theorem classical_step : fewCheck 8 2 (MczFew.plan 8 .logDepth) = true"
+        step = "theorem mcz_ok : mczFew 8 .logDepth = .ok mczCircuit"
         assert fbase.count(step) == 1
         d = os.path.join(tmp, "few_wrong_n")
         os.makedirs(d, exist_ok=True)
@@ -537,7 +541,7 @@ def main():
         rc, so, se = run(["lake", "env", "lean", "--run",
                           os.path.join("scripts", "CertifyTool.lean"), "audit", path, THEOREM])
         assert rc == 1 and "certified (" not in so and ": pass" not in so, (rc, so, se)
-        print("ok:   (d) few:log Cert.lean with the classical step for n = 7: kernel check fails "
+        print("ok:   (d) few:log Cert.lean with mcz_ok stated for n = 7: kernel check fails "
               "(exit 1)")
 
         # (c) search_while: outside the fragment, the Stage 4 hint

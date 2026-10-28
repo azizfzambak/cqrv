@@ -78,6 +78,6 @@ def gradeOf (c : Except Diagnostic Circuit) : Option Grade := (c.map grade).toOp
 #guard gradeOf (groverNet >>= (groverCircuit · 8 2)) == some ⟨15, 134, 72, 7⟩
 #guard MczVariant.ladder.status == "classical step checked at n = 8, restoration not certified"
 #guard MczVariant.logDepth.status ==
-  "restoration proved (Stage 12c); certified per instance via `cqr certify --shape few:log` (Stage 12d)"
+  "restoration proved for every n (Stage 13a); certified via `cqr certify --shape few:log`"
 
 end CQRV.Tests.MczFew

@@ -33,9 +33,9 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   (straight-line MCZ) without `--amax`, V2 (Bennett MCZ, chain only) with it. The MCZ network is
   the balanced AND tree unless `--shape chain` (Stage 12a). `--shape few:<variant>` (Stage 12b)
   uses the few-ancilla MCZ `mczFew` (no `--amax`); its output carries `status` =
-  `MczVariant.status` (Stage 12d: `few:log` "restoration proved (Stage 12c); certified per
-  instance via `cqr certify --shape few:log` (Stage 12d)", `few:ladder` "classical step checked
-  at n = 8, restoration not certified"). Prints `{name, n, shape, schedule, grade}`;
+  `MczVariant.status` (Stage 13a′: `few:log` "restoration proved for every n (Stage 13a);
+  certified via `cqr certify --shape few:log`", `few:ladder` "classical step checked at n = 8,
+  restoration not certified"). Prints `{name, n, shape, schedule, grade}`;
   `--json`/`--layers` as above.
 * `cqr synthesize <file> --grover [--shape tree|chain|few:ladder|few:log] [--iterations r]
   [--solutions M] [--json] [--layers]` — the Grover circuit `H^{⊗n}` then `r` iterations of
@@ -433,7 +433,7 @@ same circuit) and, with `--report`, `run_report.md` / `run_report.json` → stat
 `--bench k` repeats the kernel check `k + 1` times and records the median of the last `k`.
 `--profile` (Stage 11b): the hardware check; the profile is read before anything is written.
 `--shape few:log` (Stage 12d): the Grover circuit with the few-ancilla diffusion
-(`groverCircuitFew … .logDepth`), certified by `grover_certificate_few`. -/
+(`groverCircuitFew … .logDepth`), certified by `grover_certificate_few_all` (Stage 13a′). -/
 def runCertify (path : String) (solutions iters : Option Nat) (out : Option String)
     (bench : Option Nat) (report : Bool) (profile : Option String)
     (diff : CertDiffusion := .tree) : IO UInt32 := do

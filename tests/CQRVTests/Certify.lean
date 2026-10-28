@@ -161,10 +161,16 @@ def groverCertFew : String := (groverReqFew.map renderCert).getD ""
   some (⟨10, 172, 96, 2⟩, 2, .fewLog)
 #guard (groverCertFew.splitOn "native_decide").length == 1
 #guard (groverCertFew.splitOn "sorry").length == 1
-#guard (groverCertFew.splitOn "theorem classical_step : fewCheck 8 2 (MczFew.plan 8 .logDepth) = true").length == 2
+-- Stage 13a′: no per-instance classical check; `grover_certificate_few_all`
+#guard (groverCertFew.splitOn "fewCheck").length == 1
+#guard (groverCertFew.splitOn "classical_step").length == 1
+#guard (groverCertFew.splitOn "mcz_WF").length == 1
+#guard (groverCertFew.splitOn "diff_WF").length == 1
+#guard (groverCertFew.splitOn "theorem mcz_ok : mczFew 8 .logDepth = .ok mczCircuit").length == 2
 #guard (groverCertFew.splitOn "theorem emitted_ok : groverCircuitFew net 8 2 .logDepth = .ok emitted").length == 2
 #guard (groverCertFew.splitOn "theorem diff_ok : diffusionFew 8 .logDepth = .ok diffCircuit").length == 2
-#guard (groverCertFew.splitOn "  grover_certificate_few oracle").length == 2
+#guard (groverCertFew.splitOn "  grover_certificate_few_all oracle (by decide) diff_ok emitted_ok").length == 2
+#guard (groverCertFew.splitOn "  grover_certificate_few oracle").length == 1
 #guard (groverCertFew.splitOn "(7 / 128 : ℝ) ⟨10, 172, 96, 2⟩").length == 2
 #guard (groverCertFew.splitOn "treeNet").length == 1
 
@@ -237,5 +243,11 @@ info: 'CQRV.Certify.grover_certificate_few' depends on axioms: [propext, Classic
 -/
 #guard_msgs in
 #print axioms grover_certificate_few
+
+/--
+info: 'CQRV.Certify.grover_certificate_few_all' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms grover_certificate_few_all
 
 end CQRV.Tests.Certify
