@@ -34,3 +34,5 @@ Limit parallelism (Git Bash):
 export LEAN_NUM_THREADS=4
 lake exe cache get && lake build
 ```
+
+Setting up a new workstation (repository and toolchain on an SSD, build, CI): `docs/SETUP_WORKSTATION.md`.

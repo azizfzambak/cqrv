@@ -43,7 +43,7 @@ The chain-shaped diffusion of the earlier stages, (15, 230, 72, 7), is kept as `
 | Item | Kind |
 |---|---|
 | Theorem 3.1 in categorical form; `toNetwork` well-formedness proof | documented gaps |
-| Remote CI (only `scripts/ci_local.sh` has run) | engineering, reviewer's choice |
+| Remote CI (only `scripts/ci_local.sh` has run) | not planned (user decision 2026-10-28) |
 
 ## 5. Reproduce
 
