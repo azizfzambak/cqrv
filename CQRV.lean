@@ -7,6 +7,7 @@ import CQRV.Realizability.Spec
 import CQRV.Realizability.Realizes
 import CQRV.Realizability.Composition
 import CQRV.Realizability.TraceDistance
+import CQRV.Realizability.Diamond
 import CQRV.Realizability.Coherent
 import CQRV.Realizability.Obstruction
 import CQRV.Patterns.Basic

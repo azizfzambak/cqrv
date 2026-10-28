@@ -1,17 +1,20 @@
 module
 
 public import CQRV.Realizability.TraceDistance
+public import CQRV.Realizability.Diamond
 
 /-!
 # CQRV.Realizability.Coherent
 
 Report §2.3.2 — Theorem 3.3b (coherent-interface composition), proved in Stage 10b.
 
-Neither Mathlib nor Physlib has the diamond norm, so the channel distance is an explicit
-parameter `dist⋄` that dominates twice the trace distance on every input (docs/DECISIONS.md,
-2026-10-23). The proof uses only the trace-distance facts of `TraceDistance`; instantiating
-`dist⋄` with the real diamond norm needs only the domination lemma `‖Λ₁ρ − Λ₂ρ‖₁ ≤ ‖Λ₁ − Λ₂‖⋄`,
-a remaining Phase III item (§9.3; docs/DECISIONS.md, 2026-10-25).
+`coherent_composition` takes the channel distance as an explicit parameter `dist⋄` that
+dominates twice the trace distance on every input (docs/DECISIONS.md, 2026-10-23: neither Mathlib
+nor Physlib has the diamond norm); its proof uses only the trace-distance facts of
+`TraceDistance`. Since Stage 13b the diamond norm is defined (`diamondDist`,
+`CQRV.Realizability.Diamond`) with the domination lemma `diamond_dominates`
+(`‖Λ₁ρ − Λ₂ρ‖₁ ≤ ‖Λ₁ − Λ₂‖⋄`, the Phase III item of §9.3), and `coherent_composition_diamond`
+is Theorem 3.3b with the real channel distance (docs/DECISIONS.md, 2026-10-25, 2026-10-28).
 -/
 
 @[expose] public section
@@ -65,6 +68,23 @@ theorem coherent_composition
   have hm := prob_sub_le_trDistance_of dec (Ψ₁ (Φ₁ ρ)) (Ψ₂.chan (Φ₂.chan ρ))
     ((S_g.comp S_f).relax ε₀ x)
   linarith
+
+set_option linter.unusedSectionVars false in
+/-- Report §2.3.2, Theorem 3.3b with `dist⋄ = ‖·‖⋄` (Stage 13b decision 4) — the statement of
+`coherent_composition` with the diamond distance `diamondDist` and no domination hypothesis:
+if `‖Φ₂ − Φ₁‖⋄ ≤ η_f` and `‖Ψ₂ − Ψ₁‖⋄ ≤ η_g`, then `Ψ₂ ∘ Φ₂` (ε₀, δ₀ + ½(η_f + η_g))-realizes
+`g ∘ f` within `r ⊕ s`. Proof: `coherent_composition` with `diamond_dominates`. -/
+theorem coherent_composition_diamond
+    [MetricSpace Z] {S_f : Spec X Y} {S_g : Spec Y Z} {dec : POVM Z dZ}
+    {Φ₁ : CPTPMap X dY} {Ψ₁ : CPTPMap dY dZ} {Φ₂ : GradedChannel X dY}
+    {Ψ₂ : GradedChannel dY dZ} {ε₀ δ₀ η_f η_g : ℝ} {r s : Grade}
+    (hideal : Realizes (S_g.comp S_f) dec ⟨Ψ₁ ∘ₘ Φ₁, 0⟩ ε₀ δ₀ 0)
+    (hΦ : diamondDist Φ₂.chan Φ₁ ≤ η_f) (hΨ : diamondDist Ψ₂.chan Ψ₁ ≤ η_g)
+    (hr : Φ₂.grade ≤ r) (hs : Ψ₂.grade ≤ s) :
+    Realizes (S_g.comp S_f) dec ⟨Ψ₂.chan ∘ₘ Φ₂.chan, Φ₂.grade + Ψ₂.grade⟩ ε₀
+      (δ₀ + (η_f + η_g) / 2) (r + s) :=
+  coherent_composition (fun Λ₁ Λ₂ => diamondDist Λ₁ Λ₂)
+    (fun Λ₁ Λ₂ ρ => diamond_dominates Λ₁ Λ₂ ρ) hideal hΦ hΨ hr hs
 
 end CQRV
 

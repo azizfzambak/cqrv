@@ -10,7 +10,8 @@ import Mathlib.Topology.Instances.Nat
 
 `Spec.dom` and `Spec.comp` on a small `Fin` example, and one use of `Spec.relax_zero`; the
 §2.3.3 three-stage pipeline as two applications of Theorem 3.3a (Stage 10a); Theorem 3.3b
-instantiated with `distD := fun _ _ => 2` as a non-vacuity check of its hypotheses (Stage 10b).
+instantiated with `distD := fun _ _ => 2` as a non-vacuity check of its hypotheses (Stage 10b);
+the diamond distance and `coherent_composition_diamond` (Stage 13b).
 -/
 
 namespace CQRV.Tests.Realizability
@@ -129,5 +130,81 @@ info: 'CQRV.coherent_composition' depends on axioms: [propext, Classical.choice,
 -/
 #guard_msgs in
 #print axioms coherent_composition
+
+/-! Stage 13b: the diamond distance on a qubit, the domination lemma, Theorem 3.3b with `‖·‖⋄`. -/
+
+example (Λ : CPTPMap (Fin 2) (Fin 2)) : diamondDist Λ Λ = 0 := diamondDist_self Λ
+
+example (Λ₁ Λ₂ : CPTPMap (Fin 2) (Fin 2)) (ρ : MState (Fin 2)) :
+    TrDistance (Λ₁ ρ) (Λ₂ ρ) ≤ 1 := by
+  have h₁ := diamond_dominates Λ₁ Λ₂ ρ
+  have h₂ := diamondDist_le_two Λ₁ Λ₂
+  linarith
+
+/--
+info: 'CQRV.diamondDist_bddAbove' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms diamondDist_bddAbove
+
+/--
+info: 'CQRV.diamondDist_nonneg' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms diamondDist_nonneg
+
+/--
+info: 'CQRV.diamondDist_le_two' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms diamondDist_le_two
+
+/--
+info: 'CQRV.diamondDist_self' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms diamondDist_self
+
+/--
+info: 'CQRV.diamondDist_comm' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms diamondDist_comm
+
+/--
+info: 'CQRV.diamondDist_triangle' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms diamondDist_triangle
+
+/--
+info: 'CQRV.traceRight_prod_id_apply' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms traceRight_prod_id_apply
+
+/--
+info: 'CQRV.diamond_dominates' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms diamond_dominates
+
+/--
+info: 'CQRV.prod_id_compose' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms prod_id_compose
+
+/--
+info: 'CQRV.diamondDist_compose_le' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms diamondDist_compose_le
+
+/--
+info: 'CQRV.coherent_composition_diamond' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms coherent_composition_diamond
 
 end CQRV.Tests.Realizability
