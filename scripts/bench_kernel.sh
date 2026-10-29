@@ -6,10 +6,11 @@
 # Mathlib / Physlib revisions, then for both committed certificates (Stage 9b) runs
 #   cqr certify examples/grover_pred_037.cqr --out examples/certs/grover_pred_037 --bench N --report
 #   cqr certify examples/simple_alu_x0_1.cqr --solutions M --out examples/certs/simple_alu_x0_1 #     --bench N --report
-#   cqr certify examples/grover_pred_037.cqr --shape few:log --profile ibm_kyiv \
+#   cqr certify examples/grover_pred_037.cqr --shape few:log --profile illustrative_sc \
 #     --out examples/certs/grover_pred_037_few --bench N --report        (Stage 12d)
 # (M of the second predicate is counted by the Python harness, tests/diff/benchmark_diff.py, as a
-# test oracle only; the certificate stays conditional on solution_count = M), each of which
+# test oracle; since Stage 14a the certificate itself decides M by the kernel for n ≤ 12,
+# `hM_count`, so the three certificates are `certified` without condition), each of which
 # kernel-checks the certificate N + 1 times (`lake env lean -Dprofiler=true Cert.lean`)
 # and records the median of the last N (the first run is excluded: cold file cache) in the
 # certificate's reference_configuration.kernel_check: wall_ms (process start, imports,
@@ -56,7 +57,7 @@ echo "M(simple_alu_x0_1) = $M_ALU (enumerated by tests/diff/benchmark_diff.py; t
 # <output directory>:<source>:<extra flags> (the few:log certificate, Stage 12d, is the third)
 for spec in "grover_pred_037:grover_pred_037:" \
     "simple_alu_x0_1:simple_alu_x0_1:--solutions $M_ALU" \
-    "grover_pred_037_few:grover_pred_037:--shape few:log --profile ibm_kyiv"; do
+    "grover_pred_037_few:grover_pred_037:--shape few:log --profile illustrative_sc"; do
   name="${spec%%:*}"
   rest="${spec#*:}"
   src="${rest%%:*}"

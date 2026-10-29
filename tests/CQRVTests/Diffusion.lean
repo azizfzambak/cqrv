@@ -109,7 +109,7 @@ def gradeOf (c : Except Diagnostic Circuit) : Option Grade := (c.map grade).toOp
 #guard ((groverNet >>= synthesizeOracle).map grade).toOption.bind (fun o =>
   (gradeOf (diffusion 8 none)).map (o + ·)) == some ⟨15, 68, 36, 7⟩
 -- Full Grover, r⋆ = 2 (V1 tree): (15, 134, 72, 7); d = 134 < 1 + 2 · 68 = 137 (boundary overlap),
--- below the declared ibm_kyiv depth budget 200 (report §3.3.3, Table 3.5).
+-- below the declared `illustrative_sc` depth budget 200 (report §3.3.3, Table 3.5).
 #guard gradeOf (groverNet >>= (groverCircuit · 8 2)) == some ⟨15, 134, 72, 7⟩
 #guard ((groverNet >>= (groverCircuit · 8 2)).map (·.validate.isOk)).toOption == some true
 #guard ((groverNet >>= (groverCircuit · 8 2)).map (·.nBits)).toOption == some 18

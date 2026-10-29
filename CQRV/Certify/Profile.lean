@@ -92,10 +92,23 @@ def profilePath (arg : String) : String :=
 def profileHash (text : String) : String :=
   SHA3.sha3String (normalizeLF text)
 
+/-- The names of the bundled profiles (`profiles/*.json`), sorted; for the unknown-profile
+diagnostic (Stage 14a: no alias for a renamed profile, the diagnostic lists what exists). -/
+def availableProfiles : IO (List String) := do
+  unless ← System.FilePath.pathExists "profiles" do return []
+  let entries ← System.FilePath.readDir "profiles"
+  let names := entries.toList.filterMap fun e =>
+    if e.fileName.endsWith ".json" then some (e.fileName.dropEnd ".json".length).toString
+    else none
+  return names.mergeSort
+
 /-- Read and check a profile; returns it with its hash. -/
 def loadProfile (arg : String) : IO (Except String (Profile × String)) := do
   let path := profilePath arg
-  unless ← System.FilePath.pathExists path do return .error s!"profile file {path} not found"
+  unless ← System.FilePath.pathExists path do
+    let avail ← availableProfiles
+    return .error s!"profile file {path} not found (available profiles: \
+      {if avail.isEmpty then "none" else ", ".intercalate avail})"
   let text ← IO.FS.readFile path
   return do
     let j ← (Json.parse text).mapError (s!"{path}: " ++ ·)

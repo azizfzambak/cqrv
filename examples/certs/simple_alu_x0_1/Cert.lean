@@ -5,7 +5,7 @@ import CQRV
 
 Report §5.1.3, §8.4.1, §8.4.4 (DECISIONS.md 2026-10-25, Stage 8b): the Grover parametric lemma
 specialized to the request and checked by the Lean kernel (`lake env lean`). Instance:
-n = 6, M = 30 (hypothesis `hM_card`, never decided), r = 1.
+n = 6, M = 30 (decided by the kernel: `hM_count`, Stage 14a), r = 1.
 predicate_hash = 07acc1e757cea983f2c0bdbd9ab542f6ee0b52138bbfd29f513ae7f0a8e26c75
 -/
 
@@ -133,15 +133,21 @@ def mcz : DiffusionCert 6 where
            hWF := by decide +kernel}
   hN := rfl
 
+/-- Report §8.2 (Stage 14a) — the solution count, decided by the kernel: `Network.countSat`
+evaluates `net` on all 2^6 inputs; `Network.countSat_eq_card` identifies that count with the
+cardinality of the statement. -/
+theorem hM_count : (Finset.univ.filter fun x => Network.pred net 6 x = true).card = 30 := by
+  rw [← Network.countSat_eq_card]
+  decide +kernel
+
 /-- Report §8.4.1, §8.4.4 — the certificate: the emitted circuit realizes the search spec of
-`net` with δ = 833/2048 exactly within its measured grade, and restores its ancillae; conditional
-on the solution count `hM_card`. -/
-theorem cert
-    (hM_card : (Finset.univ.filter fun x => Network.pred net 6 x = true).card = 30) :
+`net` with δ = 833/2048 exactly within its measured grade, and restores its ancillae;
+the solution count is decided by the kernel (`hM_count`). -/
+theorem cert :
     RealizesExact (SearchSpec (Network.pred net 6)) (basisPOVM 6) (groverChannel 6 emitted)
         (833 / 2048 : ℝ) ⟨16, 121, 60, 10⟩ ∧
       AncRestore 6 10 emitted (groverOp (Network.pred net 6) ^ 1 * hadamardU 6) :=
-  grover_certificate oracle mcz (by decide) emitted_ok delta_eq grade_eq nAnc_eq hM_card
+  grover_certificate oracle mcz (by decide) emitted_ok delta_eq grade_eq nAnc_eq hM_count
 
 #print axioms cert
 

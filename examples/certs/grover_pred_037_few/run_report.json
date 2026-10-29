@@ -1,4 +1,4 @@
-{"status": "certified (conditional on: solution_count = 32)",
+{"status": "certified",
  "source": "examples/grover_pred_037.cqr",
  "rows":
  [{"verification": "declared trust boundary",
@@ -20,7 +20,7 @@
    "resources": "ĉ∧ = 2 (upper bound), AND-depth 2, ancilla budget 2",
    "output": "Ground signature σ_in: Search, n = 8, M = 32, iter = bounded(1)",
    "note":
-   "ℰ is total but not proved correct; the certificate theorem does not use σ_in (Cert.lean restates n, M and the network); M is the hypothesis hM_card, never decided",
+   "ℰ is total but not proved correct; the certificate theorem does not use σ_in (Cert.lean restates n, M and the network); M is decided by the kernel (hM_count: Network.countSat on all 2^8 inputs, Network.countSat_eq_card)",
    "input": "Typed AST"},
   {"verification": "unverified",
    "stage": "3. Pattern Matching",
@@ -55,11 +55,10 @@
   {"verification": "kernel-checked",
    "stage": "7. Certificate Gen",
    "resources":
-   "kernel 22.60 s, wall 43.25 s (median of 5 (first run excluded)); axioms: propext, Classical.choice, Quot.sound",
+   "kernel 6.72 s, wall 16.78 s (median of 5 (first run excluded)); axioms: propext, Classical.choice, Quot.sound",
    "output":
    "examples/certs/grover_pred_037_few/Cert.lean, certificate.json (theorem CQRV.Cert.grover_pred_037.cert)",
-   "note":
-   "lake env lean exit 0; #print axioms audited; status: certified (conditional on: solution_count = 32)",
+   "note": "lake env lean exit 0; #print axioms audited; status: certified",
    "input": "Proof + grade"},
   {"verification": "declared trust boundary",
    "stage": "8. QIR Export",
@@ -76,10 +75,11 @@
    "resources":
    "width 10 / 127: fits; depth 172 / 200: fits; T-count 96 / —: not limiting; ancilla 2 / 127: fits; G = 380",
    "output":
-   "hardware profile ibm_kyiv: fits all budgets; δ_hw ≤ 7/128 + 380·1/100 = 2467/640 (vacuous)",
+   "hardware profile illustrative_sc: fits all budgets; δ_hw ≤ 7/128 + 380·1/100 = 2467/640 (vacuous)",
    "note":
    "declared profile figures, not calibration data; routing, native gates and calibration are outside the trust boundary (report §5.3.1); not part of the certified status (the certificate is about the ideal channel)",
-   "input": "profile ibm_kyiv (profile_hash 551369d44550…), grade, δ, G"}],
+   "input":
+   "profile illustrative_sc (profile_hash 09b4d2fb9d95…), grade, δ, G"}],
  "name": "grover_pred_037",
  "instance": {"r": 2, "n": 8, "M": 32},
  "certified": true}

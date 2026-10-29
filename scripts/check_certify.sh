@@ -15,16 +15,24 @@
 #                                injected sorry → sorryAx, native_decide → its auxiliary axiom,
 #                                search_while → Stage 4 hint); Stage 11b: without --profile
 #                                certificate.json byte-identical to the committed one outside
-#                                reference_configuration; --profile ibm_kyiv: Grover and ALU
-#                                fit all (tree, Stage 12a), δ_hw vacuous for both, `hardware`
-#                                recomputed; Stage 12d: --shape few:log (grade (10, 172, 96, 2),
-#                                schema v1.5.0, Kyiv fits), the committed
+#                                reference_configuration; --profile illustrative_sc: Grover
+#                                and ALU fit all (tree, Stage 12a), δ_hw vacuous for both,
+#                                `hardware` recomputed; Stage 12d: --shape few:log (grade
+#                                (10, 172, 96, 2), diffusion_shape, the profile fits), the committed
 #                                examples/certs/grover_pred_037_few, and a few:log Cert.lean
 #                                with mcz_ok for a wrong n → kernel check fails (Stage 13a′:
-#                                no per-instance classical step, grover_certificate_few_all)
-#   tests/diff/profile_schema.py profiles/*.json against docs/profile.schema.json; ibm_kyiv =
-#                                report Table 3.5 / §3.3.3; mutated profiles rejected by the
-#                                schema and by `cqr certify --profile` (Stage 11b)
+#                                no per-instance classical step, grover_certificate_few_all);
+#                                Stage 14a: schema v1.6.0 with solution_count {value, status};
+#                                n ≤ 12: status line `certified`, Cert.lean proves hM_count and
+#                                `cert` has no hypothesis (kernel_decided); negative tests:
+#                                grover_pred_037 --solutions 31 and simple_alu_x0_1 --solutions 29
+#                                → solution_count_mismatch, nothing written; --count-limit 4 and
+#                                --count-limit 0 → the conditional form (hM_card, hypothesis);
+#                                --profile ibm_kyiv → unknown profile listing illustrative_sc
+#   tests/diff/profile_schema.py profiles/*.json against docs/profile.schema.json;
+#                                illustrative_sc = report Table 3.5 / §3.3.3 (renamed from
+#                                ibm_kyiv in Stage 14a, no alias); mutated profiles rejected by
+#                                the schema and by `cqr certify --profile` (Stage 11b)
 #
 # Usage (after `lake build`, from anywhere):  scripts/check_certify.sh
 #   PYTHON=.venv/Scripts/python.exe scripts/check_certify.sh   # local Windows venv

@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
-  "name": "ibm_kyiv",
-  "note": "Illustrative figures of the report (v3, §3.3.2–3.3.3, Table 3.5), not calibration data of the device. Routing, native-gate translation and calibration noise are outside the trust boundary (§5.3.1).",
+  "name": "illustrative_sc",
+  "note": "illustrative figures from the specification's example; not calibration data of any device (report v3, §3.3.2–3.3.3, Table 3.5: a superconducting device of 127 qubits). Routing, native-gate translation and calibration noise are outside the trust boundary (§5.3.1).",
   "source": {
     "w": "report §3.3.2 and Table 3.5: 127 qubits (Eagle r3, 127 superconducting transmon qubits)",
     "d": "report Table 3.5: ~200 layers, coherence-limited; §3.3.3: T1/t_gate ≈ 100 μs/500 ns ≈ 200",

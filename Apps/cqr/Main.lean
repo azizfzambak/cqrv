@@ -55,7 +55,8 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   synthesize, write `<dir>/Cert.lean` (default `certs/<name>/`; the specialization of the Grover
   parametric lemma), kernel-check it with `lake env lean` (run from the project root), audit the
   axioms of `#print axioms cert`, write `certificate.json`, `<name>.qir`, `<name>.qasm` from the
-  same circuit and print the status line: `certified (conditional on: solution_count = M)`
+  same circuit and print the status line: `certified` (Stage 14a, `n ≤ --count-limit`) or
+  `certified (conditional on: solution_count = M)`
   (exit 0) only if the kernel check and the audit pass; otherwise `certificate with tracked
   obligations: <list>` (exit 3). Kernel-check failure: message, exit 1, no JSON. `--bench k`:
   `k + 1` kernel checks, the median of the last `k` is recorded (scripts/bench_kernel.sh).
@@ -70,6 +71,13 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   whether the bound is vacuous. Hardware fitness is not part of "certified" and does not change
   the exit code; a profile that cannot be read: message, exit 2, nothing written. Without
   `--profile` every output is as before.
+  Stage 14a: `--count-limit k` (default 12; `0` disables). For `n ≤ k` the tool evaluates
+  `Network.countSat net n` itself; if it differs from the supplied or extracted `M` it prints the
+  diagnostic `solution_count_mismatch` (stage `hypothesis`; supplied M, computed count) and
+  writes nothing (exit 1); otherwise `Cert.lean` proves `hM_count` by `Network.countSat_eq_card`
+  and `decide +kernel`, `theorem cert` takes no hypothesis, and the status line is `certified`.
+  For `n > k` the conditional form stays: `certified (conditional on: solution_count = M)`.
+  `certificate.json` records `solution_count: {value, status}` (`kernel_decided` / `hypothesis`).
 -/
 
 open CQRV CQRV.DSL CQRV.Matching CQRV.Synthesis CQRV.Certify CQRV.Emit
@@ -86,7 +94,7 @@ def usage : String :=
     "  synthesize <file> --grover [--shape tree|chain|few:ladder|few:log] [--iterations r] [--solutions M] [--json] [--layers]\n" ++
     "  check <file> --truth-table\n" ++
     "  certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k] [--report]\n" ++
-    "          [--profile name|path] [--shape tree|few:log]\n" ++
+    "          [--profile name|path] [--shape tree|few:log] [--count-limit k]\n" ++
     "  emit <file> --format qir|qasm [--iterations r] [--solutions M] [--oracle]\n"
 
 /-- Report §4.2.2 — parse and surface-check a source file; also returns the position of the
@@ -381,32 +389,41 @@ def runEmit (path : String) (fmt : EmitFormat) (iters solutions : Option Nat) (o
       return 0
 
 /-- Parse `[--solutions M] [--iterations r] [--out dir] [--bench k] [--report]
-[--profile name|path]` in any order. -/
+[--profile name|path] [--count-limit k]` in any order. -/
 def certifyFlags : List String →
-    Option (Option Nat × Option Nat × Option String × Option Nat × Bool × Option String)
-  | [] => some (none, none, none, none, false, none)
+    Option (Option Nat × Option Nat × Option String × Option Nat × Bool × Option String ×
+      Option Nat)
+  | [] => some (none, none, none, none, false, none, none)
   | "--solutions" :: m :: rest => do
     let m ← m.toNat?
-    let (_, r, o, b, p, h) ← certifyFlags rest
-    return (some m, r, o, b, p, h)
+    let (_, r, o, b, p, h, c) ← certifyFlags rest
+    return (some m, r, o, b, p, h, c)
   | "--iterations" :: r :: rest => do
     let r ← r.toNat?
-    let (m, _, o, b, p, h) ← certifyFlags rest
-    return (m, some r, o, b, p, h)
+    let (m, _, o, b, p, h, c) ← certifyFlags rest
+    return (m, some r, o, b, p, h, c)
   | "--out" :: o :: rest => do
-    let (m, r, _, b, p, h) ← certifyFlags rest
-    return (m, r, some o, b, p, h)
+    let (m, r, _, b, p, h, c) ← certifyFlags rest
+    return (m, r, some o, b, p, h, c)
   | "--bench" :: k :: rest => do
     let k ← k.toNat?
     guard (k ≥ 1)
-    let (m, r, o, _, p, h) ← certifyFlags rest
-    return (m, r, o, some k, p, h)
+    let (m, r, o, _, p, h, c) ← certifyFlags rest
+    return (m, r, o, some k, p, h, c)
   | "--report" :: rest =>
-    (certifyFlags rest).map fun (m, r, o, b, _, h) => (m, r, o, b, true, h)
+    (certifyFlags rest).map fun (m, r, o, b, _, h, c) => (m, r, o, b, true, h, c)
   | "--profile" :: h :: rest => do
-    let (m, r, o, b, p, _) ← certifyFlags rest
-    return (m, r, o, b, p, some h)
+    let (m, r, o, b, p, _, c) ← certifyFlags rest
+    return (m, r, o, b, p, some h, c)
+  | "--count-limit" :: k :: rest => do
+    let k ← k.toNat?
+    let (m, r, o, b, p, h, _) ← certifyFlags rest
+    return (m, r, o, b, p, h, some k)
   | _ => none
+
+/-- Stage 14a — the default of `--count-limit`: the solution count is decided by the kernel for
+`n ≤ 12` (DECISIONS.md 2026-10-29). -/
+def defaultCountLimit : Nat := 12
 
 /-- The median of a non-empty list (the lower middle element for an even length). -/
 def median (xs : List Nat) : Nat :=
@@ -433,10 +450,13 @@ same circuit) and, with `--report`, `run_report.md` / `run_report.json` → stat
 `--bench k` repeats the kernel check `k + 1` times and records the median of the last `k`.
 `--profile` (Stage 11b): the hardware check; the profile is read before anything is written.
 `--shape few:log` (Stage 12d): the Grover circuit with the few-ancilla diffusion
-(`groverCircuitFew … .logDepth`), certified by `grover_certificate_few_all` (Stage 13a′). -/
+(`groverCircuitFew … .logDepth`), certified by `grover_certificate_few_all` (Stage 13a′).
+`--count-limit k` (Stage 14a): for `n ≤ k` the solution count is checked here by
+`Network.countSat` (a mismatch is `solution_count_mismatch`, nothing written) and decided by the
+kernel in `Cert.lean` (`hM_count`); the status line is then `certified` without condition. -/
 def runCertify (path : String) (solutions iters : Option Nat) (out : Option String)
     (bench : Option Nat) (report : Bool) (profile : Option String)
-    (diff : CertDiffusion := .tree) : IO UInt32 := do
+    (diff : CertDiffusion := .tree) (countLimit : Nat := defaultCountLimit) : IO UInt32 := do
   let src ← IO.FS.readFile path
   match ← frontEnd path, ← signature path solutions with
   | .error d, _ | _, .error d => IO.println d.toJson.compress; return 1
@@ -461,6 +481,20 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
       | match fe.diagnostic? tp.name entryPos with
         | some d => IO.println d.toJson.compress; return 1
         | none => return 1
+    -- the solution count (Stage 14a): for n ≤ --count-limit, counted here and decided by the
+    -- kernel in Cert.lean (`hM_count`); a mismatch with the supplied / extracted M writes nothing
+    let count : CountStatus ←
+      if 0 < countLimit && gi.n ≤ countLimit then do
+        let c := gi.net.countSat gi.n
+        if c != M then
+          let src := if solutions.isSome then "--solutions" else "computed by ℰ"
+          let msg := s!"the solution count M = {M} ({src}) contradicts the count {c} of \
+            Network.countSat (the network of `{tp.name}` evaluated on all 2^{gi.n} inputs; \
+            report §8.2)"
+          IO.println (Diagnostic.at .hypothesis .solutionCountMismatch entryPos msg).toJson.compress
+          return 1
+        pure .kernelDecided
+      else pure .hypothesis
     let cfg ← match RefConfig.ofFiles (← IO.FS.readFile "lean-toolchain")
         (← IO.FS.readFile "lake-manifest.json") with
       | .ok c => pure c
@@ -470,7 +504,7 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
       | some arg => match ← loadProfile arg with
         | .ok ph => pure (some ph)
         | .error e => IO.eprintln s!"cqr certify: {e}"; return 2
-    let q := CertRequest.ofInstance tp.name src gi M
+    let q := CertRequest.ofInstance tp.name src gi M count
     let text := renderCert q
     let dir := (out.getD s!"certs/{tp.name}").dropEndWhile (fun c => c == '/' || c == '\\')
     let file (n : String) : String := s!"{dir}/{n}"
@@ -500,7 +534,7 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
     let cfg := { cfg with cpu := some (cpu.getD "unknown"), logicalCpus := cpus, clock,
                           leanThreads := ← IO.getEnv "LEAN_NUM_THREADS", kernelCheck := timing }
     let base ← match Certificate.build src sig gi.entry gi.facts gi.circuit gi.circuit.grade gi.r
-        gi.n M q.delta cfg feText with
+        gi.n M q.delta cfg feText count with
       | .ok c => pure c
       | .error e => IO.eprintln s!"cqr certify: {e}"; return 1
     let hw := prof.map fun (p, h) =>
@@ -512,9 +546,10 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
     IO.FS.writeFile (file "certificate.json") (cert.toJson.compress ++ "\n")
     IO.FS.writeFile (file s!"{tp.name}.qir") (emitQIR tp.name gi.circuit)
     IO.FS.writeFile (file s!"{tp.name}.qasm") (emitQASM tp.name gi.circuit)
-    let statusLine := match status with
-      | .certified => s!"certified (conditional on: solution_count = {M})"
-      | _ => s!"certificate with tracked obligations: {", ".intercalate obligations}"
+    let statusLine := match status, count with
+      | .certified, .kernelDecided => "certified"
+      | .certified, .hypothesis => s!"certified (conditional on: solution_count = {M})"
+      | _, _ => s!"certificate with tracked obligations: {", ".intercalate obligations}"
     if report then
       let dif ← match (match diff with
           | .tree => diffusion gi.n none
@@ -527,7 +562,7 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
           diffusion := dif, circuit := gi.circuit, n := gi.n, M, r := gi.r, delta := q.delta,
           frontEnd := fe, theoremName := q.theoremName, certPath, timing,
           axioms := last.axioms, statusLine, certified := status == .certified,
-          hardware := hw, diffusionShape := diff }
+          hardware := hw, diffusionShape := diff, count }
       IO.FS.writeFile (file "run_report.md") rd.toMarkdown
       IO.FS.writeFile (file "run_report.json") (rd.toJson.pretty ++ "\n")
     let kms := match timing.kernelMs with | some k => s!", {secs k} kernel" | none => ""
@@ -577,7 +612,8 @@ def main (args : List String) : IO UInt32 := do
     match shapeFlag flags with
     | some (sh, flags) =>
       match certDiffusionOf sh, certifyFlags flags with
-      | some dif, some (m, r, o, b, p, h) => runCertify file m r o b p h dif
+      | some dif, some (m, r, o, b, p, h, c) =>
+        runCertify file m r o b p h dif (c.getD defaultCountLimit)
       | none, _ =>
         IO.eprintln s!"cqr certify: --shape {shapeName sh} has no certificate path \
           (certified: tree, few:log)"

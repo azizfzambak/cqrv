@@ -19,7 +19,8 @@ of the front-end comparison) and 1b the typed AST → network translation (exhau
 on 2ⁿ inputs; declared trust boundary for n > 16). With `--profile` (Stage 11b, decision 2 of
 the tasks) a last row "Hardware profile" reports the check against the declared profile, with
 its own status `checked against declared profile (not a proof about hardware)`; without it the
-report is unchanged.
+report is unchanged. Stage 14a: the header and the stage-2 note say whether `M` is decided by
+the kernel (`hM_count`) or the hypothesis `hM_card` (`RunData.count`).
 -/
 
 @[expose] public section
@@ -86,10 +87,23 @@ structure RunData where
   hardware : Option HardwareCheck := none
   /-- Stage 12d: the diffusion of `circuit` (`--shape few:log`) -/
   diffusionShape : CertDiffusion := .tree
+  /-- Stage 14a: how `M` was obtained -/
+  count : CountStatus := .hypothesis
   deriving Inhabited
 
 /-- `(w, d, t, a)` -/
 def gradeText (g : Grade) : String := s!"(w, d, t, a) = ({g.w}, {g.d}, {g.t}, {g.a})"
+
+/-- Report §8.2 (Stage 14a) — the trust-boundary clause for `M` in the stage-2 note. -/
+def countNote (n : Nat) : CountStatus → String
+  | .hypothesis => "M is the hypothesis hM_card, never decided"
+  | .kernelDecided => s!"M is decided by the kernel (hM_count: Network.countSat on all 2^{n} \
+      inputs, Network.countSat_eq_card)"
+
+/-- The word after `M = …` in the report header. -/
+def countWord : CountStatus → String
+  | .hypothesis => "hypothesis"
+  | .kernelDecided => "kernel-decided"
 
 /-- Report §6.2.2 — T gates of a circuit after its first mid-circuit measurement: for a
 synthesized oracle (all compute blocks, then the phase flip, then every MBU block), the T-count of
@@ -137,8 +151,8 @@ def RunData.rows (d : RunData) : List ReportRow :=
       verification := .unverified,
       resources := s!"ĉ∧ = {d.sig.andComplexity} (upper bound), AND-depth {d.sig.andDepth}, \
         ancilla budget {d.sig.ancillaBudget}",
-      note := "ℰ is total but not proved correct; the certificate theorem does not use σ_in \
-        (Cert.lean restates n, M and the network); M is the hypothesis hM_card, never decided" },
+      note := s!"ℰ is total but not proved correct; the certificate theorem does not use σ_in \
+        (Cert.lean restates n, M and the network); {countNote d.n d.count}" },
     { stage := "3. Pattern Matching", input := "Signature σ_in",
       output := s!"{d.pattern}: σ = {"{"}{d.subst}{"}"}",
       verification := .unverified,
@@ -218,7 +232,7 @@ def RunData.toMarkdown (d : RunData) : String :=
   let header := s!"# Run report: {d.name}\n\n\
     Report §8.5.2 (Table 8.5.2 shape), Stage 9b decision 4: every resource is a measured value \
     of this run, never a report target.\n\n\
-    - source: `{d.source}`\n- instance: n = {d.n}, M = {d.M} (hypothesis), r = {d.r}\n\
+    - source: `{d.source}`\n- instance: n = {d.n}, M = {d.M} ({countWord d.count}), r = {d.r}\n\
     - status: **{d.statusLine}**\n\n\
     | Stage | Input | Output | Verification | Resources |\n|---|---|---|---|---|\n"
   let body := String.join (rows.map fun r =>

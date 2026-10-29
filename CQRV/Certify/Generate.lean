@@ -22,7 +22,9 @@ The generated file imports `CQRV` and contains
 * `delta_eq`, `grade_eq`, `nAnc_eq` (kernel evaluation of `groverDelta`, `Synthesis.grade`,
   `Circuit.nAnc`);
 * `theorem cert (hM_card : …)`: `grover_certificate` at these data — `hM_card` is a hypothesis
-  of the theorem (§5.2.4, never decided);
+  of the theorem (§5.2.4), or, since Stage 14a (`CertRequest.count = .kernelDecided`, `cqr
+  certify --count-limit k` with `n ≤ k`), `theorem hM_count : (Finset.univ.filter …).card = M`
+  by `Network.countSat_eq_card` and `decide +kernel`, and `theorem cert` takes no hypothesis;
 * `#print axioms cert` (parsed by `CQRV.Certify.Audit`).
 
 Stage 12d (decision 4), Stage 13a′ (decision 2): for `cqr certify --shape few:log` the file
@@ -112,12 +114,15 @@ structure CertRequest where
   predicateHash : String
   /-- Stage 12d: the diffusion (`.tree` unless `--shape few:log`) -/
   diffusion : CertDiffusion := .tree
+  /-- Stage 14a: `M` decided by the kernel (`hM_count`) or a hypothesis (`hM_card`) -/
+  count : CountStatus := .hypothesis
 
 /-- The request of a matched Grover instance with solution count `M`. -/
-def CertRequest.ofInstance (name src : String) (gi : GroverInstance) (M : Nat) : CertRequest :=
+def CertRequest.ofInstance (name src : String) (gi : GroverInstance) (M : Nat)
+    (count : CountStatus := .hypothesis) : CertRequest :=
   { name, net := gi.net, n := gi.n, M, r := gi.r, circuit := gi.circuit,
     delta := groverDelta gi.r gi.n M, grade := gi.circuit.grade, nAnc := gi.circuit.nAnc,
-    predicateHash := CQRV.Certify.predicateHash src, diffusion := gi.diffusion }
+    predicateHash := CQRV.Certify.predicateHash src, diffusion := gi.diffusion, count }
 
 /-- The namespace of the generated declarations. -/
 def CertRequest.namespace (q : CertRequest) : String := s!"CQRV.Cert.«{q.name}»"
@@ -128,11 +133,48 @@ def CertRequest.theoremName (q : CertRequest) : String := s!"CQRV.Cert.{q.name}.
 /-- The predicate of the certificate statement. -/
 def CertRequest.predText (q : CertRequest) : String := s!"(Network.pred net {q.n})"
 
-/-- The statement of `cert`. -/
+/-- How the file header describes `M` (Stage 14a). -/
+def CertRequest.countText (q : CertRequest) : String :=
+  match q.count with
+  | .kernelDecided => s!"M = {q.M} (decided by the kernel: `hM_count`, Stage 14a)"
+  | .hypothesis => s!"M = {q.M} (hypothesis `hM_card`, never decided)"
+
+/-- The solution-count fact `cert` is applied to: `hM_count` or the hypothesis `hM_card`. -/
+def CertRequest.countArg (q : CertRequest) : String :=
+  match q.count with
+  | .kernelDecided => "hM_count"
+  | .hypothesis => "hM_card"
+
+/-- The last clause of the doc comment of `cert`. -/
+def CertRequest.countClause (q : CertRequest) : String :=
+  match q.count with
+  | .kernelDecided => "the solution count is decided by the kernel (`hM_count`)"
+  | .hypothesis => "conditional on the solution count `hM_card`"
+
+/-- Report §8.2 (Stage 14a) — the theorem `hM_count` (`Network.countSat_eq_card`, then the
+kernel evaluates `Network.countSat net n` on all `2ⁿ` inputs); empty when `M` stays a
+hypothesis. -/
+def CertRequest.countTheorem (q : CertRequest) : String :=
+  match q.count with
+  | .hypothesis => ""
+  | .kernelDecided => s!"/-- Report §8.2 (Stage 14a) — the solution count, decided by the kernel: `Network.countSat`
+evaluates `net` on all 2^{q.n} inputs; `Network.countSat_eq_card` identifies that count with the
+cardinality of the statement. -/
+theorem hM_count : (Finset.univ.filter fun x => Network.pred net {q.n} x = true).card = {q.M} := by
+  rw [← Network.countSat_eq_card]
+  decide +kernel
+
+"
+
+/-- The statement of `cert`: with the hypothesis `hM_card`, or (Stage 14a) without any
+hypothesis when `hM_count` is proved. -/
 def CertRequest.statement (q : CertRequest) : String :=
   let g := q.grade
-  s!"theorem cert
-    (hM_card : (Finset.univ.filter fun x => Network.pred net {q.n} x = true).card = {q.M}) :
+  let hyp := match q.count with
+    | .hypothesis =>
+      s!"\n    (hM_card : (Finset.univ.filter fun x => Network.pred net {q.n} x = true).card = {q.M})"
+    | .kernelDecided => ""
+  s!"theorem cert{hyp} :
     RealizesExact (SearchSpec {q.predText}) (basisPOVM {q.n}) (groverChannel {q.n} emitted)
         {realLit q.delta} ⟨{g.w}, {g.d}, {g.t}, {g.a}⟩ ∧
       AncRestore {q.n} {q.nAnc} emitted (groverOp {q.predText} ^ {q.r} * hadamardU {q.n}) :="
@@ -151,8 +193,8 @@ Report §5.1.3, §8.4.1, §8.4.4 (DECISIONS.md 2026-10-25, Stage 8b; 2026-10-26,
 2026-10-28, Stage 13a′): the Grover parametric lemma over a certified diffusion
 (`grover_parametric_lemma_diff`), specialized to the request with the few-ancilla diffusion
 (candidate B: Khattar–Gidney 2025 §5.3, Maslov 2016 relative-phase Toffoli pairs, at most 2 clean
-ancillae), and checked by the Lean kernel (`lake env lean`). Instance: n = {n}, M = {q.M}
-(hypothesis `hM_card`, never decided), r = {q.r}. KG Theorem 5.1 for every n
+ancillae), and checked by the Lean kernel (`lake env lean`). Instance: n = {n},
+{q.countText}, r = {q.r}. KG Theorem 5.1 for every n
 (`mczFew_logDepth_ancRestore`, Stage 13a); no per-instance classical check.
 predicate_hash = {q.predicateHash}
 -/
@@ -204,12 +246,12 @@ the diffusion; the kernel compares it with `emitted`. -/
 theorem emitted_ok : groverCircuitFew net {n} {q.r} .logDepth = .ok emitted :=
   (groverCircuitFew_ok_of oracle.hn oracle.hC mcz_ok).trans (congrArg Except.ok (by decide +kernel))
 
-/-- Report §8.4.1, §8.4.4 — the certificate: the emitted circuit realizes the search spec of
-`net` with δ = {q.delta} exactly within its measured grade, and restores its ancillae; conditional
-on the solution count `hM_card`. -/
+{q.countTheorem}/-- Report §8.4.1, §8.4.4 — the certificate: the emitted circuit realizes the search spec of
+`net` with δ = {q.delta} exactly within its measured grade, and restores its ancillae;
+{q.countClause}. -/
 {q.statement}
   grover_certificate_few_all oracle (by decide) diff_ok emitted_ok delta_eq grade_eq nAnc_eq
-    hM_card
+    {q.countArg}
 
 #print axioms cert
 
@@ -227,7 +269,7 @@ def renderCert (q : CertRequest) : String :=
 
 Report §5.1.3, §8.4.1, §8.4.4 (DECISIONS.md 2026-10-25, Stage 8b): the Grover parametric lemma
 specialized to the request and checked by the Lean kernel (`lake env lean`). Instance:
-n = {q.n}, M = {q.M} (hypothesis `hM_card`, never decided), r = {q.r}.
+n = {q.n}, {q.countText}, r = {q.r}.
 predicate_hash = {q.predicateHash}
 -/
 
@@ -276,11 +318,11 @@ def mcz : DiffusionCert {q.n} where
            hWF := by decide +kernel{rb}
   hN := rfl
 
-/-- Report §8.4.1, §8.4.4 — the certificate: the emitted circuit realizes the search spec of
-`net` with δ = {q.delta} exactly within its measured grade, and restores its ancillae; conditional
-on the solution count `hM_card`. -/
+{q.countTheorem}/-- Report §8.4.1, §8.4.4 — the certificate: the emitted circuit realizes the search spec of
+`net` with δ = {q.delta} exactly within its measured grade, and restores its ancillae;
+{q.countClause}. -/
 {q.statement}
-  grover_certificate oracle mcz (by decide) emitted_ok delta_eq grade_eq nAnc_eq hM_card
+  grover_certificate oracle mcz (by decide) emitted_ok delta_eq grade_eq nAnc_eq {q.countArg}
 "
   header ++ body ++ s!"
 #print axioms cert

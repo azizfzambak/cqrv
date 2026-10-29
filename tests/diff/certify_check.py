@@ -2,8 +2,9 @@
 
 Runs the built `cqr` from the project root and checks
 
-  * grover_pred_037: exit 0, status line `certified (conditional on: solution_count = 32)`,
-    certificate.json valid against docs/certificate.schema.json (v1.3.0), grade (15, 134, 72, 7),
+  * grover_pred_037: exit 0, status line `certified` (Stage 14a: n = 8 ≤ --count-limit 12, so
+    Cert.lean proves hM_count and `cert` has no hypothesis; solution_count.status kernel_decided),
+    certificate.json valid against docs/certificate.schema.json (v1.6.0), grade (15, 134, 72, 7),
     delta "7/128", axioms exactly propext, Classical.choice, Quot.sound, no obligations,
     trust_boundary.front_end = the exhaustive-validation wording for 2^8 inputs (Stage 9b);
   * the hash link, independently of the CLI: the `emitted` IR literal of Cert.lean (the circuit
@@ -41,9 +42,9 @@ Runs the built `cqr` from the project root and checks
   * without --profile (Stage 11b): the certificate.json of each example run is byte-identical
     to the committed one outside the object reference_configuration (machine and timing
     fields), schema_version "1.3.0", no `hardware`;
-  * --profile ibm_kyiv (Stage 11b; profiles/ibm_kyiv.json, report Table 3.5 / §3.3.3):
+  * --profile illustrative_sc (Stage 11b; profiles/illustrative_sc.json, report Table 3.5 / §3.3.3):
     grover_pred_037 → exit 0, the status line unchanged, then
-    `hardware profile ibm_kyiv: fits all budgets; δ_hw ≤ 7/128 + 390·1/100 = 2531/640
+    `hardware profile illustrative_sc: fits all budgets; δ_hw ≤ 7/128 + 390·1/100 = 2531/640
     (vacuous)` (since Stage 12a: tree diffusion, d = 134 ≤ 200; the chain's 230 exceeded it);
     simple_alu_x0_1 → fits all budgets, δ_hw vacuous as well (G·p̄ = 3.45).
     Every field of `hardware` is recomputed here (components against the profile file, G,
@@ -53,9 +54,9 @@ Runs the built `cqr` from the project root and checks
     "Hardware profile" with status "checked against declared profile (not a proof about
     hardware)";
   * --shape few:log (Stage 12d; few-ancilla diffusion, candidate B): grover_pred_037 without and
-    with --profile ibm_kyiv → exit 0, `certified (conditional on: solution_count = 32)`, schema
+    with --profile illustrative_sc → exit 0, `certified (conditional on: solution_count = 32)`, schema
     v1.5.0 with diffusion_shape "few:log" (hardware only with --profile), grade (10, 172, 96, 2),
-    delta 7/128, axioms exactly the standard three; Kyiv: `hardware profile ibm_kyiv: fits all
+    delta 7/128, axioms exactly the standard three; the profile: `hardware profile illustrative_sc: fits all
     budgets; δ_hw ≤ 7/128 + 380·1/100 = 2467/640 (vacuous)` (d = 172 <= 200), every field of
     `hardware` recomputed; Cert.lean applies `grover_certificate_few_all` (Stage 13a′: KG
     Theorem 5.1 for every n, no per-instance classical check: no `fewCheck`, `classical_step`,
@@ -64,6 +65,15 @@ Runs the built `cqr` from the project root and checks
     outside reference_configuration; run report); negative test (d): the committed few Cert.lean
     with `mcz_ok` stated for n = 7 → the kernel check fails;
   * the tree certificates are unchanged by Stage 12d: the byte-identity checks above.
+  * Stage 14a: every certificate carries solution_count {value, status} (schema v1.6.0); value =
+    instance.M; the status line is `certified` iff status is kernel_decided, and then Cert.lean
+    has hM_count and no hM_card (every n ≤ 12 case below is now unconditional); negative tests:
+    (e) grover_pred_037 --solutions 31 (ℰ's count) and simple_alu_x0_1 --solutions 29
+    (Network.countSat's count) → solution_count_mismatch, exit 1, nothing written; (f)
+    --count-limit 4 and --count-limit 0 → the conditional form (`certified (conditional on:
+    solution_count = 32)`, hM_card, status hypothesis); (g) --profile illustrative_sc (renamed to
+    illustrative_sc, no alias) → exit 2, the unknown-profile diagnostic lists the available
+    profiles.
 
 Usage: python -I tests/diff/certify_check.py --cqr <path to cqr>   (after `lake build`)
 """
@@ -111,6 +121,20 @@ def secs(ms):
     return f"{c // 100}.{c % 100:02d} s"
 
 
+def status_line(cert):
+    """The status line of a certificate (Stage 14a): unconditional iff M is kernel-decided;
+    solution_count.value = instance.M; the hypothesis list names M iff it is a hypothesis."""
+    sc = cert["solution_count"]
+    assert sc["value"] == cert["instance"]["M"], sc
+    named = [h for h in cert["hypotheses"] if h.startswith("solution_count")]
+    if sc["status"] == "kernel_decided":
+        assert named == [], cert["hypotheses"]
+        return "certified"
+    assert sc["status"] == "hypothesis", sc
+    assert named == [f"solution_count = {sc['value']} (hM_card, supplied, not decided)"], named
+    return "certified (conditional on: solution_count = {})".format(sc["value"])
+
+
 def check_report(d, cert):
     """The committed run report of a certificate directory agrees with its certificate.json."""
     rep = json.loads(read(os.path.join(d, "run_report.json")))
@@ -119,9 +143,15 @@ def check_report(d, cert):
     assert [r["stage"] for r in rep["rows"]] == STAGES + hw_rows, [r["stage"] for r in rep["rows"]]
     assert all(r["verification"] in VERIFICATION for r in rep["rows"][:len(STAGES)]), rep["rows"]
     assert all(r["verification"] == HW_STATUS for r in rep["rows"][len(STAGES):]), rep["rows"]
-    status = "certified (conditional on: solution_count = {})".format(cert["instance"]["M"])
+    status = status_line(cert)
     assert rep["status"] == status and rep["certified"] is True, rep["status"]
     rows = {r["stage"]: r for r in rep["rows"]}
+    # Stage 14a: the trust-boundary note for M follows the two cases
+    decided = cert["solution_count"]["status"] == "kernel_decided"
+    note2 = rows["2. Spec Extraction"]["note"]
+    assert ("M is decided by the kernel (hM_count" in note2) == decided, note2
+    assert ("M is the hypothesis hM_card, never decided" in note2) == (not decided), note2
+    assert (f"M = {cert['instance']['M']} (kernel-decided)" in md) == decided, md[:400]
     g = cert["grade"]
     assert f"({g['w']}, {g['d']}, {g['t']}, {g['a']})" in rows["4. QPLP Instant."]["resources"]
     assert f"δ = {cert['spec']['delta']} exact" in rows["4. QPLP Instant."]["resources"]
@@ -146,7 +176,8 @@ def sha3(b):
     return hashlib.sha3_256(b).hexdigest()
 
 
-KYIV = os.path.join(ROOT, "profiles", "ibm_kyiv.json")
+PROFILE_NAME = "illustrative_sc"  # Stage 14a: renamed from ibm_kyiv (no alias)
+PROFILE = os.path.join(ROOT, "profiles", f"{PROFILE_NAME}.json")
 HW_STATUS = "checked against declared profile (not a proof about hardware)"
 HW_NOTE = "routing, native gates and calibration are outside the trust boundary"
 RE_REFCONF = re.compile(r'"reference_configuration":\{[^{}]*(?:\{[^{}]*\}|null)[^{}]*\}')
@@ -165,13 +196,13 @@ def masked(text):
     return out
 
 
-def check_hardware(d, cert, plain, last_two, fits, version="1.4.0"):
+def check_hardware(d, cert, plain, last_two, fits, version="1.6.0"):
     """The `hardware` object of a --profile run, recomputed; the rest equals `plain`."""
-    prof = json.loads(read(KYIV))
+    prof = json.loads(read(PROFILE))
     h = cert["hardware"]
     assert cert["schema_version"] == version, cert["schema_version"]
-    assert h["profile"] == "ibm_kyiv" and h["note"] == HW_NOTE, h
-    assert h["profile_hash"] == sha3(read(KYIV, "rb").replace(b"\r\n", b"\n")), "profile hash"
+    assert h["profile"] == PROFILE_NAME and h["note"] == HW_NOTE, h
+    assert h["profile_hash"] == sha3(read(PROFILE, "rb").replace(b"\r\n", b"\n")), "profile hash"
     names = {"w": "width", "d": "depth", "t": "T-count", "a": "ancilla"}
     over = []
     for k in "wdta":
@@ -186,9 +217,9 @@ def check_hardware(d, cert, plain, last_two, fits, version="1.4.0"):
     delta = Fraction(cert["spec"]["delta"])
     dhw = delta + G * pbar
     assert (h["G"], h["p_bar"], h["delta_hw"], h["vacuous"]) == (G, rat(pbar), rat(dhw), dhw >= 1), h
-    line = (f"hardware profile ibm_kyiv: {'exceeds ' + ', '.join(over) if over else 'fits all budgets'}; "
+    line = (f"hardware profile {PROFILE_NAME}: {'exceeds ' + ', '.join(over) if over else 'fits all budgets'}; "
             f"δ_hw ≤ {rat(delta)} + {G}·{rat(pbar)} = {rat(dhw)}{' (vacuous)' if dhw >= 1 else ''}")
-    status = "certified (conditional on: solution_count = {})".format(cert["instance"]["M"])
+    status = status_line(cert)
     assert last_two == [status, line], (last_two, line)
     rest = {k: v for k, v in cert.items() if k not in ("hardware", "schema_version")}
     base = {k: v for k, v in plain.items() if k != "schema_version"}
@@ -316,10 +347,9 @@ def main():
             out = os.path.join(tmp, f"run{i}")
             rc, so, se = certify(args.cqr, src, out)
             assert rc == 0, (rc, so, se)
-            assert so.rstrip("\n").split("\n")[-1] == \
-                "certified (conditional on: solution_count = 32)", so
+            assert so.rstrip("\n").split("\n")[-1] == "certified", so
             runs.append(out)
-        print("ok:   status line `certified (conditional on: solution_count = 32)` (exit 0)")
+        print("ok:   status line `certified` (exit 0; Stage 14a: M decided by the kernel)")
         cert, text = check_dir(runs[0], validator)
         assert cert["status"] == "certified" and cert["obligations"] == []
         assert cert["grade"] == {"w": 15, "d": 134, "t": 72, "a": 7}, cert["grade"]
@@ -327,7 +357,16 @@ def main():
         assert cert["axioms"] == STANDARD, cert["axioms"]
         assert cert["theorem"] == THEOREM
         assert cert["trust_boundary"]["front_end"] == validated(8), cert["trust_boundary"]
-        print("ok:   JSON valid (schema v1.3.0); grade (15, 134, 72, 7), delta 7/128, "
+        assert cert["solution_count"] == {"value": 32, "status": "kernel_decided"}, cert
+        assert status_line(cert) == "certified"
+        assert text.count("theorem hM_count : (Finset.univ.filter fun x => Network.pred net 8 x "
+                          "= true).card = 32 := by\n  rw [← Network.countSat_eq_card]\n"
+                          "  decide +kernel\n") == 1, "hM_count"
+        assert "theorem cert :\n    RealizesExact" in text and "hM_card" not in text, "cert"
+        assert text.count("nAnc_eq hM_count\n") == 1 and "native_decide" not in text
+        print("ok:   Cert.lean: hM_count by Network.countSat_eq_card and decide +kernel; "
+              "theorem cert without hypothesis; solution_count kernel_decided")
+        print("ok:   JSON valid (schema v1.6.0); grade (15, 134, 72, 7), delta 7/128, "
               "axioms exactly propext, Classical.choice, Quot.sound; front end validated "
               "on 2^8 inputs")
         print("ok:   circuit hash = SHA3 of the IR literal of Cert.lean (hashlib); "
@@ -346,21 +385,21 @@ def main():
         print("ok:   committed examples/certs/grover_pred_037 agrees (JSON modulo machine fields)")
         assert masked(read(os.path.join(runs[0], "certificate.json"))) == \
             masked(read(os.path.join(EXAMPLE, "certificate.json"))), "certificate.json bytes"
-        assert cert["schema_version"] == "1.3.0" and "hardware" not in cert
+        assert cert["schema_version"] == "1.6.0" and "hardware" not in cert
         print("ok:   without --profile: certificate.json byte-identical to the committed one "
-              "outside reference_configuration (schema_version 1.3.0, no hardware)")
+              "outside reference_configuration (schema_version 1.6.0, no hardware)")
 
-        # --profile ibm_kyiv (Stage 11b)
-        out = os.path.join(tmp, "kyiv")
-        rc, so, se = certify(args.cqr, src, out, "--profile", "ibm_kyiv", "--report")
+        # --profile illustrative_sc (Stage 11b; renamed from ibm_kyiv in Stage 14a)
+        out = os.path.join(tmp, "prof")
+        rc, so, se = certify(args.cqr, src, out, "--profile", PROFILE_NAME, "--report")
         assert rc == 0, (rc, so, se)
         kc, _ = check_dir(out, validator)
         for f in ("Cert.lean", f"{NAME}.qir", f"{NAME}.qasm"):
             assert read(os.path.join(out, f), "rb") == read(os.path.join(EXAMPLE, f), "rb"), f
         line = check_hardware(out, kc, cert, so.rstrip("\n").split("\n")[-2:], fits=True)
-        assert line == ("hardware profile ibm_kyiv: fits all budgets; "
+        assert line == ("hardware profile illustrative_sc: fits all budgets; "
                         "δ_hw ≤ 7/128 + 390·1/100 = 2531/640 (vacuous)"), line
-        print("ok:   --profile ibm_kyiv: status line unchanged (exit 0); fits all budgets "
+        print("ok:   --profile illustrative_sc: status line unchanged (exit 0); fits all budgets "
               "(d = 134 <= 200, tree diffusion), delta_hw = 7/128 + 390*1/100 = 2531/640 "
               "(vacuous); hardware recomputed; run report row 'Hardware profile'; "
               "Cert.lean / .qir / .qasm = committed")
@@ -374,9 +413,11 @@ def main():
         rc, so, se = certify(args.cqr, os.path.join("examples", f"{alu}.cqr"), out,
                              "--solutions", str(m))
         last = so.rstrip("\n").split("\n")[-1]
-        assert rc == 0 and last == "certified (conditional on: solution_count = 30)", (rc, so, se)
+        assert rc == 0 and last == "certified", (rc, so, se)
         ac, atext = check_dir(out, validator)
         assert ac["status"] == "certified" and ac["obligations"] == []
+        assert ac["solution_count"] == {"value": 30, "status": "kernel_decided"}, ac
+        assert "theorem hM_count" in atext and "hM_card" not in atext
         assert ac["axioms"] == STANDARD, ac["axioms"]
         assert ac["instance"] == {"n": 6, "M": 30, "r": 1}, ac["instance"]
         assert ac["spec"]["delta"] == "833/2048", ac["spec"]
@@ -394,16 +435,17 @@ def main():
             masked(read(os.path.join(exa, "certificate.json"))), "certificate.json bytes"
         out_k = os.path.join(tmp, alu + "_kyiv")
         rc, so, se = certify(args.cqr, os.path.join("examples", f"{alu}.cqr"), out_k,
-                             "--solutions", str(m), "--profile", "ibm_kyiv", "--report")
+                             "--solutions", str(m), "--profile", PROFILE_NAME, "--report")
         assert rc == 0, (rc, so, se)
         akc, _ = check_dir(out_k, validator)
         line = check_hardware(out_k, akc, ac, so.rstrip("\n").split("\n")[-2:], fits=True)
-        assert line == ("hardware profile ibm_kyiv: fits all budgets; "
+        assert line == ("hardware profile illustrative_sc: fits all budgets; "
                         "δ_hw ≤ 833/2048 + 345·1/100 = 39493/10240 (vacuous)"), line
         print("ok:   simple_alu_x0_1: certificate.json byte-identical to the committed one outside "
-              "reference_configuration; --profile ibm_kyiv: fits all budgets, delta_hw = "
+              "reference_configuration; --profile illustrative_sc: fits all budgets, delta_hw = "
               "833/2048 + 345*1/100 = 39493/10240 (vacuous: G*p_bar = 3.45 >= 1)")
-        print(f"ok:   second predicate {alu} (M = 30 from the SyReC semantics): `{last}` (exit 0; "
+        print(f"ok:   second predicate {alu} (M = 30 from the SyReC semantics, and decided by the "
+              f"kernel): `{last}` (exit 0; "
               "r = 1, delta 833/2048, grade (16, 121, 60, 10), front end validated on 2^6 "
               "inputs); committed examples/certs/simple_alu_x0_1 agrees")
         for d, c in ((EXAMPLE, ex), (exa, ea)):
@@ -414,16 +456,16 @@ def main():
 
         # --shape few:log (Stage 12d): the few-ancilla diffusion, candidate B
         runs_few = {}
-        for label, extra in (("plain", []), ("kyiv", ["--profile", "ibm_kyiv", "--report"])):
+        for label, extra in (("plain", []), ("kyiv", ["--profile", PROFILE_NAME, "--report"])):
             out = os.path.join(tmp, "few_" + label)
             rc, so, se = certify(args.cqr, src, out, "--shape", "few:log", *extra)
             assert rc == 0, (rc, so, se)
             runs_few[label] = (out, so)
         out_p, so_p = runs_few["plain"]
-        assert so_p.rstrip("\n").split("\n")[-1] == \
-            "certified (conditional on: solution_count = 32)", so_p
+        assert so_p.rstrip("\n").split("\n")[-1] == "certified", so_p
         fc, ftext = check_dir(out_p, validator)
-        assert fc["schema_version"] == "1.5.0" and fc["diffusion_shape"] == "few:log", fc
+        assert fc["schema_version"] == "1.6.0" and fc["diffusion_shape"] == "few:log", fc
+        assert fc["solution_count"] == {"value": 32, "status": "kernel_decided"}, fc
         assert "hardware" not in fc
         assert fc["status"] == "certified" and fc["obligations"] == [] and fc["axioms"] == STANDARD
         assert fc["grade"] == {"w": 10, "d": 172, "t": 96, "a": 2}, fc["grade"]
@@ -433,17 +475,17 @@ def main():
                      "theorem emitted_ok : groverCircuitFew net 8 2 .logDepth = .ok emitted",
                      "theorem mcz_ok : mczFew 8 .logDepth = .ok mczCircuit",
                      "theorem diff_ok : diffusionFew 8 .logDepth = .ok diffCircuit",
-                     "no per-instance classical check"):
+                     "no per-instance classical check", "theorem hM_count :",
+                     "nAnc_eq\n    hM_count\n", "theorem cert :\n    RealizesExact"):
             assert ftext.count(frag) == 1, frag
         for bad_frag in ("native_decide", "sorry", "treeNet", "fewCheck", "classical_step",
                          "mcz_WF", "mcz_nBits", "mcz_nAnc", "diff_WF",
-                         "grover_certificate_few oracle"):
+                         "grover_certificate_few oracle", "hM_card"):
             assert bad_frag not in ftext, bad_frag
         out_k, so_k = runs_few["kyiv"]
         fk, _ = check_dir(out_k, validator)
-        line = check_hardware(out_k, fk, fc, so_k.rstrip("\n").split("\n")[-2:], fits=True,
-                              version="1.5.0")
-        assert line == ("hardware profile ibm_kyiv: fits all budgets; "
+        line = check_hardware(out_k, fk, fc, so_k.rstrip("\n").split("\n")[-2:], fits=True)
+        assert line == ("hardware profile illustrative_sc: fits all budgets; "
                         "δ_hw ≤ 7/128 + 380·1/100 = 2467/640 (vacuous)"), line
         assert fk["hardware"]["components"]["d"] == {"required": 172, "budget": 200, "fits": True}
         exf, _ = check_dir(EXAMPLE_FEW, validator)
@@ -456,10 +498,10 @@ def main():
             masked(read(os.path.join(EXAMPLE_FEW, "certificate.json"))), "few certificate.json"
         assert exf["reference_configuration"]["kernel_check"]["runs"] == 5
         check_report(EXAMPLE_FEW, exf)
-        print("ok:   --shape few:log: `certified (conditional on: solution_count = 32)` (exit 0); "
-              "schema v1.5.0, diffusion_shape few:log, grade (10, 172, 96, 2), delta 7/128, "
+        print("ok:   --shape few:log: `certified` (exit 0); "
+              "schema v1.6.0, diffusion_shape few:log, grade (10, 172, 96, 2), delta 7/128, "
               "axioms exactly the standard three; grover_certificate_few_all, no fewCheck")
-        print("ok:   --shape few:log --profile ibm_kyiv: fits all budgets (d = 172 <= 200), "
+        print("ok:   --shape few:log --profile illustrative_sc: fits all budgets (d = 172 <= 200), "
               "delta_hw = 7/128 + 380*1/100 = 2467/640 (vacuous); hardware recomputed; "
               "committed examples/certs/grover_pred_037_few agrees (bytes, JSON, run report)")
 
@@ -468,8 +510,9 @@ def main():
         rc, so, se = certify(args.cqr, os.path.join("tests", "certify", "xor_pred.cqr"), out,
                              "--solutions", "4")
         last = so.rstrip("\n").split("\n")[-1]
-        assert rc == 0 and last == "certified (conditional on: solution_count = 4)", (rc, so, se)
+        assert rc == 0 and last == "certified", (rc, so, se)
         xc, xtext = check_dir(out, validator)
+        assert xc["solution_count"] == {"value": 4, "status": "kernel_decided"}, xc
         assert xc["status"] == "certified" and xc["obligations"] == []
         assert xc["axioms"] == STANDARD, xc["axioms"]
         assert "sorry" not in xtext and ".xor " in xtext
@@ -485,8 +528,9 @@ def main():
         rc, so, se = certify(args.cqr, os.path.join("tests", "certify", "if_pred.cqr"), out,
                              "--solutions", str(m))
         last = so.rstrip("\n").split("\n")[-1]
-        assert rc == 0 and last == "certified (conditional on: solution_count = 8)", (rc, so, se)
+        assert rc == 0 and last == "certified", (rc, so, se)
         ic, itext = check_dir(out, validator)
+        assert ic["solution_count"] == {"value": 8, "status": "kernel_decided"}, ic
         assert ic["status"] == "certified" and ic["obligations"] == []
         assert ic["axioms"] == STANDARD, ic["axioms"]
         assert ic["spec"]["delta"] == "7/128" and "r = 2." in itext, (ic["spec"], itext[:400])
@@ -511,7 +555,7 @@ def main():
 
         # (b) injected sorry, (b') native_decide, in temp copies of the committed certificate
         proof = ("  grover_certificate oracle mcz (by decide) emitted_ok delta_eq grade_eq nAnc_eq "
-                 "hM_card\n")
+                 "hM_count\n")
         nd = "theorem nAnc_eq : emitted.nAnc = 7 := by decide +kernel\n"
         assert base.count(proof) == 1 and base.count(nd) == 1
         for label, mutated, expect in (
@@ -554,6 +598,52 @@ def main():
             (rc, so, se)
         assert not os.path.exists(os.path.join(tmp, "sw")), "no certificate for a non-match"
         print(f"ok:   (c) search_while: hint {hint['code']} at {hint['location']} (exit 1)")
+
+        # Stage 14a: the solution count decided by the kernel — negative and conditional cases
+        # (e) --solutions 31 contradicts ℰ's M = 32 (the Stage 3 diagnostic): nothing written
+        out = os.path.join(tmp, "m31")
+        rc, so, se = certify(args.cqr, src, out, "--solutions", "31")
+        d31 = json.loads(so.strip().split("\n")[-1])
+        assert rc == 1 and d31["code"] == "solution_count_mismatch" and \
+            d31["stage"] == "hypothesis", (rc, so, se)
+        assert not os.path.exists(out), "a certificate was written on a count mismatch"
+        # (e') --solutions 29 for simple_alu_x0_1 (ℰ has no count): Network.countSat says 30
+        out = os.path.join(tmp, "m29")
+        rc, so, se = certify(args.cqr, os.path.join("examples", f"{alu}.cqr"), out,
+                             "--solutions", "29")
+        d29 = json.loads(so.strip().split("\n")[-1])
+        assert rc == 1 and d29["code"] == "solution_count_mismatch" and \
+            d29["stage"] == "hypothesis", (rc, so, se)
+        assert "Network.countSat" in d29["message"] and "M = 29" in d29["message"] and \
+            "count 30" in d29["message"], d29
+        assert not os.path.exists(out), "a certificate was written on a count mismatch"
+        print("ok:   (e) --solutions 31 (grover_pred_037, the extractor counts 32) and --solutions 29 "
+              "(simple_alu_x0_1, Network.countSat counts 30): solution_count_mismatch, exit 1, "
+              "nothing written")
+        # (f) --count-limit 4 and --count-limit 0 (disabled): n = 8 → the conditional form
+        for lim in ("4", "0"):
+            out = os.path.join(tmp, "lim" + lim)
+            rc, so, se = certify(args.cqr, src, out, "--count-limit", lim)
+            last = so.rstrip("\n").split("\n")[-1]
+            assert rc == 0 and last == "certified (conditional on: solution_count = 32)", \
+                (rc, so, se)
+            lc, ltext = check_dir(out, validator)
+            assert lc["solution_count"] == {"value": 32, "status": "hypothesis"}, lc["solution_count"]
+            assert lc["hypotheses"][0] == "solution_count = 32 (hM_card, supplied, not decided)"
+            assert "(hM_card :" in ltext and "hM_count" not in ltext and "nAnc_eq hM_card\n" in ltext
+            assert lc["status"] == "certified" and lc["axioms"] == STANDARD and lc["obligations"] == []
+            assert lc["hashes"]["circuit"] == cert["hashes"]["circuit"] and lc["grade"] == cert["grade"]
+            assert lc["hashes"]["proof"] != cert["hashes"]["proof"]
+        print("ok:   (f) --count-limit 4 / 0: `certified (conditional on: solution_count = 32)`, "
+              "Cert.lean with hM_card, solution_count.status hypothesis (exit 0)")
+        # (g) the renamed profile has no alias: --profile illustrative_sc is an unknown profile
+        out = os.path.join(tmp, "kyiv_old")
+        rc, so, se = certify(args.cqr, src, out, "--profile", "ibm_kyiv")
+        assert rc == 2 and "profiles/ibm_kyiv.json not found" in se and \
+            "available profiles: illustrative_sc" in se, (rc, so, se)
+        assert not os.path.exists(out)
+        print("ok:   (g) --profile ibm_kyiv: unknown profile (exit 2), the diagnostic lists "
+              "illustrative_sc; nothing written")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("certify_check: all checks passed")

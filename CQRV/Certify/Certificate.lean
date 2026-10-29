@@ -33,7 +33,11 @@ reviewer decisions 2 and 3).
   included (it is valid under both); one with `hardware` says "1.4.0". v1.5.0 (Stage 12d,
   decision 5) adds the optional field `diffusion_shape` (`"tree"` when omitted): only a
   certificate of `cqr certify --shape few:log` carries it (`"few:log"`) and says "1.5.0", so
-  the tree certificates stay byte-identical.
+  the tree certificates stay byte-identical. v1.6.0 (Stage 14a, DECISIONS.md 2026-10-29) adds
+  the required object `solution_count` `{value, status}` (`CountStatus`: `kernel_decided` when
+  `Cert.lean` proves `hM_count` by `Network.countSat_eq_card` and `decide +kernel`, `hypothesis`
+  when `cert` keeps `hM_card`); every certificate now says "1.6.0", and `hardware` /
+  `diffusion_shape` are optional under it.
 -/
 
 @[expose] public section
@@ -190,6 +194,20 @@ def CertDiffusion.name : CertDiffusion → String
   | .tree => "tree"
   | .fewLog => "few:log"
 
+/-- Report §8.2, §5.1.3 (Stage 14a) — how the solution count `M` of a certificate was obtained:
+decided by the kernel (`hM_count` in `Cert.lean`, through `Network.countSat_eq_card`; `cqr
+certify --count-limit k`, `n ≤ k`), or supplied as the hypothesis `hM_card` of `cert`
+(§5.2.4, the only form before Stage 14a). -/
+inductive CountStatus where
+  | kernelDecided
+  | hypothesis
+  deriving Repr, DecidableEq, Inhabited
+
+/-- The word of `solution_count.status` (`docs/certificate.schema.json`). -/
+def CountStatus.name : CountStatus → String
+  | .kernelDecided => "kernel_decided"
+  | .hypothesis => "hypothesis"
+
 /-- Report §8.4.2, §8.4.4, §9.5.3 — the certificate record, schema v1.0.0. -/
 structure Certificate where
   pattern : String
@@ -224,17 +242,16 @@ structure Certificate where
   hardware : Option HardwareCheck := none
   /-- Stage 12d: the diffusion, written only when it is not the tree (`diffusion_shape`) -/
   diffusion : CertDiffusion := .tree
+  /-- Stage 14a: how `M` was obtained (`solution_count.status`) -/
+  count : CountStatus := .hypothesis
   deriving Repr
 
-/-- The schema version written to `schema_version` (semver) by a certificate without
-`hardware`: unchanged since Stage 9b, so those certificates stay byte-identical. -/
-def schemaVersion : String := "1.3.0"
-
-/-- The schema version of a certificate with `hardware` (Stage 11b, decision 5). -/
-def schemaVersionHardware : String := "1.4.0"
-
-/-- The schema version of a certificate with `diffusion_shape` (Stage 12d, decision 5). -/
-def schemaVersionDiffusion : String := "1.5.0"
+/-- The schema version written to `schema_version` (semver): "1.6.0" for every certificate
+since Stage 14a (the object `solution_count` is required; `hardware`, Stage 11b, and
+`diffusion_shape`, Stage 12d, are optional under it). Before Stage 14a the version depended on
+the optional objects present (1.3.0 / 1.4.0 / 1.5.0) to keep older certificates byte-identical;
+Stage 14a regenerates all three committed certificates, so one version suffices. -/
+def schemaVersion : String := "1.6.0"
 
 /-- The trust-boundary note of the `hardware` object (§5.3.1). -/
 def hardwareNote : String :=
@@ -260,10 +277,10 @@ def Certificate.toJson (c : Certificate) : Json :=
   let ratStr (q : Rat) : Json := Json.str (toString q)
   let optStr : Option String → Json := fun | some s => str s | none => Json.null
   Json.mkObj <|
-    [("schema_version", str (if c.diffusion != .tree then schemaVersionDiffusion
-        else if c.hardware.isSome then schemaVersionHardware else schemaVersion)),
+    [("schema_version", str schemaVersion),
      ("pattern", str c.pattern),
      ("instance", Json.mkObj [("n", c.n), ("M", c.M), ("r", c.r)]),
+     ("solution_count", Json.mkObj [("value", c.M), ("status", str c.count.name)]),
      ("spec", Json.mkObj [("epsilon", ratStr c.epsilon), ("delta", ratStr c.delta),
        ("success_probability", ratStr (1 - c.delta))]),
      ("grade", Json.mkObj [("w", c.grade.w), ("d", c.grade.d), ("t", c.grade.t),
@@ -306,10 +323,12 @@ def restorationText : String := "AncRestore: all ancillae |0…0⟩ on density o
 signature, match, circuit, grade, `r`, `n`, `M`, exact `δ`). Checks that the data agree: the
 signature's arity and solution count are `n` and `M`, the circuit has `n` data qubits, and the
 grade is the circuit's measured grade (DECISIONS.md, Stage 5b review). `frontEnd` is the
-declared front-end boundary (`FrontEndCheck.trustText` of the Stage 9b validation). -/
+declared front-end boundary (`FrontEndCheck.trustText` of the Stage 9b validation). `count`
+(Stage 14a) says whether `M` is decided by the kernel (`hM_count`) or a hypothesis (`hM_card`);
+only in the second case is it listed under `hypotheses`. -/
 def Certificate.build (src : String) (sig : SigmaIn) (entry : LibEntry) (facts : List Discharged)
-    (C : Circuit) (g : Grade) (r n M : Nat) (δ : Rat) (cfg : RefConfig) (frontEnd : String) :
-    Except String Certificate := do
+    (C : Circuit) (g : Grade) (r n M : Nat) (δ : Rat) (cfg : RefConfig) (frontEnd : String)
+    (count : CountStatus := .hypothesis) : Except String Certificate := do
   if sig.arity != n then throw s!"arity {sig.arity} of the signature ≠ n = {n}"
   if sig.solutionCount != some M then throw s!"solution count of the signature ≠ M = {M}"
   if C.nData != n then throw s!"the circuit has {C.nData} data qubits, n = {n}"
@@ -318,14 +337,16 @@ def Certificate.build (src : String) (sig : SigmaIn) (entry : LibEntry) (facts :
   return {
     pattern := entry.name, n, M, r, epsilon := 0, delta := δ, grade := g
     hypotheses :=
-      [s!"solution_count = {M} (hM_card, supplied, not decided)"] ++
+      (match count with
+        | .hypothesis => [s!"solution_count = {M} (hM_card, supplied, not decided)"]
+        | .kernelDecided => []) ++
       facts.map (fun d => s!"{d.cond.render}: {d.render} (side condition of {entry.name}, \
         discharged by the matcher)") ++
       [s!"iterations r = {r} (parameter of grover_parametric_lemma; δ is exact for this r)"]
     restoration := restorationText
     predicateHash := hP, circuitHash := hC, proofHash := none
     gateCounts := G, config := cfg, axioms := [], status := .notYetAudited, theoremName := none,
-    obligations := [], frontEnd }
+    obligations := [], frontEnd, count }
 
 /-! ## The matched Grover instance (shared by `cqr emit` and the certificate) -/
 

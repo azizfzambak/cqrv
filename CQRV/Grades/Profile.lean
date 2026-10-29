@@ -131,8 +131,10 @@ def HardwareCheck.deltaHw (c : HardwareCheck) : Option Rat :=
 def HardwareCheck.vacuous (c : HardwareCheck) : Option Bool := c.deltaHw.map (1 ≤ ·)
 
 /-- Report §3.3.3, Decision 4 of Stage 11b — the second status line, e.g.
-`hardware profile ibm_kyiv: exceeds depth budget (230 > 200); δ_hw ≤ 7/128 + 390·1/100 =
-2531/640 (vacuous)`. -/
+`hardware profile illustrative_sc: exceeds depth budget (230 > 200); δ_hw ≤ 7/128 + 390·1/100 =
+2531/640 (vacuous)` (the bundled profile `profiles/illustrative_sc.json` carries the
+specification's illustrative superconducting figures, Table 3.5; renamed from `ibm_kyiv` in
+Stage 14a: not calibration data of any device). -/
 def HardwareCheck.statusLine (c : HardwareCheck) : String :=
   let over := c.components.filter (!·.fits)
   let budgets := if over.isEmpty then "fits all budgets" else

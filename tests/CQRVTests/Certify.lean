@@ -18,6 +18,10 @@ Stage 8b (report §5.1.3, §8.4.1, §9.5.1, §9.5.3): `auditAxioms`, the parsers
 `#print axioms` and profiler output, the shape of the generated `Cert.lean`, the axioms of the
 lemmas a certificate instantiates (pinned with `#guard_msgs`). The kernel check itself and the
 negative tests are `tests/diff/certify_check.py` (driver `scripts/check_certify.sh`).
+
+Stage 14a (report §8.2): `Network.countSat` on the corpus, its agreement with the `Finset`
+cardinality decided by the kernel on the committed network literal, and the shape of a
+certificate whose solution count is kernel-decided (`hM_count`, `cert` without hypothesis).
 -/
 
 namespace CQRV.Tests.Certify
@@ -54,7 +58,14 @@ def sample : Except String Certificate := certificateOf groverSrc cfg
 
 #guard match sample with
   | .ok c => c.delta == 7 / 128 && c.grade == ⟨15, 134, 72, 7⟩ && c.status == .notYetAudited &&
-      c.n == 8 && c.M == 32 && c.r == 2 && c.proofHash.isNone && c.axioms.isEmpty
+      c.n == 8 && c.M == 32 && c.r == 2 && c.proofHash.isNone && c.axioms.isEmpty &&
+      c.count == .hypothesis
+  | .error _ => false
+-- Stage 14a: the sample (no kernel check) lists M under `hypotheses`; a kernel-decided one does not
+#guard match sample with
+  | .ok c => c.hypotheses.head? == some "solution_count = 32 (hM_card, supplied, not decided)" &&
+      (c.toJson.compress.splitOn "\"solution_count\":{\"status\":\"hypothesis\",\"value\":32}").length == 2 &&
+      (c.toJson.compress.splitOn "\"schema_version\":\"1.6.0\"").length == 2
   | .error _ => false
 -- Stage 8a review: G counts every noisy operation, terminal measurements included
 #guard match sample with
@@ -146,6 +157,20 @@ def xorNet : Network := ⟨2, #[.input 0, .input 1, .xor 0 1], [2]⟩
 #guard groverReq.all fun q =>
   ((renderCert { q with net := xorNet }).splitOn "def oracle : OracleCert 8 where").length == 2
 #guard (groverCert.splitOn "hXor").length == 1
+-- Stage 14a: the default request keeps the hypothesis `hM_card`; with `count := .kernelDecided`
+-- the certificate proves `hM_count` (`Network.countSat_eq_card`, `decide +kernel`) and `cert`
+-- takes no hypothesis
+#guard (groverCert.splitOn "\n    (hM_card : (Finset.univ.filter fun x => Network.pred net 8 x = true).card = 32) :").length == 2
+#guard (groverCert.splitOn "hM_count").length == 1
+#guard (groverCert.splitOn "nAnc_eq hM_card\n").length == 2
+def groverCertCounted : String :=
+  (groverReq.map fun q => renderCert { q with count := .kernelDecided }).getD ""
+#guard (groverCertCounted.splitOn "theorem hM_count : (Finset.univ.filter fun x => Network.pred net 8 x = true).card = 32 := by\n  rw [← Network.countSat_eq_card]\n  decide +kernel\n").length == 2
+#guard (groverCertCounted.splitOn "theorem cert :\n    RealizesExact").length == 2
+#guard (groverCertCounted.splitOn "hM_card").length == 1
+#guard (groverCertCounted.splitOn "nAnc_eq hM_count\n").length == 2
+#guard (groverCertCounted.splitOn "native_decide").length == 1
+#guard (groverCertCounted.splitOn "sorry").length == 1
 -- Stage 12d: `--shape few:log` — the few-ancilla Grover circuit, its own template
 def groverReqFew : Option CertRequest :=
   match parse groverSrc >>= check with
@@ -173,6 +198,36 @@ def groverCertFew : String := (groverReqFew.map renderCert).getD ""
 #guard (groverCertFew.splitOn "  grover_certificate_few oracle").length == 1
 #guard (groverCertFew.splitOn "(7 / 128 : ℝ) ⟨10, 172, 96, 2⟩").length == 2
 #guard (groverCertFew.splitOn "treeNet").length == 1
+#guard (groverCertFew.splitOn "nAnc_eq\n    hM_card\n").length == 2
+-- Stage 14a, few:log with the kernel-decided count
+#guard (((groverReqFew.map fun q => renderCert { q with count := .kernelDecided }).getD "").splitOn
+  "nAnc_eq\n    hM_count\n").length == 2
+#guard (((groverReqFew.map fun q => renderCert { q with count := .kernelDecided }).getD "").splitOn
+  "hM_card").length == 1
+
+/-! ## The solution count decided by the kernel (Stage 14a, report §8.2) -/
+
+def aluSrc : String := include_str "../../examples/simple_alu_x0_1.cqr"
+
+/-- `Network.countSat` of a corpus predicate. -/
+def countOf (src : String) (n : Nat) : Option Nat :=
+  ((parse src >>= check >>= toNetwork).map (·.countSat n)).toOption
+
+#guard countOf groverSrc 8 == some 32
+#guard countOf aluSrc 6 == some 30
+#guard xorNet.countSat 2 == 2
+#guard xorNet.countSat 3 == 4
+-- the network literal of the committed certificate examples/certs/grover_pred_037/Cert.lean,
+-- counted by the kernel exactly as `hM_count` does
+def groverNetLit : Network := ⟨8, #[.input 0, .input 1, .input 2, .input 3, .input 4, .input 5,
+  .input 6, .input 7, .and 0 3, .and 8 7], [9]⟩
+example : groverNetLit.countSat 8 = 32 := by decide +kernel
+example : (Finset.univ.filter fun x => Network.pred groverNetLit 8 x = true).card = 32 := by
+  rw [← Network.countSat_eq_card]
+  decide +kernel
+-- `bitsEquiv` is the bit vector of `inputBits` (bit `i` of `k` at index `i`)
+#guard (List.finRange (2 ^ 3)).all fun k =>
+  (List.finRange 3).all fun i => bitsEquiv 3 k i == (k.val >>> i.val % 2 == 1)
 
 /-! ## `symDiff` by structural insertion sort (kernel-evaluable, Stage 8b) -/
 
@@ -182,8 +237,8 @@ example : symDiff [.anc 1, .data 0] [.data 2] = [.data 0, .data 2, .anc 1] := by
 
 /-! ## Hardware profiles (Stage 11b, §3.3.2–3.3.3)
 
-`profileOfJson` on inline profile texts (the file `profiles/ibm_kyiv.json` itself is read by
-`tests/diff/certify_check.py` through `cqr certify --profile ibm_kyiv`). -/
+`profileOfJson` on inline profile texts (the file `profiles/illustrative_sc.json` itself is read by
+`tests/diff/certify_check.py` through `cqr certify --profile illustrative_sc`). -/
 
 /-- The source entries of a profile, all eight fields. -/
 def sourceAll : String :=
@@ -213,6 +268,8 @@ def readProfile (s : String) : Except String Profile := Lean.Json.parse s >>= pr
 #guard (readProfile (profileText "200" "\"0.01\"" "{\"w\":\"x\"}")).toBool == false
 #guard (readProfile ((profileText "200" "\"0.01\"").replace "\"name\"" "\"x\":1,\"name\"")).toBool
   == false
+#guard profilePath "illustrative_sc" == "profiles/illustrative_sc.json"
+-- Stage 14a: the renamed profile has no alias; `ibm_kyiv` is just a name without a file
 #guard profilePath "ibm_kyiv" == "profiles/ibm_kyiv.json"
 #guard profilePath "my/kyiv.json" == "my/kyiv.json"
 
@@ -237,6 +294,10 @@ def groverHw : Option HardwareCheck := (readProfile (profileText "200" "\"0.01\"
 /-- info: 'CQRV.Certify.grover_certificate' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms grover_certificate
+
+/-- info: 'CQRV.Synthesis.Network.countSat_eq_card' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Network.countSat_eq_card
 
 /--
 info: 'CQRV.Certify.grover_certificate_few' depends on axioms: [propext, Classical.choice, Quot.sound]

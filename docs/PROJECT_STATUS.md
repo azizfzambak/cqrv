@@ -1,6 +1,6 @@
-# CQRV — project status (2026-10-28)
+# CQRV — project status (2026-10-29)
 
-One-page state of the repository after Stages 0–13c. The specification is report v3
+One-page state of the repository after Stages 0–14a. The specification is report v3
 (`docs/cqrv_report_revised_v3.docx`, tracked changes over v2, errata appendix). Details:
 `docs/M2_REPORT.md` (milestone M2, frozen, with post-M2 notes), `docs/DECISIONS.md` (every decision),
 `docs/SORRIES.md` (obligations). Toolchain: Lean 4.35.0, Mathlib v4.35.0, Physlib 96a6bc5.
@@ -17,26 +17,28 @@ One-page state of the repository after Stages 0–13c. The specification is repo
 | Theorem 3.1 in its concrete linear-algebra form (`no_cloning_obstruction`) | §2.2.2 |
 | Soundness of the Miller-pattern matcher (`millerMatch_sound`) | §4.1.2 |
 | Exact δ for every `r` (`sin_sq_odd_mul`); balanced-tree MCZ computes y₀ ∧ … ∧ yₙ₋₁ (`treeNet_pred`) | §8.2, §6.1.4 |
+| The solution count as a kernel computation: `Network.countSat_eq_card` (count by evaluation = the `Finset` cardinality of the certificate statement; Stage 14a) | §8.2, §8.4.1 |
 
 ## 2. Certificates (`cqr certify`, `examples/certs/`)
 
 | | `grover_pred_037` (Chapter 8) | `simple_alu_x0_1` (RevLib Simple ALU, one bit) |
 |---|---|---|
-| Status | certified (conditional on: solution_count = 32) | certified (conditional on: solution_count = 30) |
+| Status | certified (M decided by the kernel, `hM_count`; Stage 14a) | certified (M decided by the kernel, `hM_count`; Stage 14a) |
 | Grade (w, d, t, a), measured | (15, 134, 72, 7) | (16, 121, 60, 10) |
 | δ (exact) | 7/128 | 833/2048 |
-| Kernel check (i9-13900H, 4 threads) | 7.2 s | 6.4 s |
-| `--profile ibm_kyiv` (report Table 3.5 figures) | fits all budgets; δ_hw ≤ 2531/640 (vacuous) | fits all budgets; δ_hw ≤ 39493/10240 (vacuous) |
-| `--shape few:log` (2-ancilla diffusion, Stage 12d; `examples/certs/grover_pred_037_few`) | certified (conditional on: solution_count = 32) via the every-n theorem (`grover_certificate_few_all`, KG Theorem 5.1 for every n; Stage 13a, 13a′; no per-instance classical check); (10, 172, 96, 2); δ 7/128; kernel 22.6 s (slow regime; 5.9 s fast, DECISIONS.md 2026-10-28); ibm_kyiv fits all budgets, δ_hw ≤ 2467/640 (vacuous) | — (not requested) |
+| Kernel check (i9-13900H, 4 threads; median of 5) | 12.30 s | 11.10 s |
+| `--profile illustrative_sc` (report Table 3.5 figures; renamed from `ibm_kyiv` in Stage 14a, no alias) | fits all budgets; δ_hw ≤ 2531/640 (vacuous) | fits all budgets; δ_hw ≤ 39493/10240 (vacuous) |
+| `--shape few:log` (2-ancilla diffusion, Stage 12d; `examples/certs/grover_pred_037_few`) | certified (M kernel-decided) via the every-n theorem (`grover_certificate_few_all`, KG Theorem 5.1 for every n; Stage 13a, 13a′; no per-instance classical check); (10, 172, 96, 2); δ 7/128; kernel 6.72 s (median of 5; bimodal regimes, DECISIONS.md 2026-10-28); illustrative_sc fits all budgets, δ_hw ≤ 2467/640 (vacuous) | — (not requested) |
 
 The chain-shaped diffusion of the earlier stages, (15, 230, 72, 7), is kept as `*_chain` theorems.
+Status words (Stage 14a): `certified` when `n ≤ --count-limit` (default 12) and `Cert.lean` proves `hM_count`; `certified (conditional on: solution_count = M)` otherwise (`certificate.json` `solution_count.status`: `kernel_decided` / `hypothesis`, schema v1.6.0).
 
 ## 3. Declared trust boundaries (outside the kernel)
 
 - **Front end**: DSL → network (`toNetwork`) — exhaustively validated on all 2ⁿ inputs (n ≤ 16), not proved.
 - **Emitter**: QIR (Adaptive Profile) / OpenQASM 3 text — unverified, translation-validated by re-parse; QIR verified with llvmlite.
-- **Solution count M**: a hypothesis of every certificate (`hM_card`), never decided by enumeration.
-- **Hardware**: routing, native-gate translation and calibration noise are the backend's; the profile check uses the report's illustrative Kyiv figures. δ_hw is vacuous at p̄ = 10⁻² (G·p̄ ≥ 1) — needs error correction or mitigation.
+- **Solution count M**: decided by the kernel for n ≤ 12 (`hM_count`, `Network.countSat_eq_card`; `cqr certify --count-limit k`); a hypothesis (`hM_card`) only for larger n or with `--count-limit 0`.
+- **Hardware**: routing, native-gate translation and calibration noise are the backend's; the profile check uses the report's illustrative figures (`profiles/illustrative_sc.json`, not calibration data of any device). δ_hw is vacuous at p̄ = 10⁻² (G·p̄ ≥ 1) — needs error correction or mitigation.
 
 ## 4. Open
 
@@ -50,5 +52,5 @@ The chain-shaped diffusion of the earlier stages, (15, 230, 72, 7), is kept as `
 ```bash
 lake exe cache get && lake build
 scripts/ci_local.sh
-.lake/build/bin/cqr certify examples/grover_pred_037.cqr --profile ibm_kyiv
+.lake/build/bin/cqr certify examples/grover_pred_037.cqr --profile illustrative_sc
 ```

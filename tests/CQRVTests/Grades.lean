@@ -70,12 +70,14 @@ example (tT : Nat) : ((ρNISQ 500 tT).map ⟨10, 74, 72, 2⟩).d ≤ 100000 :=
 
 /-! ## §3.3.2–3.3.3 — declared profiles, `fitsPartial`, `δ_hw` (Stage 11b)
 
-`kyiv` has the figures of `profiles/ibm_kyiv.json` (report Table 3.5, §3.3.3): budget
+`illus` has the figures of `profiles/illustrative_sc.json` (report Table 3.5, §3.3.3; the
+specification's illustrative superconducting example, not calibration data of any device;
+renamed from `ibm_kyiv` in Stage 14a): budget
 (127, 200, —, 127), t_gate = 500 ns, no t_T, T1 = 100 μs, p̄ = 1/100. -/
 
-/-- The IBM Kyiv profile of report Table 3.5 / §3.3.3 (T-count not limiting). -/
-def kyiv : Profile :=
-  { name := "ibm_kyiv", budget := ⟨some 127, some 200, none, some 127⟩, tGateNs := some 500,
+/-- The illustrative profile of report Table 3.5 / §3.3.3 (T-count not limiting). -/
+def illus : Profile :=
+  { name := "illustrative_sc", budget := ⟨some 127, some 200, none, some 127⟩, tGateNs := some 500,
     tTNs := none, t1Ns := some 100000, pBar := some (1 / 100) }
 
 /-- The measured grades of the two worked examples (examples/certs/). -/
@@ -84,16 +86,16 @@ def groverGrade : Grade := ⟨15, 230, 72, 7⟩
 def aluGrade : Grade := ⟨16, 145, 60, 10⟩
 
 -- grover_pred_037 exceeds the depth budget only (Table 3.5, v3 erratum 10)
-#guard groverGrade.fitsPartial kyiv.budget = false
-#guard (groverGrade.checkComponents kyiv.budget).map (·.fits) == [true, false, true, true]
-#guard (groverGrade.checkComponents kyiv.budget).filter (!·.fits) ==
+#guard groverGrade.fitsPartial illus.budget = false
+#guard (groverGrade.checkComponents illus.budget).map (·.fits) == [true, false, true, true]
+#guard (groverGrade.checkComponents illus.budget).filter (!·.fits) ==
   [⟨"d", "depth", 230, some 200⟩]
 -- simple_alu_x0_1 fits every component
-#guard aluGrade.fitsPartial kyiv.budget = true
-#guard (aluGrade.checkComponents kyiv.budget).all (·.fits)
+#guard aluGrade.fitsPartial illus.budget = true
+#guard (aluGrade.checkComponents illus.budget).all (·.fits)
 -- a `none` component is never compared, however large the requirement
-#guard (⟨1, 1, 10 ^ 9, 1⟩ : Grade).fitsPartial kyiv.budget = true
-#guard (⟨1, 201, 0, 1⟩ : Grade).fitsPartial kyiv.budget = false
+#guard (⟨1, 1, 10 ^ 9, 1⟩ : Grade).fitsPartial illus.budget = true
+#guard (⟨1, 201, 0, 1⟩ : Grade).fitsPartial illus.budget = false
 
 -- agreement with `Grade.fits` when every component is given: the theorem (Stage 11b review) …
 example (r b : Grade) : r.fitsPartial (.ofGrade b) = fits r b := fitsPartial_ofGrade r b
@@ -108,29 +110,29 @@ example (r b : Grade) : r.fitsPartial (.ofGrade b) = fits r b := fitsPartial_ofG
   [⟨127, 200, 72, 127⟩, ⟨127, 73, 72, 127⟩, 0, ⟨15, 230, 72, 7⟩].all fun b =>
     r.fitsPartial (.ofGrade b) == fits r b
 
--- ρNISQ consistency of the Kyiv figures: d · t_gate ≤ T1 (200 · 500 ns = 100 μs) …
-#guard kyiv.coherenceOk == some true
+-- ρNISQ consistency of the illustrative figures: d · t_gate ≤ T1 (200 · 500 ns = 100 μs) …
+#guard illus.coherenceOk == some true
 -- … and the measured Grover depth does not: 230 · 500 ns = 115 μs > T1
 #guard ((ρNISQ 500 0).map groverGrade).d == 115000
 #guard ((ρNISQ 500 0).map aluGrade).d ≤ 100000
-#guard ({ kyiv with t1Ns := none } : Profile).coherenceOk == none
+#guard ({ illus with t1Ns := none } : Profile).coherenceOk == none
 
 -- δ_hw = δ + G·p̄, exact (§3.3.3): Grover G = 390, ALU G = 345 (Stage 8a counts); both vacuous
 #guard deltaHw (7 / 128) 390 (1 / 100) == 2531 / 640
-#guard (HardwareCheck.of kyiv "" groverGrade (7 / 128) 390).vacuous == some true
+#guard (HardwareCheck.of illus "" groverGrade (7 / 128) 390).vacuous == some true
 #guard deltaHw (833 / 2048) 345 (1 / 100) == 39493 / 10240
-#guard (HardwareCheck.of kyiv "" aluGrade (833 / 2048) 345).vacuous == some true
+#guard (HardwareCheck.of illus "" aluGrade (833 / 2048) 345).vacuous == some true
 -- informative when G·p̄ ≪ 1, e.g. p̄ = 10⁻⁴ (the fault-tolerant p_phy of §3.3.3)
-#guard (HardwareCheck.of { kyiv with pBar := some (1 / 10000) } "" groverGrade (7 / 128)
+#guard (HardwareCheck.of { illus with pBar := some (1 / 10000) } "" groverGrade (7 / 128)
   390).vacuous == some false
-#guard (HardwareCheck.of { kyiv with pBar := none } "" groverGrade (7 / 128) 390).deltaHw == none
+#guard (HardwareCheck.of { illus with pBar := none } "" groverGrade (7 / 128) 390).deltaHw == none
 
 -- the second status line (Stage 11b, decision 4)
-#guard (HardwareCheck.of kyiv "" groverGrade (7 / 128) 390).statusLine ==
-  "hardware profile ibm_kyiv: exceeds depth budget (230 > 200); δ_hw ≤ 7/128 + 390·1/100 = \
+#guard (HardwareCheck.of illus "" groverGrade (7 / 128) 390).statusLine ==
+  "hardware profile illustrative_sc: exceeds depth budget (230 > 200); δ_hw ≤ 7/128 + 390·1/100 = \
     2531/640 (vacuous)"
-#guard (HardwareCheck.of kyiv "" aluGrade (833 / 2048) 345).statusLine ==
-  "hardware profile ibm_kyiv: fits all budgets; δ_hw ≤ 833/2048 + 345·1/100 = 39493/10240 \
+#guard (HardwareCheck.of illus "" aluGrade (833 / 2048) 345).statusLine ==
+  "hardware profile illustrative_sc: fits all budgets; δ_hw ≤ 833/2048 + 345·1/100 = 39493/10240 \
     (vacuous)"
 
 -- exact decimals

@@ -1,4 +1,4 @@
-{"status": "certified (conditional on: solution_count = 30)",
+{"status": "certified",
  "source": "examples/simple_alu_x0_1.cqr",
  "rows":
  [{"verification": "declared trust boundary",
@@ -20,7 +20,7 @@
    "resources": "ĉ∧ = 10 (upper bound), AND-depth 4, ancilla budget 10",
    "output": "Ground signature σ_in: Search, n = 6, M = 30, iter = bounded(1)",
    "note":
-   "ℰ is total but not proved correct; the certificate theorem does not use σ_in (Cert.lean restates n, M and the network); M is the hypothesis hM_card, never decided",
+   "ℰ is total but not proved correct; the certificate theorem does not use σ_in (Cert.lean restates n, M and the network); M is decided by the kernel (hM_count: Network.countSat on all 2^6 inputs, Network.countSat_eq_card)",
    "input": "Typed AST"},
   {"verification": "unverified",
    "stage": "3. Pattern Matching",
@@ -56,11 +56,10 @@
   {"verification": "kernel-checked",
    "stage": "7. Certificate Gen",
    "resources":
-   "kernel 6.37 s, wall 16.04 s (median of 5 (first run excluded)); axioms: propext, Classical.choice, Quot.sound",
+   "kernel 11.10 s, wall 22.11 s (median of 5 (first run excluded)); axioms: propext, Classical.choice, Quot.sound",
    "output":
    "examples/certs/simple_alu_x0_1/Cert.lean, certificate.json (theorem CQRV.Cert.simple_alu_x0_1.cert)",
-   "note":
-   "lake env lean exit 0; #print axioms audited; status: certified (conditional on: solution_count = 30)",
+   "note": "lake env lean exit 0; #print axioms audited; status: certified",
    "input": "Proof + grade"},
   {"verification": "declared trust boundary",
    "stage": "8. QIR Export",

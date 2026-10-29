@@ -1,8 +1,10 @@
-"""Certificate JSON schema v1.5.0 (report §8.4.2, §8.4.4, §9.5.3; Stage 8a, reviewer
+"""Certificate JSON schema v1.6.0 (report §8.4.2, §8.4.4, §9.5.3; Stage 8a, reviewer
 decisions 2 and 3; Stage 8b: theorem, obligations, machine fields; Stage 8b review:
 trust_boundary.front_end; Stage 9b: front_end after the exhaustive front-end validation;
 Stage 11b: the optional object `hardware`, present iff schema_version is "1.4.0"; Stage 12d:
-the optional field `diffusion_shape`, present iff schema_version is "1.5.0").
+the optional field `diffusion_shape`, present iff schema_version is "1.5.0"; Stage 14a: the
+required object `solution_count` {value, status}, present iff schema_version is "1.6.0", under
+which `hardware` and `diffusion_shape` are optional).
 
 Builds the Stage 8a certificate of examples/grover_pred_037.cqr in Lean (scripts/CertifyTool.lean
 `sample`: no kernel check, no axiom audit) and checks that
@@ -24,6 +26,11 @@ Builds the Stage 8a certificate of examples/grover_pred_037.cqr in Lean (scripts
   * Stage 12d: diffusion_shape "few:log" with schema_version "1.5.0" validates, with and
     without `hardware`; diffusion_shape under "1.3.0" / "1.4.0", "1.5.0" without it, and
     diffusion_shape "tree" or free text are rejected.
+  * Stage 14a: the sample says schema_version "1.6.0" with solution_count {32, hypothesis};
+    a kernel_decided audited envelope validates; "1.6.0" without solution_count, solution_count
+    under "1.5.0", kernel_decided while "not yet audited", an unknown status word and a
+    malformed object are rejected; legacy envelopes (1.3.0 / 1.4.0 + hardware / 1.5.0 +
+    diffusion_shape, without solution_count) still validate.
 
 Usage: python -I tests/diff/cert_schema.py --cqr <path to cqr>   (after `lake build`)
 """
@@ -71,6 +78,9 @@ def main():
         "(2^8 inputs) by the unverified evaluator; not kernel-checked")
     assert cert["theorem"] is None and cert["obligations"] == []
     assert cert["reference_configuration"]["kernel_check"] is None
+    assert cert["schema_version"] == "1.6.0", cert["schema_version"]
+    assert cert["solution_count"] == {"value": 32, "status": "hypothesis"}, cert["solution_count"]
+    assert cert["hypotheses"][0] == "solution_count = 32 (hM_card, supplied, not decided)"
     print("ok:   delta 7/128, grade (15, 134, 72, 7), status 'not yet audited'")
 
     with open(os.path.join(ROOT, SRC), "rb") as f:
@@ -123,6 +133,12 @@ def main():
 
     certified = mutated(audited)
     validator.validate(certified)
+    # Stage 14a: an audited envelope whose solution count the kernel decided
+    validator.validate(mutated(lambda c: (audited(c), c["solution_count"].update(
+        status="kernel_decided"), c.update(hypotheses=c["hypotheses"][1:]))))
+    # legacy: a Stage 9b certificate (1.3.0, no solution_count) still validates
+    validator.validate(mutated(lambda c: (c.update(schema_version="1.3.0"),
+                                          c.pop("solution_count"))))
     with_obl = mutated(lambda c: (audited(c, "certificate with tracked obligations"),
                                   c.update(obligations=["lemma_6_3_2_xor"],
                                            axioms=["propext", "sorryAx"])))
@@ -149,8 +165,18 @@ def main():
                       "evaluator; not kernel-checked")),
         "front_end free text": mutated(lambda c: c["trust_boundary"].update(front_end="verified")),
         "missing front_end": mutated(lambda c: c["trust_boundary"].pop("front_end")),
+        # Stage 14a
+        "1.6.0 without solution_count": mutated(lambda c: c.pop("solution_count")),
+        "solution_count under 1.3.0": mutated(lambda c: c.update(schema_version="1.3.0")),
+        "kernel_decided while not yet audited":
+            mutated(lambda c: c["solution_count"].update(status="kernel_decided")),
+        "solution_count unknown status":
+            mutated(lambda c: c["solution_count"].update(status="decided")),
+        "solution_count without value": mutated(lambda c: c["solution_count"].pop("value")),
+        "solution_count negative value": mutated(lambda c: c["solution_count"].update(value=-1)),
+        "solution_count extra key": mutated(lambda c: c["solution_count"].update(by="kernel")),
     })
-    hw = {"profile": "ibm_kyiv", "profile_hash": "0" * 64,
+    hw = {"profile": "illustrative_sc", "profile_hash": "0" * 64,
           "components": {"w": {"required": 15, "budget": 127, "fits": True},
                          "d": {"required": 230, "budget": 200, "fits": False},
                          "t": {"required": 72, "budget": None, "fits": True},
@@ -158,19 +184,25 @@ def main():
           "fits": False, "G": 390, "p_bar": "1/100", "delta_hw": "2531/640", "vacuous": True,
           "note": "routing, native gates and calibration are outside the trust boundary"}
 
-    def with_hw(f=lambda h: None, version="1.4.0"):
+    def with_hw(f=lambda h: None, version="1.6.0", legacy=False):
         def g(c):
             h = copy.deepcopy(hw)
             f(h)
             c.update(schema_version=version, hardware=h)
+            if legacy:
+                c.pop("solution_count")
         return mutated(g)
 
     validator.validate(with_hw())
     validator.validate(with_hw(lambda h: h.update(p_bar=None, delta_hw=None, vacuous=None)))
-    print("ok:   schema v1.4.0: an envelope with `hardware` validates (also without p_bar)")
+    validator.validate(with_hw(version="1.4.0", legacy=True))
+    print("ok:   schema v1.6.0: an envelope with `hardware` validates (also without p_bar); "
+          "a legacy v1.4.0 one too")
     bad.update({
-        "hardware under 1.3.0": with_hw(version="1.3.0"),
-        "1.4.0 without hardware": mutated(lambda c: c.update(schema_version="1.4.0")),
+        "hardware under 1.3.0": with_hw(version="1.3.0", legacy=True),
+        "1.4.0 without hardware": mutated(lambda c: (c.update(schema_version="1.4.0"),
+                                                     c.pop("solution_count"))),
+        "hardware under 1.4.0 with solution_count": with_hw(version="1.4.0"),
         "hardware without note": with_hw(lambda h: h.pop("note")),
         "hardware note free text": with_hw(lambda h: h.update(note="calibrated")),
         "hardware float delta_hw": with_hw(lambda h: h.update(delta_hw="3.95")),
@@ -180,20 +212,26 @@ def main():
         "hardware short profile hash": with_hw(lambda h: h.update(profile_hash="abc")),
     })
 
-    def with_shape(shape="few:log", version="1.5.0", hardware=False):
+    def with_shape(shape="few:log", version="1.6.0", hardware=False, legacy=False):
         def g(c):
             if hardware:
                 c.update(hardware=copy.deepcopy(hw))
             c.update(schema_version=version, diffusion_shape=shape)
+            if legacy:
+                c.pop("solution_count")
         return mutated(g)
 
     validator.validate(with_shape())
     validator.validate(with_shape(hardware=True))
-    print("ok:   schema v1.5.0: diffusion_shape few:log validates (with and without hardware)")
+    validator.validate(with_shape(version="1.5.0", legacy=True))
+    print("ok:   schema v1.6.0: diffusion_shape few:log validates (with and without hardware); "
+          "a legacy v1.5.0 one too")
     bad.update({
-        "diffusion_shape under 1.3.0": with_shape(version="1.3.0"),
-        "diffusion_shape under 1.4.0": with_shape(version="1.4.0", hardware=True),
-        "1.5.0 without diffusion_shape": mutated(lambda c: c.update(schema_version="1.5.0")),
+        "diffusion_shape under 1.3.0": with_shape(version="1.3.0", legacy=True),
+        "diffusion_shape under 1.4.0": with_shape(version="1.4.0", hardware=True, legacy=True),
+        "1.5.0 without diffusion_shape": mutated(lambda c: (c.update(schema_version="1.5.0"),
+                                                            c.pop("solution_count"))),
+        "diffusion_shape under 1.5.0 with solution_count": with_shape(version="1.5.0"),
         "diffusion_shape tree": with_shape(shape="tree"),
         "diffusion_shape free text": with_shape(shape="few:ladder"),
     })

@@ -6,9 +6,10 @@
 #      auto-generated injEq / sizeOf_spec / eq_* lemmas are skipped) must pass
 #      CQRV.Certify.auditAxioms: no sorryAx, only propext, Classical.choice, Quot.sound or an
 #      entry of the trust-boundary table (CQRV/Certify/Audit.lean, empty today);
-#   2. the committed example certificates examples/certs/{grover_pred_037,simple_alu_x0_1}/
-#      Cert.lean (the second since Stage 9b) must kernel-check and their theorem `cert` must pass
-#      the same audit (scripts/CertifyTool.lean `audit`).
+#   2. the committed example certificates examples/certs/{grover_pred_037,simple_alu_x0_1,
+#      grover_pred_037_few}/Cert.lean (the second since Stage 9b, the third since Stage 14a) must
+#      kernel-check and their theorem `cert` must pass the same audit (scripts/CertifyTool.lean
+#      `audit`); since Stage 14a `cert` has no hypothesis there (`hM_count`).
 # Exits non-zero on any failure. Run after `lake build`.
 #
 # Portable: bash only; ubuntu and Git Bash on Windows.
@@ -17,7 +18,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 lake env lean scripts/PrintAxioms.lean 2>&1 | tr -d '\r' \
   | sed -E 's/^.*PrintAxioms\.lean:[0-9]+:[0-9]+: (info: )?//'
-for name in grover_pred_037 simple_alu_x0_1; do
+# <directory>:<theorem namespace>
+for spec in grover_pred_037:grover_pred_037 simple_alu_x0_1:simple_alu_x0_1 \
+    grover_pred_037_few:grover_pred_037; do
   lake env lean --run scripts/CertifyTool.lean audit \
-    "examples/certs/$name/Cert.lean" "CQRV.Cert.$name.cert"
+    "examples/certs/${spec%%:*}/Cert.lean" "CQRV.Cert.${spec#*:}.cert"
 done

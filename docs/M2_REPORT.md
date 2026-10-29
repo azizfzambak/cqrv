@@ -34,6 +34,8 @@ Post-M2 note (2026-10-26, Stage 12a): the diffusion's MCZ is now a balanced AND 
 
 Post-M2 note (2026-10-27, Stage 12d): a third certificate, `examples/certs/grover_pred_037_few/` (`cqr certify --shape few:log`: the 2-ancilla diffusion, Khattar–Gidney 2025 §5.3 with Maslov 2016 relative-phase Toffoli pairs), is `certified (conditional on: solution_count = 32)` with grade (10, 172, 96, 2), δ = 7/128, kernel check 6.76 s kernel / 16.37 s wall, ibm_kyiv fits all budgets (δ_hw ≤ 2467/640, vacuous); its classical KG step is checked per instance by `decide +kernel` (1.53 s / 8.13 s / 40.9 s at n = 8 / 10 / 12; DECISIONS.md 2026-10-26 and 2026-10-27, Stage 12d); the tree certificates above are unchanged.
 
+Post-M2 note (2026-10-29, Stage 14a): the solution count of the three committed certificates is now decided by the kernel (`theorem hM_count` by `Network.countSat_eq_card` and `decide +kernel`, for n ≤ `--count-limit` = 12): their status line is `certified` without condition, `theorem cert` has no hypothesis, and `certificate.json` (schema v1.6.0) carries `solution_count: {value, status: kernel_decided}`; larger instances keep the conditional form below. The bundled hardware profile `ibm_kyiv` was renamed `illustrative_sc` (the specification's illustrative figures, not calibration data of any device; no alias). The M2 tables above keep their values (DECISIONS.md 2026-10-29).
+
 | | `grover_pred_037` (Chapter 8) | `simple_alu_x0_1` (second predicate, Table 9.2) |
 |---|---|---|
 | Predicate | x0 ∧ x3 ∧ x7, n = 8 | RevLib Simple ALU (`simple_alu_234.src`), bit 1 of x0, n = 6: `if op = k` chain, XOR chain |
