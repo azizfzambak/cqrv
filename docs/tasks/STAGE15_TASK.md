@@ -142,7 +142,11 @@ Then `_diff` becomes a one-line instance; its statement is unchanged.
   `unsupportedCombination`.
 - JSON: `"uncompute": "mbu"|"coherent"` (schema 1.7.0; 1.6.0 is Stage 14a's `solution_count` envelope; `tests/diff/cert_schema.py`); run report
   row 3 names the mode; `G` of the hardware perturbation bound counts no measurement in mode
-  `coherent` (`GateCounts` already distinguishes the kinds).
+  `coherent` (`GateCounts` already distinguishes the kinds). Note from 15a: the coherent Grover
+  circuit of the running example has grade (15, 200, 144, 7) and 0 classical bits, so under
+  `--profile illustrative_sc` the depth check passes with equality (200 ≤ 200); the run report must
+  show the measured depth next to the budget, and the certificate's `hardware` block must come
+  out of the same code path as the MBU one (no special case for equality).
 - Commit a fourth example certificate `examples/certs/grover_pred_037_coh/` (running example,
   tree diffusion, mode coherent) with its run report, QIR, QASM; `check_certify.sh` and
   `ci_local.sh` step 20 cover it.

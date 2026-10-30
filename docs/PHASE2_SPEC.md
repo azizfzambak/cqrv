@@ -50,7 +50,10 @@ circuit on n data qubits that respects the bit discipline and restores its ancil
 `phaseOracle P` on every register at least as large as its own; the Phase 1 lemmas are instances.
 Certificates record the mode (`"uncompute": "mbu" | "coherent"`). Bennett pebbling and the
 few-ancilla MCZ keep MBU in this stage; the combination is rejected with a diagnostic, not
-silently changed.
+silently changed: diagnostic code `unsupported_combination` (`Code.unsupportedCombination`,
+added in Stage 15a; it is a new code because no existing one names a legal request whose parts
+are individually supported but not together, and Phase 3 needs every terminating diagnostic
+classified).
 
 ### A.1 IR extension: exact phase gates and the extended grade (extends report §9.1.1, §3.1.1)
 
