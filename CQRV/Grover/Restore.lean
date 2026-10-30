@@ -66,6 +66,40 @@ theorem OracleCert.ancRestore {n : ℕ} (O : OracleCert n) {a : ℕ} (ha : O.C.n
     exact h
   exact key _ O.nData_eq (O.restore a ha)
 
+/-- PHASE2_SPEC.md §A.0.1 (Stage 15b), report §5.2.4 — a certified oracle in uncomputation mode
+`coherent`: as `OracleCert` (which is unchanged: the committed certificates construct it) with
+`synthesizeOracle N .coherent = .ok C`; the restoration field is filled by Lemma 6.3.2 in mode
+`coherent` (`lemma_6_3_2_coherent_of_le`), never assumed. -/
+structure OracleCertCoh (n : ℕ) where
+  /-- The Boolean network of the predicate (§6.1.2). -/
+  N : Network
+  /-- The synthesized oracle circuit in mode `coherent` (§6.1.4, PHASE2_SPEC.md §A.0.1). -/
+  C : Circuit
+  hn : N.nInputs = n
+  hC : synthesizeOracle N .coherent = .ok C
+  hWF : C.WF
+  /-- Lemma 6.3.2 in mode `coherent` (filled by the proof). -/
+  restore : ∀ a, C.nAnc ≤ a → AncRestore C.nData a C (phaseOracle (N.pred C.nData)) :=
+    fun a ha => lemma_6_3_2_coherent_of_le N C hC hWF a ha
+
+/-- The predicate `P : Reg n → Bool` of a coherent oracle certificate. -/
+def OracleCertCoh.P {n : ℕ} (O : OracleCertCoh n) : Reg n → Bool := O.N.pred n
+
+/-- The synthesized circuit acts on the `N.nInputs = n` data qubits. -/
+theorem OracleCertCoh.nData_eq {n : ℕ} (O : OracleCertCoh n) : O.C.nData = n := by
+  obtain ⟨_, _, _, _, _, _, hC⟩ := synthesizeOracle_okM O.hC
+  rw [hC]
+  exact O.hn
+
+/-- Lemma 6.3.2 in mode `coherent` for a coherent oracle certificate, on `Reg n × Reg a`. -/
+theorem OracleCertCoh.ancRestore {n : ℕ} (O : OracleCertCoh n) {a : ℕ} (ha : O.C.nAnc ≤ a) :
+    AncRestore n a O.C (phaseOracle O.P) := by
+  have key : ∀ m, m = n → AncRestore m a O.C (phaseOracle (O.N.pred m)) →
+      AncRestore n a O.C (phaseOracle (O.N.pred n)) := by
+    rintro m rfl h
+    exact h
+  exact key _ O.nData_eq (O.restore a ha)
+
 /-! ## `P_all`: the predicate of `allNet n` -/
 
 /-- After the input nodes `0..m−1`, the values are the input bits. -/
@@ -640,24 +674,32 @@ theorem diffusion_ancRestore {n a : ℕ} (mcz : Circuit) (hb : mcz.bitsOk = true
     (AncRestore.comp hpre hb (ancRestore_pre n a) hmcz) (ancRestore_post n a)
   exact h.congr fun ρ => uConj_neg (diffusion_circuit_matrix n) ρ
 
-/-- `diffusion n none s` is the V1 diffusion circuit around the synthesized MCZ of
-`diffusionNet s n` (Stage 12a, either shape). -/
-theorem diffusion_ok_shape {n : ℕ} {s : DiffusionShape} {D : Circuit}
-    (h : diffusion n none s = .ok D) :
-    n ≠ 0 ∧ ∃ mcz, synthesizeOracle (diffusionNet s n) = .ok mcz ∧ D = diffusionCircuit n mcz := by
+/-- `diffusion n none s mode` is the V1 diffusion circuit around the MCZ of `diffusionNet s n`
+synthesized in `mode` (Stage 12a, either shape; Stage 15b, either uncomputation mode). -/
+theorem diffusion_ok_mode {n : ℕ} {s : DiffusionShape} {mode : UncomputeMode} {D : Circuit}
+    (h : diffusion n none s mode = .ok D) :
+    n ≠ 0 ∧ ∃ mcz, synthesizeOracle (diffusionNet s n) mode = .ok mcz ∧
+      D = diffusionCircuit n mcz := by
   unfold diffusion diffusionWith synthesizeWithBudget at h
   by_cases hn : n = 0
   · subst hn
     simp [Diffusion.fail, throw, throwThe, MonadExceptOf.throw, Functor.map, Except.map, bind,
       Except.bind] at h
   · refine ⟨hn, ?_⟩
-    cases hs : synthesizeOracle (diffusionNet s n) with
+    cases hs : synthesizeOracle (diffusionNet s n) mode with
     | error e =>
       simp [hs, hn, Functor.map, Except.map, bind, Except.bind] at h
     | ok mcz =>
       refine ⟨mcz, rfl, ?_⟩
       simp [hs, hn, Functor.map, Except.map, bind, Except.bind, pure, Except.pure] at h
       exact h.symm
+
+/-- `diffusion n none s` is the V1 diffusion circuit around the synthesized MCZ of
+`diffusionNet s n` (Stage 12a, either shape): `diffusion_ok_mode` in mode `mbu`. -/
+theorem diffusion_ok_shape {n : ℕ} {s : DiffusionShape} {D : Circuit}
+    (h : diffusion n none s = .ok D) :
+    n ≠ 0 ∧ ∃ mcz, synthesizeOracle (diffusionNet s n) = .ok mcz ∧ D = diffusionCircuit n mcz :=
+  diffusion_ok_mode h
 
 /-- `diffusion n none .chain` is the V1 diffusion circuit around the synthesized MCZ of the
 chain: the Stage 7a statement of `diffusion_ok`, kept for the chain (Stage 12a). -/
@@ -671,17 +713,19 @@ theorem diffusion_ok {n : ℕ} {D : Circuit} (h : diffusion n none = .ok D) :
     n ≠ 0 ∧ ∃ mcz, synthesizeOracle (treeNet n) = .ok mcz ∧ D = diffusionCircuit n mcz :=
   diffusion_ok_shape h
 
-/-- `groverIteration P n none s` is the oracle of `P` appended with the diffusion of shape `s`. -/
-theorem groverIteration_ok_shape {P : Network} {n : ℕ} {s : DiffusionShape} {it : Circuit}
-    (h : groverIteration P n none s = .ok it) :
-    ∃ oc d, synthesizeOracle P = .ok oc ∧ diffusion n none s = .ok d ∧ it = oc.append d := by
+/-- `groverIteration P n none s mode` is the oracle of `P` (in `mode`) appended with the diffusion
+of shape `s` (in `mode`). -/
+theorem groverIteration_ok_mode {P : Network} {n : ℕ} {s : DiffusionShape}
+    {mode : UncomputeMode} {it : Circuit} (h : groverIteration P n none s mode = .ok it) :
+    ∃ oc d, synthesizeOracle P mode = .ok oc ∧ diffusion n none s mode = .ok d ∧
+      it = oc.append d := by
   unfold groverIteration at h
-  cases ho : synthesizeOracle P with
+  cases ho : synthesizeOracle P mode with
   | error e =>
     split_ifs at h <;> simp [ho, bind, Except.bind, Diffusion.fail, throw, throwThe,
       MonadExceptOf.throw] at h
   | ok oc =>
-    cases hd : diffusion n none s with
+    cases hd : diffusion n none s mode with
     | error e =>
       split_ifs at h <;> simp [ho, hd, bind, Except.bind, Diffusion.fail, throw, throwThe,
         MonadExceptOf.throw] at h
@@ -691,21 +735,37 @@ theorem groverIteration_ok_shape {P : Network} {n : ℕ} {s : DiffusionShape} {i
         MonadExceptOf.throw, pure, Except.pure] at h
       exact h.symm
 
+/-- `groverIteration P n none s` is the oracle of `P` appended with the diffusion of shape `s`:
+`groverIteration_ok_mode` in mode `mbu`. -/
+theorem groverIteration_ok_shape {P : Network} {n : ℕ} {s : DiffusionShape} {it : Circuit}
+    (h : groverIteration P n none s = .ok it) :
+    ∃ oc d, synthesizeOracle P = .ok oc ∧ diffusion n none s = .ok d ∧ it = oc.append d :=
+  groverIteration_ok_mode h
+
 /-- `groverIteration P n` is the oracle of `P` appended with the diffusion. -/
 theorem groverIteration_ok {P : Network} {n : ℕ} {it : Circuit}
     (h : groverIteration P n = .ok it) :
     ∃ oc d, synthesizeOracle P = .ok oc ∧ diffusion n none = .ok d ∧ it = oc.append d :=
   groverIteration_ok_shape h
 
-/-- `groverCircuit P n r none s` is `H^{⊗n}` followed by `r` iterations of shape `s`. -/
-theorem groverCircuit_ok_shape {P : Network} {n r : ℕ} {s : DiffusionShape} {C : Circuit}
-    (h : groverCircuit P n r none s = .ok C) :
-    ∃ it, groverIteration P n none s = .ok it ∧
+/-- `groverCircuit P n r none s mode` is `H^{⊗n}` followed by `r` iterations of shape `s` in
+`mode`. -/
+theorem groverCircuit_ok_mode {P : Network} {n r : ℕ} {s : DiffusionShape} {mode : UncomputeMode}
+    {C : Circuit} (h : groverCircuit P n r none s mode = .ok C) :
+    ∃ it, groverIteration P n none s mode = .ok it ∧
       C = (List.replicate r it).foldl Circuit.append ⟨n, Diffusion.onAll .h n⟩ := by
   unfold groverCircuit at h
   rw [except_bind_eq_ok] at h
   obtain ⟨it, hit, h⟩ := h
   exact ⟨it, hit, (except_pure_eq_ok.mp h).symm⟩
+
+/-- `groverCircuit P n r none s` is `H^{⊗n}` followed by `r` iterations of shape `s`:
+`groverCircuit_ok_mode` in mode `mbu`. -/
+theorem groverCircuit_ok_shape {P : Network} {n r : ℕ} {s : DiffusionShape} {C : Circuit}
+    (h : groverCircuit P n r none s = .ok C) :
+    ∃ it, groverIteration P n none s = .ok it ∧
+      C = (List.replicate r it).foldl Circuit.append ⟨n, Diffusion.onAll .h n⟩ :=
+  groverCircuit_ok_mode h
 
 /-- `groverCircuit P n r` is `H^{⊗n}` followed by `r` iterations. -/
 theorem groverCircuit_ok {P : Network} {n r : ℕ} {C : Circuit}
@@ -931,6 +991,48 @@ theorem iteration_ancRestore_diff {n a : ℕ} (O : OracleCert n) (Dc : Circuit)
     AncRestore n a (O.C.append Dc) (groverOp O.P) :=
   AncRestore.comp O.hWF.bitsOk hDb (O.ancRestore hO) hDr
 
+/-- PHASE2_SPEC.md §A.0.1 (Stage 15b) — `iteration_ancRestore_diff` with the oracle abstract: any
+circuit `Oc` that respects the bit discipline and restores its ancillae with `phaseOracle P`. -/
+theorem iteration_ancRestore_gen {n a : ℕ} (P : Reg n → Bool) (Oc : Circuit)
+    (hOb : Oc.bitsOk = true) (hOr : ∀ a, Oc.nAnc ≤ a → AncRestore n a Oc (phaseOracle P))
+    (Dc : Circuit) (hDb : Dc.bitsOk = true) (hDr : AncRestore n a Dc (diffU n))
+    (hO : Oc.nAnc ≤ a) : AncRestore n a (Oc.append Dc) (groverOp P) :=
+  AncRestore.comp hOb hDb (hOr a hO) hDr
+
+/-- PHASE2_SPEC.md §A.0.1 (Stage 15b) — **the restoration conjunct with an abstract oracle**: the
+7a / 12a / 12d proof of `grover_ancRestore_diff`, with the oracle's bit discipline and restoration
+fact as parameters (`grover_ancRestore_diff` is its instance at an `OracleCert`). -/
+theorem grover_ancRestore_gen {n r : ℕ} (P : Reg n → Bool) (Oc : Circuit) (hOb : Oc.bitsOk = true)
+    (hOr : ∀ a, Oc.nAnc ≤ a → AncRestore n a Oc (phaseOracle P)) (Dc : Circuit)
+    (hDb : Dc.bitsOk = true) (hDr : ∀ a, Dc.nAnc ≤ a → AncRestore n a Dc (diffU n))
+    {C : Circuit} (hC : C = groverCircuitOf Oc Dc n r) :
+    AncRestore n C.nAnc C (groverOp P ^ r * hadamardU n) := by
+  subst hC
+  cases r with
+  | zero => simpa [groverCircuitOf] using ancRestore_hLayer n _
+  | succ k =>
+    set it := Oc.append Dc with hit_def
+    set Cf := groverCircuitOf Oc Dc n (k + 1) with hCf
+    have hle : it.nAnc ≤ Cf.nAnc := by
+      have hsplit : Cf = ((List.replicate k it).foldl Circuit.append
+          (⟨n, Diffusion.onAll .h n⟩ : Circuit)).append it := by
+        rw [hCf, groverCircuitOf, List.replicate_succ', List.foldl_append, List.foldl_cons,
+          List.foldl_nil]
+      rw [hsplit, nAnc_append _ it]
+      exact Nat.le_max_right _ _
+    have hO : Oc.nAnc ≤ Cf.nAnc := by
+      refine le_trans ?_ hle
+      rw [hit_def, nAnc_append]
+      exact le_max_left _ _
+    have hD : Dc.nAnc ≤ Cf.nAnc := by
+      refine le_trans ?_ hle
+      rw [hit_def, nAnc_append]
+      exact le_max_right _ _
+    have hitb : it.bitsOk = true := Circuit.bitsOk_append hOb hDb
+    exact (ancRestore_foldl _ _ _ _ (bitsOk_dataLayer _ _ (onAll_h_unitary n)) hitb
+      (ancRestore_hLayer n _) (iteration_ancRestore_gen P Oc hOb hOr Dc hDb (hDr _ hD) hO)
+      (k + 1)).2
+
 /-- Report §8.2.4, §8.3.3 (Stage 12d decision 2) — **the restoration conjunct over any certified
 diffusion**: if `Dc` respects the bit discipline and restores its ancillae with `U_s` on every
 register `a ≥ Dc.nAnc`, the Grover circuit `groverCircuitOf O.C Dc n r` on
@@ -939,31 +1041,8 @@ register `a ≥ Dc.nAnc`, the Grover circuit `groverCircuitOf O.C Dc n r` on
 theorem grover_ancRestore_diff {n r : ℕ} (O : OracleCert n) (Dc : Circuit)
     (hDb : Dc.bitsOk = true) (hDr : ∀ a, Dc.nAnc ≤ a → AncRestore n a Dc (diffU n))
     {C : Circuit} (hC : C = groverCircuitOf O.C Dc n r) :
-    AncRestore n C.nAnc C (groverOp O.P ^ r * hadamardU n) := by
-  subst hC
-  cases r with
-  | zero => simpa [groverCircuitOf] using ancRestore_hLayer n _
-  | succ k =>
-    set it := O.C.append Dc with hit_def
-    set Cf := groverCircuitOf O.C Dc n (k + 1) with hCf
-    have hle : it.nAnc ≤ Cf.nAnc := by
-      have hsplit : Cf = ((List.replicate k it).foldl Circuit.append
-          (⟨n, Diffusion.onAll .h n⟩ : Circuit)).append it := by
-        rw [hCf, groverCircuitOf, List.replicate_succ', List.foldl_append, List.foldl_cons,
-          List.foldl_nil]
-      rw [hsplit, nAnc_append _ it]
-      exact Nat.le_max_right _ _
-    have hO : O.C.nAnc ≤ Cf.nAnc := by
-      refine le_trans ?_ hle
-      rw [hit_def, nAnc_append]
-      exact le_max_left _ _
-    have hD : Dc.nAnc ≤ Cf.nAnc := by
-      refine le_trans ?_ hle
-      rw [hit_def, nAnc_append]
-      exact le_max_right _ _
-    have hitb : it.bitsOk = true := Circuit.bitsOk_append O.hWF.bitsOk hDb
-    exact (ancRestore_foldl _ _ _ _ (bitsOk_dataLayer _ _ (onAll_h_unitary n)) hitb
-      (ancRestore_hLayer n _) (iteration_ancRestore_diff O Dc hDb (hDr _ hD) hO) (k + 1)).2
+    AncRestore n C.nAnc C (groverOp O.P ^ r * hadamardU n) :=
+  grover_ancRestore_gen O.P O.C O.hWF.bitsOk (fun _ ha => O.ancRestore ha) Dc hDb hDr hC
 
 /-! ## Stage 12a — the diffusion shape: tree (default) and chain -/
 
@@ -1008,6 +1087,29 @@ theorem grover_ancRestore_shape {n r : ℕ} (O : OracleCert n) (s : DiffusionSha
     exact le_max_of_le_left (le_max_right _ _)
   have hm := (DiffusionCert.ofShape s n hmcz).mcz.ancRestore hD
   rw [(DiffusionCert.ofShape s n hmcz).P_eq hn] at hm
+  exact diffusion_ancRestore mcz hmb hm
+
+/-- PHASE2_SPEC.md §A.0.1 (Stage 15b) — the balanced-tree diffusion whose MCZ is synthesized in
+mode `coherent` respects the bit discipline and restores its ancillae with `U_s` on every register
+`a ≥ nAnc`: the MCZ is a coherent oracle certificate of `treeNet n` (`synthesizeOracle_WF'`,
+Lemma 6.3.2 in mode `coherent`), its predicate is `P_all` (`treeNet_pred`), then
+`diffusion_ancRestore`. -/
+theorem diffusionCoh_ancRestore {n : ℕ} {mcz : Circuit} (hn : n ≠ 0)
+    (hmcz : synthesizeOracle (treeNet n) .coherent = .ok mcz) :
+    (diffusionCircuit n mcz).bitsOk = true ∧
+      ∀ a, (diffusionCircuit n mcz).nAnc ≤ a → AncRestore n a (diffusionCircuit n mcz) (diffU n) := by
+  have hWF : mcz.WF := synthesizeOracle_WF' .coherent (treeNet_WF hn) hmcz
+  have hmb : mcz.bitsOk = true := hWF.bitsOk
+  refine ⟨Circuit.bitsOk_append (Circuit.bitsOk_append (bitsOk_dataLayer _ _ (pre_unitary n)) hmb)
+    (bitsOk_dataLayer _ _ (post_unitary n)), fun a ha => ?_⟩
+  have hD : mcz.nAnc ≤ a := by
+    refine le_trans ?_ ha
+    rw [diffusionCircuit, nAnc_append, nAnc_append]
+    exact le_max_of_le_left (le_max_right _ _)
+  have hm := ({ N := treeNet n, C := mcz, hn := rfl, hC := hmcz, hWF := hWF } :
+    OracleCertCoh n).ancRestore hD
+  rw [show ({ N := treeNet n, C := mcz, hn := rfl, hC := hmcz, hWF := hWF } :
+    OracleCertCoh n).P = allOnes from treeNet_pred hn] at hm
   exact diffusion_ancRestore mcz hmb hm
 
 /-- Report §8.2.4, §8.3.3 — **the restoration conjunct of `grover_parametric_lemma`**: the

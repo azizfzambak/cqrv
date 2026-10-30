@@ -29,7 +29,12 @@
 #                                → solution_count_mismatch, nothing written; --count-limit 4 and
 #                                --count-limit 0 → the conditional form (hM_card, hypothesis);
 #                                (f′) Stage 14c: n = 11 without the flag → the conditional form;
-#                                --profile ibm_kyiv → unknown profile listing illustrative_sc
+#                                --profile ibm_kyiv → unknown profile listing illustrative_sc;
+#                                Stage 15b: --uncompute coherent (schema v1.7.0, uncompute,
+#                                grade (15, 200, 144, 7), no measurement; the profile fits with
+#                                d = 200 = 200), the committed examples/certs/grover_pred_037_coh,
+#                                --uncompute mbu byte-identical to Phase 1, few:log + coherent →
+#                                unsupported_combination
 #   tests/diff/profile_schema.py profiles/*.json against docs/profile.schema.json;
 #                                illustrative_sc = report Table 3.5 / §3.3.3 (renamed from
 #                                ibm_kyiv in Stage 14a, no alias); mutated profiles rejected by

@@ -89,6 +89,8 @@ structure RunData where
   diffusionShape : CertDiffusion := .tree
   /-- Stage 14a: how `M` was obtained -/
   count : CountStatus := .hypothesis
+  /-- Stage 15b: the uncomputation mode of `oracle` and `circuit` -/
+  uncompute : UncomputeMode := .mbu
   deriving Inhabited
 
 /-- `(w, d, t, a)` -/
@@ -161,7 +163,8 @@ def RunData.rows (d : RunData) : List ReportRow :=
       note := "Algorithm 1 (Miller pattern); `millerMatch_sound` is proved for the algorithm, \
         this run is not kernel-checked; the certificate theorem states the Grover instance \
         directly" },
-    { stage := "4. QPLP Instant.", input := s!"QPLP {d.pattern} + σ, r = {d.r}",
+    { stage := "4. QPLP Instant.",
+      input := s!"QPLP {d.pattern} + σ, r = {d.r}, uncompute = {d.uncompute}",
       output := s!"Concrete circuit H^⊗{d.n} · (U_s U_P)^{d.r} (`emitted` in Cert.lean)",
       verification := .kernelChecked,
       resources := s!"grade {gradeText d.circuit.grade} (measured); δ = {d.delta} exact",
@@ -169,22 +172,32 @@ def RunData.rows (d : RunData) : List ReportRow :=
         delta_eq by `decide +kernel` in Cert.lean; δ = 1 − sin²((2r+1)θ) via sin_sq_odd_mul" },
     { stage := "5. Oracle Synthesis",
       input := s!"Boolean network ({d.net.nodes.size} nodes, {andNodes} AND)",
-      output := "U_P + proof (Lemma 6.3.2, lemma_6_3_2_xor_of_le)",
+      output := match d.uncompute with
+        | .mbu => "U_P + proof (Lemma 6.3.2, lemma_6_3_2_xor_of_le)"
+        | .coherent => "U_P + proof (Lemma 6.3.2 in mode coherent, lemma_6_3_2_coherent_of_le)",
       verification := .kernelChecked,
       resources := s!"oracle {gradeText d.oracle.grade}; {andNodes} AND nodes vs ĉ∧ = \
         {d.sig.andComplexity}",
-      note := "OracleCert of the network literal: synthesizeOracle net = .ok … and C.WF by \
-        `decide +kernel`; restoration by lemma_6_3_2_xor_of_le" },
+      note := match d.uncompute with
+        | .mbu => "OracleCert of the network literal: synthesizeOracle net = .ok … and C.WF by \
+            `decide +kernel`; restoration by lemma_6_3_2_xor_of_le"
+        | .coherent => "OracleCertCoh of the network literal: synthesizeOracle net .coherent = \
+            .ok … and C.WF by `decide +kernel`; restoration by lemma_6_3_2_coherent_of_le \
+            (PHASE2_SPEC.md §A.0.1: every AND undone by the adjoint of its compute block, no \
+            measurement, no classical bit)" },
     { stage := "6. Ancilla Restore", input := "Oracle U_P and diffusion MCZ",
       output := "Restored circuit (AncRestore conjunct of `cert`)",
       verification := .kernelChecked,
       resources := s!"T after the first measurement: oracle {tAfterFirstMeasure d.oracle}, \
         diffusion {tAfterFirstMeasure d.diffusion}; {G.midCircuitMeasurements} MBU measurements, \
         {G.classicallyControlled} classically controlled gates; a = {d.circuit.grade.a}",
-      note := match d.diffusionShape with
-        | .tree => "AncRestore n a emitted (groverOp P ^ r * hadamardU n), on density operators \
+      note := match d.diffusionShape, d.uncompute with
+        | .tree, .coherent => "AncRestore n a emitted (groverOp P ^ r * hadamardU n), on density \
+            operators (Lemma 6.3.2 in mode coherent per oracle call and for the MCZ of the tree \
+            diffusion, certified from the circuit: grover_certificate_coherent)"
+        | .tree, _ => "AncRestore n a emitted (groverOp P ^ r * hadamardU n), on density operators \
             (Lemma 6.3.2 per oracle call, DiffusionCert for the MCZ)"
-        | .fewLog => "AncRestore n a emitted (groverOp P ^ r * hadamardU n), on density \
+        | .fewLog, _ => "AncRestore n a emitted (groverOp P ^ r * hadamardU n), on density \
             operators (Lemma 6.3.2 per oracle call; few-ancilla MCZ by \
             mczFew_logDepth_ancRestore, KG Theorem 5.1 for every n, Stage 13a; no per-instance \
             classical check)" },
@@ -232,7 +245,8 @@ def RunData.toMarkdown (d : RunData) : String :=
   let header := s!"# Run report: {d.name}\n\n\
     Report §8.5.2 (Table 8.5.2 shape), Stage 9b decision 4: every resource is a measured value \
     of this run, never a report target.\n\n\
-    - source: `{d.source}`\n- instance: n = {d.n}, M = {d.M} ({countWord d.count}), r = {d.r}\n\
+    - source: `{d.source}`\n- instance: n = {d.n}, M = {d.M} ({countWord d.count}), r = {d.r}, \
+    uncompute = {d.uncompute}\n\
     - status: **{d.statusLine}**\n\n\
     | Stage | Input | Output | Verification | Resources |\n|---|---|---|---|---|\n"
   let body := String.join (rows.map fun r =>

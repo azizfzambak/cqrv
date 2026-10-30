@@ -7,7 +7,8 @@
 #      CQRV.Certify.auditAxioms: no sorryAx, only propext, Classical.choice, Quot.sound or an
 #      entry of the trust-boundary table (CQRV/Certify/Audit.lean, empty today);
 #   2. the committed example certificates examples/certs/{grover_pred_037,simple_alu_x0_1,
-#      grover_pred_037_few}/Cert.lean (the second since Stage 9b, the third since Stage 14a) must
+#      grover_pred_037_few,grover_pred_037_coh}/Cert.lean (the second since Stage 9b, the third
+#      since Stage 14a, the fourth — mode coherent — since Stage 15b) must
 #      kernel-check and their theorem `cert` must pass the same audit (scripts/CertifyTool.lean
 #      `audit`); since Stage 14a `cert` has no hypothesis there (`hM_count`).
 # Exits non-zero on any failure. Run after `lake build`.
@@ -20,7 +21,7 @@ lake env lean scripts/PrintAxioms.lean 2>&1 | tr -d '\r' \
   | sed -E 's/^.*PrintAxioms\.lean:[0-9]+:[0-9]+: (info: )?//'
 # <directory>:<theorem namespace>
 for spec in grover_pred_037:grover_pred_037 simple_alu_x0_1:simple_alu_x0_1 \
-    grover_pred_037_few:grover_pred_037; do
+    grover_pred_037_few:grover_pred_037 grover_pred_037_coh:grover_pred_037; do
   lake env lean --run scripts/CertifyTool.lean audit \
     "examples/certs/${spec%%:*}/Cert.lean" "CQRV.Cert.${spec#*:}.cert"
 done

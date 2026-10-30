@@ -28,6 +28,11 @@ lemma_6_3_2 (proved) → grover_ancRestore (proved, Restore) ──────�
 * The grade is derived (decision 1): the budget of `RealizesExact` is `Synthesis.grade C` of the
   synthesized circuit, not the report's formula `r⋆ (depth_U + depth_D)`.
 * `r` is a parameter (decision 2): the lemma holds for every `r`, with `δ = 1 − sin²((2r+1)θ)`.
+* Stage 15b (PHASE2_SPEC.md §A.0.1): the plane facts and the Figure 8.1 statements are proved
+  over `GroverData` (`n`, `M`, `P`, `hM_card`; no oracle certificate); the `GroverParams`
+  statements are unchanged and are the instances at `gp.data`; `grover_parametric_lemma_gen`
+  takes the oracle as an abstract circuit with its restoration fact, and
+  `grover_parametric_lemma_diff` is its instance.
 * The spec has input type `Unit` (decision 4); the channel prepares `|0…0⟩` on data and
   ancillae, runs `channelDenote` of the circuit and traces out the ancillae (`traceAnc`); the
   decoding is the computational-basis POVM (`basisPOVM`: Physlib has none).
@@ -44,6 +49,22 @@ noncomputable section
 
 /-! ## Parameters (§5.2.4) -/
 
+/-- PHASE2_SPEC.md §A.0.1 (Stage 15b), report §5.2.4 — the Grover data without the oracle
+certificate: `n` data qubits, `M` solutions, the predicate `P` and the solution-count hypothesis
+`hM_card`. Every plane fact and Figure 8.1 statement is proved over this record; `GroverParams`
+(with its `OracleCert`) is an instance through `GroverParams.data`, and
+`grover_parametric_lemma_gen` takes the oracle as an abstract circuit. -/
+structure GroverData where
+  /-- Number of data qubits, `N = 2ⁿ`. -/
+  n : ℕ
+  /-- Number of solutions. -/
+  M : ℕ
+  hM_pos : 1 ≤ M
+  /-- The search predicate. -/
+  P : Reg n → Bool
+  /-- A hypothesis (specification promise), never discharged by `decide` (§5.1.3). -/
+  hM_card : (Finset.univ.filter (fun x => P x = true)).card = M
+
 /-- Report §5.2.4 (revised sketch) — the Grover parameters: `n` data qubits (`N = 2ⁿ`), `M`
 solutions, a certified oracle, and `hM_card`, the solution count of the oracle's predicate, as a
 **hypothesis** (a specification promise, §5.1.3; never decided by enumeration). -/
@@ -56,6 +77,21 @@ structure GroverParams where
   oracle : OracleCert n
   /-- A hypothesis (specification promise), never discharged by `decide` (§5.1.3). -/
   hM_card : (Finset.univ.filter (fun x => oracle.P x = true)).card = M
+
+/-- The Grover data of the parameters: the oracle enters only through its predicate. -/
+def GroverParams.data (gp : GroverParams) : GroverData :=
+  ⟨gp.n, gp.M, gp.hM_pos, gp.oracle.P, gp.hM_card⟩
+
+/-- Report §5.2.4, §8.2.2 — the Grover angle `θ = arcsin √(M / 2ⁿ)` (of the Grover data). -/
+def GroverData.θ (gp : GroverData) : ℝ := Real.arcsin (Real.sqrt ((gp.M : ℝ) / 2 ^ gp.n))
+
+/-- Report §8.3.2 — the normalized good state `ψ_g = M^{−1/2} ∑_{P x} |x⟩`. -/
+def GroverData.psiGood (gp : GroverData) : Reg gp.n → ℂ :=
+  fun x => if gp.P x then ((Real.sqrt gp.M)⁻¹ : ℂ) else 0
+
+/-- Report §8.3.2 — the normalized bad state `ψ_b = (N − M)^{−1/2} ∑_{¬P x} |x⟩`. -/
+def GroverData.psiBad (gp : GroverData) : Reg gp.n → ℂ :=
+  fun x => if gp.P x then 0 else ((Real.sqrt ((2 : ℝ) ^ gp.n - gp.M))⁻¹ : ℂ)
 
 /-- Report §5.2.4, §8.2.2 — the Grover angle `θ = arcsin √(M / 2ⁿ)`. -/
 def GroverParams.θ (gp : GroverParams) : ℝ := Real.arcsin (Real.sqrt ((gp.M : ℝ) / 2 ^ gp.n))
@@ -76,16 +112,22 @@ def SearchSpec {n : ℕ} (P : Reg n → Bool) : Spec Unit (Reg n) := fun _ x => 
 
 /-- Report §8.1 — the domain of the search spec is all of `Unit` iff there is a solution,
 i.e. iff `M ≥ 1` (decision 4). -/
-theorem searchSpec_dom_iff (gp : GroverParams) :
-    (SearchSpec gp.oracle.P).dom = Set.univ ↔ 1 ≤ gp.M := by
+theorem GroverData.searchSpec_dom_iff (gp : GroverData) :
+    (SearchSpec gp.P).dom = Set.univ ↔ 1 ≤ gp.M := by
   rw [← gp.hM_card]
   constructor
   · intro h
-    obtain ⟨x, hx⟩ : () ∈ (SearchSpec gp.oracle.P).dom := h ▸ Set.mem_univ ()
+    obtain ⟨x, hx⟩ : () ∈ (SearchSpec gp.P).dom := h ▸ Set.mem_univ ()
     exact Finset.card_pos.mpr ⟨x, by simpa [SearchSpec] using hx⟩
   · intro h
     obtain ⟨x, hx⟩ := Finset.card_pos.mp h
     exact Set.eq_univ_of_forall fun _ => ⟨x, by simpa [SearchSpec] using hx⟩
+
+/-- Report §8.1 — the domain of the search spec is all of `Unit` iff there is a solution,
+i.e. iff `M ≥ 1` (decision 4). -/
+theorem searchSpec_dom_iff (gp : GroverParams) :
+    (SearchSpec gp.oracle.P).dom = Set.univ ↔ 1 ≤ gp.M :=
+  gp.data.searchSpec_dom_iff
 
 /-- The matrix of a pure basis state `|y⟩⟨y|`. -/
 theorem pure_basis_m_apply {d : Type} [Fintype d] [DecidableEq d] (y i j : d) :
@@ -132,8 +174,8 @@ def groverChannel (n : ℕ) (C : Circuit) : GradedChannel Unit (Reg n) :=
 
 /-! ## Plane facts (Stage 7b item 1, §8.3.2) -/
 
-namespace GroverParams
-variable (gp : GroverParams)
+namespace GroverData
+variable (gp : GroverData)
 
 /-- Report §8.2 — `k = 2^{−n/2}`, the amplitude of `|s⟩` on every basis state. -/
 def amp : ℝ := (Real.sqrt 2)⁻¹ ^ gp.n
@@ -149,7 +191,7 @@ theorem M_le : gp.M ≤ 2 ^ gp.n := by
 
 /-- Report §8.3.2 — the bad set has `2ⁿ − M` elements. -/
 theorem card_bad :
-    (Finset.univ.filter (fun x => ¬ gp.oracle.P x = true)).card = 2 ^ gp.n - gp.M := by
+    (Finset.univ.filter (fun x => ¬ gp.P x = true)).card = 2 ^ gp.n - gp.M := by
   rw [← gp.hM_card, ← card_univ, Finset.filter_not,
     Finset.card_sdiff_of_subset (Finset.filter_subset _ _)]
 
@@ -164,14 +206,14 @@ theorem ratio_le : (gp.M : ℝ) / 2 ^ gp.n ≤ 1 := by
 
 /-- Report §8.2.2 — `sin θ = √M · 2^{−n/2}`. -/
 theorem sin_θ : Real.sin gp.θ = Real.sqrt gp.M * gp.amp := by
-  rw [GroverParams.θ, Real.sin_arcsin (by linarith [Real.sqrt_nonneg ((gp.M : ℝ) / 2 ^ gp.n)])
+  rw [GroverData.θ, Real.sin_arcsin (by linarith [Real.sqrt_nonneg ((gp.M : ℝ) / 2 ^ gp.n)])
     ((Real.sqrt_le_sqrt gp.ratio_le).trans_eq Real.sqrt_one), Real.sqrt_div' _ (by positivity),
     sqrt_N, amp, inv_pow, div_eq_mul_inv]
 
 /-- Report §8.2.2 — `cos θ = √(2ⁿ − M) · 2^{−n/2}`. -/
 theorem cos_θ : Real.cos gp.θ = Real.sqrt (2 ^ gp.n - gp.M) * gp.amp := by
   have h0 : (0 : ℝ) ≤ (gp.M : ℝ) / 2 ^ gp.n := by positivity
-  rw [GroverParams.θ, Real.cos_arcsin, Real.sq_sqrt h0,
+  rw [GroverData.θ, Real.cos_arcsin, Real.sq_sqrt h0,
     show (1 : ℝ) - gp.M / 2 ^ gp.n = (2 ^ gp.n - gp.M) / 2 ^ gp.n by field_simp,
     Real.sqrt_div' _ (by positivity), sqrt_N, amp, inv_pow, div_eq_mul_inv]
 
@@ -191,7 +233,7 @@ theorem sqrtB_sq : (Real.sqrt (2 ^ gp.n - gp.M)) ^ 2 = 2 ^ gp.n - gp.M :=
 
 /-- A sum of a function that is constant on the good and on the bad set. -/
 theorem sum_ite_P (α β : ℂ) :
-    ∑ x, (if gp.oracle.P x then α else β) = gp.M * α + (2 ^ gp.n - gp.M) * β := by
+    ∑ x, (if gp.P x then α else β) = gp.M * α + (2 ^ gp.n - gp.M) * β := by
   rw [Finset.sum_ite, Finset.sum_const, Finset.sum_const, gp.hM_card, card_bad, nsmul_eq_mul,
     nsmul_eq_mul, Nat.cast_sub gp.M_le]
   push_cast
@@ -217,7 +259,7 @@ theorem sum_psiBad : ∑ x, gp.psiBad x = (Real.sqrt (2 ^ gp.n - gp.M) : ℂ) :=
   · field_simp
 
 /-- A bad basis state exists only if `M < 2ⁿ`, and then `√(2ⁿ − M) ≠ 0`. -/
-theorem sqrtB_ne_of_bad {x : Reg gp.n} (hx : ¬ gp.oracle.P x = true) :
+theorem sqrtB_ne_of_bad {x : Reg gp.n} (hx : ¬ gp.P x = true) :
     (Real.sqrt (2 ^ gp.n - gp.M) : ℂ) ≠ 0 := by
   have hlt : gp.M < 2 ^ gp.n := by
     rw [← gp.hM_card, ← card_univ]
@@ -235,7 +277,7 @@ theorem ketS_eq :
     ketS gp.n = (Real.sin gp.θ : ℂ) • gp.psiGood + (Real.cos gp.θ : ℂ) • gp.psiBad := by
   funext x
   rw [ketS_apply, Pi.add_apply, Pi.smul_apply, Pi.smul_apply, sin_θ, cos_θ]
-  by_cases hx : gp.oracle.P x = true
+  by_cases hx : gp.P x = true
   · simp only [psiGood, psiBad, ite_eq_left hx, smul_eq_mul, mul_zero, add_zero]
     push_cast
     field_simp [gp.sqrtM_ne]
@@ -249,9 +291,9 @@ theorem star_ofReal (r : ℝ) : star (r : ℂ) = r := Complex.conj_ofReal r
 /-- Report §8.3.2 — `‖ψ_g‖² = 1` (`M ≥ 1`). -/
 theorem psiGood_dot_self : star gp.psiGood ⬝ᵥ gp.psiGood = 1 := by
   have h : ∀ x, star (gp.psiGood x) * gp.psiGood x =
-      if gp.oracle.P x then ((Real.sqrt gp.M : ℂ)⁻¹) ^ 2 else 0 := by
+      if gp.P x then ((Real.sqrt gp.M : ℂ)⁻¹) ^ 2 else 0 := by
     intro x
-    by_cases hx : gp.oracle.P x = true
+    by_cases hx : gp.P x = true
     · simp only [psiGood, ite_eq_left hx, star_inv₀, star_ofReal, sq]
     · simp only [psiGood, ite_eq_right hx, star_zero, mul_zero]
   simp only [dotProduct, Pi.star_apply, h, sum_ite_P, mul_zero, add_zero]
@@ -266,9 +308,9 @@ theorem psiBad_dot_self : star gp.psiBad ⬝ᵥ gp.psiBad = 1 ∨ gp.psiBad = 0 
     simp [psiBad, hb]
   · left
     have h : ∀ x, star (gp.psiBad x) * gp.psiBad x =
-        if gp.oracle.P x then 0 else ((Real.sqrt (2 ^ gp.n - gp.M) : ℂ)⁻¹) ^ 2 := by
+        if gp.P x then 0 else ((Real.sqrt (2 ^ gp.n - gp.M) : ℂ)⁻¹) ^ 2 := by
       intro x
-      by_cases hx : gp.oracle.P x = true
+      by_cases hx : gp.P x = true
       · simp only [psiBad, ite_eq_left hx, star_zero, mul_zero]
       · simp only [psiBad, ite_eq_right hx, star_inv₀, star_ofReal, sq]
     simp only [dotProduct, Pi.star_apply, h, sum_ite_P, mul_zero, zero_add]
@@ -279,18 +321,18 @@ theorem psiBad_dot_self : star gp.psiBad ⬝ᵥ gp.psiBad = 1 ∨ gp.psiBad = 0 
 /-- Report §8.3.2 — `⟨ψ_g, ψ_b⟩ = 0`. -/
 theorem psiGood_dot_psiBad : star gp.psiGood ⬝ᵥ gp.psiBad = 0 := by
   refine Finset.sum_eq_zero fun x _ => ?_
-  by_cases hx : gp.oracle.P x = true
+  by_cases hx : gp.P x = true
   · simp only [Pi.star_apply, psiBad, ite_eq_left hx, mul_zero]
   · simp only [Pi.star_apply, psiGood, ite_eq_right hx, star_zero, zero_mul]
 
 /-- Report §8.2.2 — `sin θ = √(M/2ⁿ)`. -/
 theorem sin_θ_eq : Real.sin gp.θ = Real.sqrt (gp.M / 2 ^ gp.n) := by
-  rw [GroverParams.θ, Real.sin_arcsin (by linarith [Real.sqrt_nonneg ((gp.M : ℝ) / 2 ^ gp.n)])
+  rw [GroverData.θ, Real.sin_arcsin (by linarith [Real.sqrt_nonneg ((gp.M : ℝ) / 2 ^ gp.n)])
     ((Real.sqrt_le_sqrt gp.ratio_le).trans_eq Real.sqrt_one)]
 
 /-- Report §8.2.2 — `cos θ = √(1 − M/2ⁿ)`. -/
 theorem cos_θ_eq : Real.cos gp.θ = Real.sqrt (1 - gp.M / 2 ^ gp.n) := by
-  rw [GroverParams.θ, Real.cos_arcsin, Real.sq_sqrt (by positivity)]
+  rw [GroverData.θ, Real.cos_arcsin, Real.sq_sqrt (by positivity)]
 
 /-- Report §8.2.2 — `0 ≤ θ ≤ π/2`. -/
 theorem θ_mem : 0 ≤ gp.θ ∧ gp.θ ≤ Real.pi / 2 :=
@@ -311,23 +353,143 @@ theorem ketS_dot_psiBad : star (ketS gp.n) ⬝ᵥ gp.psiBad = (Real.cos gp.θ : 
   ring
 
 /-- Report §8.3.2 — `U_P ψ_g = −ψ_g` (from `oracle_reflection`). -/
-theorem phaseOracle_psiGood : (phaseOracle gp.oracle.P).val *ᵥ gp.psiGood = -gp.psiGood := by
+theorem phaseOracle_psiGood : (phaseOracle gp.P).val *ᵥ gp.psiGood = -gp.psiGood := by
   rw [oracle_reflection, sub_mulVec, one_mulVec, smul_mulVec]
   funext x
   simp only [goodProj, Pi.sub_apply, Pi.smul_apply, Pi.neg_apply, mulVec_diagonal, smul_eq_mul,
     psiGood]
-  by_cases hx : gp.oracle.P x = true
+  by_cases hx : gp.P x = true
   · simp only [ite_eq_left hx]; ring
   · simp only [ite_eq_right hx]; ring
 
 /-- Report §8.3.2 — `U_P ψ_b = ψ_b` (from `oracle_reflection`). -/
-theorem phaseOracle_psiBad : (phaseOracle gp.oracle.P).val *ᵥ gp.psiBad = gp.psiBad := by
+theorem phaseOracle_psiBad : (phaseOracle gp.P).val *ᵥ gp.psiBad = gp.psiBad := by
   rw [oracle_reflection, sub_mulVec, one_mulVec, smul_mulVec]
   funext x
   simp only [goodProj, Pi.sub_apply, Pi.smul_apply, mulVec_diagonal, smul_eq_mul, psiBad]
-  by_cases hx : gp.oracle.P x = true
+  by_cases hx : gp.P x = true
   · simp only [ite_eq_left hx]; ring
   · simp only [ite_eq_right hx]; ring
+
+end GroverData
+
+namespace GroverParams
+variable (gp : GroverParams)
+
+/-- Report §8.2 — `k = 2^{−n/2}`, the amplitude of `|s⟩` on every basis state. -/
+def amp : ℝ := (Real.sqrt 2)⁻¹ ^ gp.n
+
+/-- `|Reg n| = 2ⁿ`. -/
+theorem card_univ : (Finset.univ : Finset (Reg gp.n)).card = 2 ^ gp.n :=
+  gp.data.card_univ
+
+/-- Report §8.1 — `M ≤ 2ⁿ`, from `hM_card`. -/
+theorem M_le : gp.M ≤ 2 ^ gp.n :=
+  gp.data.M_le
+
+/-- Report §8.3.2 — the bad set has `2ⁿ − M` elements. -/
+theorem card_bad :
+    (Finset.univ.filter (fun x => ¬ gp.oracle.P x = true)).card = 2 ^ gp.n - gp.M :=
+  gp.data.card_bad
+
+/-- `√(2ⁿ) = (√2)ⁿ`. -/
+theorem sqrt_N : Real.sqrt (2 ^ gp.n) = (Real.sqrt 2) ^ gp.n :=
+  gp.data.sqrt_N
+
+theorem ratio_le : (gp.M : ℝ) / 2 ^ gp.n ≤ 1 :=
+  gp.data.ratio_le
+
+/-- Report §8.2.2 — `sin θ = √M · 2^{−n/2}`. -/
+theorem sin_θ : Real.sin gp.θ = Real.sqrt gp.M * gp.amp :=
+  gp.data.sin_θ
+
+/-- Report §8.2.2 — `cos θ = √(2ⁿ − M) · 2^{−n/2}`. -/
+theorem cos_θ : Real.cos gp.θ = Real.sqrt (2 ^ gp.n - gp.M) * gp.amp :=
+  gp.data.cos_θ
+
+theorem M_pos : (0 : ℝ) < gp.M :=
+  gp.data.M_pos
+
+theorem sqrtM_sq : (Real.sqrt gp.M) ^ 2 = gp.M :=
+  gp.data.sqrtM_sq
+
+theorem sqrtM_ne : (Real.sqrt gp.M : ℂ) ≠ 0 :=
+  gp.data.sqrtM_ne
+
+theorem N_sub_M_nonneg : (0 : ℝ) ≤ 2 ^ gp.n - gp.M :=
+  gp.data.N_sub_M_nonneg
+
+theorem sqrtB_sq : (Real.sqrt (2 ^ gp.n - gp.M)) ^ 2 = 2 ^ gp.n - gp.M :=
+  gp.data.sqrtB_sq
+
+/-- A sum of a function that is constant on the good and on the bad set. -/
+theorem sum_ite_P (α β : ℂ) :
+    ∑ x, (if gp.oracle.P x then α else β) = gp.M * α + (2 ^ gp.n - gp.M) * β :=
+  gp.data.sum_ite_P α β
+
+/-- Report §8.3.2 — `∑ₓ ψ_g(x) = √M`. -/
+theorem sum_psiGood : ∑ x, gp.psiGood x = (Real.sqrt gp.M : ℂ) :=
+  gp.data.sum_psiGood
+
+/-- Report §8.3.2 — `∑ₓ ψ_b(x) = √(2ⁿ − M)` (also for `M = 2ⁿ`). -/
+theorem sum_psiBad : ∑ x, gp.psiBad x = (Real.sqrt (2 ^ gp.n - gp.M) : ℂ) :=
+  gp.data.sum_psiBad
+
+/-- A bad basis state exists only if `M < 2ⁿ`, and then `√(2ⁿ − M) ≠ 0`. -/
+theorem sqrtB_ne_of_bad {x : Reg gp.n} (hx : ¬ gp.oracle.P x = true) :
+    (Real.sqrt (2 ^ gp.n - gp.M) : ℂ) ≠ 0 :=
+  gp.data.sqrtB_ne_of_bad hx
+
+/-- Report §8.2 — `|s⟩` has amplitude `2^{−n/2}` everywhere. -/
+theorem ketS_apply (x : Reg gp.n) : ketS gp.n x = (gp.amp : ℂ) :=
+  gp.data.ketS_apply x
+
+/-- Report §8.3.2 — `|s⟩ = sin θ ψ_g + cos θ ψ_b`. -/
+theorem ketS_eq :
+    ketS gp.n = (Real.sin gp.θ : ℂ) • gp.psiGood + (Real.cos gp.θ : ℂ) • gp.psiBad :=
+  gp.data.ketS_eq
+
+theorem star_ofReal (r : ℝ) : star (r : ℂ) = r := Complex.conj_ofReal r
+
+/-- Report §8.3.2 — `‖ψ_g‖² = 1` (`M ≥ 1`). -/
+theorem psiGood_dot_self : star gp.psiGood ⬝ᵥ gp.psiGood = 1 :=
+  gp.data.psiGood_dot_self
+
+/-- Report §8.3.2 — `‖ψ_b‖² = 1`, or `ψ_b = 0` when `M = 2ⁿ`. -/
+theorem psiBad_dot_self : star gp.psiBad ⬝ᵥ gp.psiBad = 1 ∨ gp.psiBad = 0 :=
+  gp.data.psiBad_dot_self
+
+/-- Report §8.3.2 — `⟨ψ_g, ψ_b⟩ = 0`. -/
+theorem psiGood_dot_psiBad : star gp.psiGood ⬝ᵥ gp.psiBad = 0 :=
+  gp.data.psiGood_dot_psiBad
+
+/-- Report §8.2.2 — `sin θ = √(M/2ⁿ)`. -/
+theorem sin_θ_eq : Real.sin gp.θ = Real.sqrt (gp.M / 2 ^ gp.n) :=
+  gp.data.sin_θ_eq
+
+/-- Report §8.2.2 — `cos θ = √(1 − M/2ⁿ)`. -/
+theorem cos_θ_eq : Real.cos gp.θ = Real.sqrt (1 - gp.M / 2 ^ gp.n) :=
+  gp.data.cos_θ_eq
+
+/-- Report §8.2.2 — `0 ≤ θ ≤ π/2`. -/
+theorem θ_mem : 0 ≤ gp.θ ∧ gp.θ ≤ Real.pi / 2 :=
+  gp.data.θ_mem
+
+/-- Report §8.3.2 — `⟨s|ψ_g⟩ = sin θ`. -/
+theorem ketS_dot_psiGood : star (ketS gp.n) ⬝ᵥ gp.psiGood = (Real.sin gp.θ : ℂ) :=
+  gp.data.ketS_dot_psiGood
+
+/-- Report §8.3.2 — `⟨s|ψ_b⟩ = cos θ`. -/
+theorem ketS_dot_psiBad : star (ketS gp.n) ⬝ᵥ gp.psiBad = (Real.cos gp.θ : ℂ) :=
+  gp.data.ketS_dot_psiBad
+
+/-- Report §8.3.2 — `U_P ψ_g = −ψ_g` (from `oracle_reflection`). -/
+theorem phaseOracle_psiGood : (phaseOracle gp.oracle.P).val *ᵥ gp.psiGood = -gp.psiGood :=
+  gp.data.phaseOracle_psiGood
+
+/-- Report §8.3.2 — `U_P ψ_b = ψ_b` (from `oracle_reflection`). -/
+theorem phaseOracle_psiBad : (phaseOracle gp.oracle.P).val *ᵥ gp.psiBad = gp.psiBad :=
+  gp.data.phaseOracle_psiBad
 
 end GroverParams
 
@@ -370,14 +532,16 @@ theorem basisPOVM_measure {n : ℕ} (ρ : MState (Reg n)) (y : Reg n) :
 
 /-! ## Figure 8.1 — the statements, proved in Stage 7b -/
 
+namespace GroverData
+
 /-- Report §8.3.2, §8.3.4 Figure 8.1 ("Reflection geometry: `G` rotates by `2θ` in the 2D
 plane", est. 150 lines) — `G = U_s U_P` maps `span{ψ_g, ψ_b}` to itself as the rotation by `2θ`
 (coordinates `(sin φ, cos φ) ↦ (sin(φ + 2θ), cos(φ + 2θ))`). Uses `oracle_reflection`,
 `diffusion_reflection`, `|s⟩ = sin θ ψ_g + cos θ ψ_b` (from `hM_card`). -/
-theorem reflection_geometry (gp : GroverParams) :
-    (groverOp gp.oracle.P).val *ᵥ gp.psiGood =
+theorem reflection_geometry (gp : GroverData) :
+    (groverOp gp.P).val *ᵥ gp.psiGood =
         (Real.cos (2 * gp.θ) : ℂ) • gp.psiGood - (Real.sin (2 * gp.θ) : ℂ) • gp.psiBad ∧
-      (groverOp gp.oracle.P).val *ᵥ gp.psiBad =
+      (groverOp gp.P).val *ᵥ gp.psiBad =
         (Real.sin (2 * gp.θ) : ℂ) • gp.psiGood + (Real.cos (2 * gp.θ) : ℂ) • gp.psiBad := by
   have hsc : (Real.sin gp.θ : ℂ) ^ 2 + (Real.cos gp.θ : ℂ) ^ 2 = 1 := by
     exact_mod_cast Real.sin_sq_add_cos_sq gp.θ
@@ -397,8 +561,8 @@ theorem reflection_geometry (gp : GroverParams) :
 /-- Report §8.3.2, §8.3.4 Figure 8.1 ("Iteration induction: state after `r` iterations", est.
 200 lines) — `G^r |s⟩ = sin((2r+1)θ) ψ_g + cos((2r+1)θ) ψ_b`, by induction on `r` from
 `reflection_geometry` and `|s⟩ = sin θ ψ_g + cos θ ψ_b`. -/
-theorem iteration_induction (gp : GroverParams) (r : ℕ) :
-    (groverOp gp.oracle.P ^ r).val *ᵥ ketS gp.n =
+theorem iteration_induction (gp : GroverData) (r : ℕ) :
+    (groverOp gp.P ^ r).val *ᵥ ketS gp.n =
       (Real.sin ((2 * r + 1) * gp.θ) : ℂ) • gp.psiGood +
         (Real.cos ((2 * r + 1) * gp.θ) : ℂ) • gp.psiBad := by
   induction r with
@@ -421,28 +585,28 @@ theorem iteration_induction (gp : GroverParams) (r : ℕ) :
 `sin²((2r+1)θ)`"; part of the Figure 8.1 row "Iteration induction", no separate estimate) —
 on the data state `G^r H^{⊗n} |0…0⟩`, the basis POVM yields a solution with probability
 `sin²((2r+1)θ)`. From `iteration_induction`, `H^{⊗n}|0⟩ = |s⟩` and `hM_card`. -/
-theorem terminal_measurement (gp : GroverParams) (r : ℕ) :
-    prob ((basisPOVM gp.n).measure ((groverOp gp.oracle.P ^ r * hadamardU gp.n) ◃ ancZero gp.n))
-      (fun x => gp.oracle.P x = true) = Real.sin ((2 * r + 1) * gp.θ) ^ 2 := by
+theorem terminal_measurement (gp : GroverData) (r : ℕ) :
+    prob ((basisPOVM gp.n).measure ((groverOp gp.P ^ r * hadamardU gp.n) ◃ ancZero gp.n))
+      (fun x => gp.P x = true) = Real.sin ((2 * r + 1) * gp.θ) ^ 2 := by
   set φ := (2 * (r : ℝ) + 1) * gp.θ with hφ
-  have hv : (groverOp gp.oracle.P ^ r * hadamardU gp.n).val *ᵥ basisVec (zeroReg gp.n) =
+  have hv : (groverOp gp.P ^ r * hadamardU gp.n).val *ᵥ basisVec (zeroReg gp.n) =
       (Real.sin φ : ℂ) • gp.psiGood + (Real.cos φ : ℂ) • gp.psiBad := by
     rw [Matrix.UnitaryGroup.mul_val, ← mulVec_mulVec]
     change _ *ᵥ (hadamardMat gp.n *ᵥ _) = _
     rw [hadamardMat_mulVec_zero, iteration_induction]
   have hM : (gp.M : ℝ) ≠ 0 := gp.M_pos.ne'
   unfold prob
-  calc _ = ∑ x : Reg gp.n, (if gp.oracle.P x = true then Real.sin φ ^ 2 / gp.M else 0) :=
+  calc _ = ∑ x : Reg gp.n, (if gp.P x = true then Real.sin φ ^ 2 / gp.M else 0) :=
         Finset.sum_congr rfl fun x _ => ?_
     _ = Real.sin φ ^ 2 := by
         rw [Finset.sum_ite, Finset.sum_const_zero, add_zero, Finset.sum_const, gp.hM_card,
           nsmul_eq_mul]
         field_simp
-  by_cases hx : gp.oracle.P x = true
+  by_cases hx : gp.P x = true
   · rw [ite_eq_left hx, ite_eq_left hx, basisPOVM_measure, uConj_ancZero_m, vecMulVec_apply, hv]
-    simp only [Pi.add_apply, Pi.smul_apply, Pi.star_apply, smul_eq_mul, GroverParams.psiGood,
-      GroverParams.psiBad, ite_eq_left hx, mul_zero, add_zero]
-    rw [← Complex.ofReal_inv, ← Complex.ofReal_mul, GroverParams.star_ofReal, ← Complex.ofReal_mul,
+    simp only [Pi.add_apply, Pi.smul_apply, Pi.star_apply, smul_eq_mul, GroverData.psiGood,
+      GroverData.psiBad, ite_eq_left hx, mul_zero, add_zero]
+    rw [← Complex.ofReal_inv, ← Complex.ofReal_mul, GroverData.star_ofReal, ← Complex.ofReal_mul,
       Complex.ofReal_re]
     rw [show Real.sin φ * (Real.sqrt gp.M)⁻¹ * (Real.sin φ * (Real.sqrt gp.M)⁻¹) =
       Real.sin φ ^ 2 / (Real.sqrt gp.M) ^ 2 by ring, gp.sqrtM_sq]
@@ -454,19 +618,62 @@ restoration conjunct: any circuit `C` that restores its ancillae with `G^r H^{�
 grade. The 7b proof of `grover_realizes`, with the restoration fact as a parameter: the
 replacement channel ignores its input, `AncRestore.traced` gives the data state
 `G^r H^{⊗n} |0⟩⟨0| (G^r H^{⊗n})ᴴ`, then `terminal_measurement`. -/
-theorem grover_realizes_of_ancRestore (gp : GroverParams) (r : ℕ) {C : Circuit}
-    (hR : AncRestore gp.n C.nAnc C (groverOp gp.oracle.P ^ r * hadamardU gp.n)) :
-    RealizesExact (SearchSpec gp.oracle.P) (basisPOVM gp.n) (groverChannel gp.n C)
+theorem grover_realizes_of_ancRestore (gp : GroverData) (r : ℕ) {C : Circuit}
+    (hR : AncRestore gp.n C.nAnc C (groverOp gp.P ^ r * hadamardU gp.n)) :
+    RealizesExact (SearchSpec gp.P) (basisPOVM gp.n) (groverChannel gp.n C)
       (1 - Real.sin ((2 * r + 1) * gp.θ) ^ 2) (Synthesis.grade C) := by
   refine ⟨le_rfl, fun u _ => ?_⟩
   have hchan : (groverChannel gp.n C).chan (encode u) =
-      (groverOp gp.oracle.P ^ r * hadamardU gp.n) ◃ ancZero gp.n := by
+      (groverOp gp.P ^ r * hadamardU gp.n) ◃ ancZero gp.n := by
     simp only [groverChannel, GradedChannel.traceAnc, CPTPMap.compose_eq,
       CPTPMap.replacement_apply, CPTPMap.traceRight_eq_MState_traceRight]
     exact hR.traced (ancZero gp.n)
   rw [hchan]
-  change _ ≤ prob _ (fun x => gp.oracle.P x = true)
+  change _ ≤ prob _ (fun x => gp.P x = true)
   rw [terminal_measurement, sub_sub_cancel]
+
+end GroverData
+
+/-- Report §8.3.2, §8.3.4 Figure 8.1 ("Reflection geometry: `G` rotates by `2θ` in the 2D
+plane", est. 150 lines) — `G = U_s U_P` maps `span{ψ_g, ψ_b}` to itself as the rotation by `2θ`
+(coordinates `(sin φ, cos φ) ↦ (sin(φ + 2θ), cos(φ + 2θ))`). Uses `oracle_reflection`,
+`diffusion_reflection`, `|s⟩ = sin θ ψ_g + cos θ ψ_b` (from `hM_card`). -/
+theorem reflection_geometry (gp : GroverParams) :
+    (groverOp gp.oracle.P).val *ᵥ gp.psiGood =
+        (Real.cos (2 * gp.θ) : ℂ) • gp.psiGood - (Real.sin (2 * gp.θ) : ℂ) • gp.psiBad ∧
+      (groverOp gp.oracle.P).val *ᵥ gp.psiBad =
+        (Real.sin (2 * gp.θ) : ℂ) • gp.psiGood + (Real.cos (2 * gp.θ) : ℂ) • gp.psiBad :=
+  gp.data.reflection_geometry
+
+/-- Report §8.3.2, §8.3.4 Figure 8.1 ("Iteration induction: state after `r` iterations", est.
+200 lines) — `G^r |s⟩ = sin((2r+1)θ) ψ_g + cos((2r+1)θ) ψ_b`, by induction on `r` from
+`reflection_geometry` and `|s⟩ = sin θ ψ_g + cos θ ψ_b`. -/
+theorem iteration_induction (gp : GroverParams) (r : ℕ) :
+    (groverOp gp.oracle.P ^ r).val *ᵥ ketS gp.n =
+      (Real.sin ((2 * r + 1) * gp.θ) : ℂ) • gp.psiGood +
+        (Real.cos ((2 * r + 1) * gp.θ) : ℂ) • gp.psiBad :=
+  gp.data.iteration_induction r
+
+/-- Report §8.2.3, §8.3.2 ("measurement yields a good state with probability
+`sin²((2r+1)θ)`"; part of the Figure 8.1 row "Iteration induction", no separate estimate) —
+on the data state `G^r H^{⊗n} |0…0⟩`, the basis POVM yields a solution with probability
+`sin²((2r+1)θ)`. From `iteration_induction`, `H^{⊗n}|0⟩ = |s⟩` and `hM_card`. -/
+theorem terminal_measurement (gp : GroverParams) (r : ℕ) :
+    prob ((basisPOVM gp.n).measure ((groverOp gp.oracle.P ^ r * hadamardU gp.n) ◃ ancZero gp.n))
+      (fun x => gp.oracle.P x = true) = Real.sin ((2 * r + 1) * gp.θ) ^ 2 :=
+  gp.data.terminal_measurement r
+
+/-- Report §8.2.4, §8.3.2, §6.3.2 (Stage 12d decision 2) — the realization conjunct from the
+restoration conjunct: any circuit `C` that restores its ancillae with `G^r H^{⊗n}` on
+`Reg n × Reg C.nAnc` realizes the search spec with `δ = 1 − sin²((2r+1)θ)` within its measured
+grade. The 7b proof of `grover_realizes`, with the restoration fact as a parameter: the
+replacement channel ignores its input, `AncRestore.traced` gives the data state
+`G^r H^{⊗n} |0⟩⟨0| (G^r H^{⊗n})ᴴ`, then `terminal_measurement`. -/
+theorem grover_realizes_of_ancRestore (gp : GroverParams) (r : ℕ) {C : Circuit}
+    (hR : AncRestore gp.n C.nAnc C (groverOp gp.oracle.P ^ r * hadamardU gp.n)) :
+    RealizesExact (SearchSpec gp.oracle.P) (basisPOVM gp.n) (groverChannel gp.n C)
+      (1 - Real.sin ((2 * r + 1) * gp.θ) ^ 2) (Synthesis.grade C) :=
+  gp.data.grover_realizes_of_ancRestore r hR
 
 /-- Report §8.2.4, §8.3.2, §6.3.2 — **the realization conjunct**: the Grover channel of the
 synthesized circuit `(0, 1 − sin²((2r+1)θ))`-realizes the search spec under the basis POVM,
@@ -523,6 +730,25 @@ theorem grover_parametric_lemma' (gp : GroverParams) (r : ℕ)
       AncRestore gp.n C.nAnc C (groverOp gp.oracle.P ^ r * hadamardU gp.n) :=
   grover_parametric_lemma_shape gp .tree r hC
 
+/-- PHASE2_SPEC.md §A.0.1 (Stage 15b), report §5.2.4, §8.2.4, §8.3.4 Figure 8.1 — **the Grover
+parametric lemma with an abstract oracle**: for Grover data `d` (predicate `P`, `M`, `hM_card`),
+any oracle circuit `Oc` that respects the bit discipline and restores its ancillae with
+`phaseOracle P` on every register `a ≥ Oc.nAnc`, any diffusion circuit `Dc` doing the same with
+`U_s`, and the Grover circuit `C = groverCircuitOf Oc Dc n r`: realization with
+`δ = 1 − sin²((2r+1)θ)` within the measured grade, and restoration with `G^r H^{⊗n}`. The proof
+of `grover_parametric_lemma_diff` used its `OracleCert` only through `P`, `C`, `hWF.bitsOk` and
+`ancRestore` (`nData_eq` only to state restoration at `n`), so `_diff` is its instance; the
+oracle's `nData` is not needed (the channel fixes the data register). -/
+theorem grover_parametric_lemma_gen (d : GroverData) (Oc : Circuit) (hOb : Oc.bitsOk = true)
+    (hOr : ∀ a, Oc.nAnc ≤ a → AncRestore d.n a Oc (phaseOracle d.P)) (Dc : Circuit)
+    (hDb : Dc.bitsOk = true) (hDr : ∀ a, Dc.nAnc ≤ a → AncRestore d.n a Dc (diffU d.n))
+    (r : ℕ) {C : Circuit} (hC : C = groverCircuitOf Oc Dc d.n r) :
+    RealizesExact (SearchSpec d.P) (basisPOVM d.n) (groverChannel d.n C)
+        (1 - Real.sin ((2 * r + 1) * d.θ) ^ 2) (Synthesis.grade C) ∧
+      AncRestore d.n C.nAnc C (groverOp d.P ^ r * hadamardU d.n) :=
+  have hR := grover_ancRestore_gen d.P Oc hOb hOr Dc hDb hDr hC
+  ⟨d.grover_realizes_of_ancRestore r hR, hR⟩
+
 /-- Report §5.2.4, §8.2.4, §8.3.4 Figure 8.1 (Stage 12d decision 2) — **the Grover parametric
 lemma over any certified diffusion**: for an oracle certificate, any diffusion circuit `Dc` that
 respects the bit discipline and restores its ancillae with `U_s = 2|s⟩⟨s| − I` (on every
@@ -537,8 +763,8 @@ theorem grover_parametric_lemma_diff (gp : GroverParams) (Dc : Circuit)
     RealizesExact (SearchSpec gp.oracle.P) (basisPOVM gp.n) (groverChannel gp.n C)
         (1 - Real.sin ((2 * r + 1) * gp.θ) ^ 2) (Synthesis.grade C) ∧
       AncRestore gp.n C.nAnc C (groverOp gp.oracle.P ^ r * hadamardU gp.n) :=
-  have hR := grover_ancRestore_diff gp.oracle Dc hDb hDr hC
-  ⟨grover_realizes_of_ancRestore gp r hR, hR⟩
+  grover_parametric_lemma_gen gp.data gp.oracle.C gp.oracle.hWF.bitsOk
+    (fun _ ha => gp.oracle.ancRestore ha) Dc hDb hDr r hC
 
 /-! ## The instance trig fact (decision 3) -/
 

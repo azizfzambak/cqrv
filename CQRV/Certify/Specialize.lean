@@ -213,6 +213,38 @@ theorem grover_certificate_few_all {n M r a : ℕ} {δ : ℝ} {g : Grade} (O : O
     rw [ha] at h2
     exact ⟨h1, h2⟩
 
+/-- PHASE2_SPEC.md §A.0.1 (Stage 15b), report §5.1.3, §8.4.1, §8.4.4 — **the certificate lemma in
+uncomputation mode `coherent`** (`cqr certify --uncompute coherent`): the conclusion of
+`grover_certificate` for `C` synthesized by `groverCircuit O.N n r none .tree .coherent`, from
+`grover_parametric_lemma_gen` with the coherent oracle certificate `O` and the balanced-tree
+diffusion whose MCZ is synthesized in mode `coherent` (`diffusionCoh_ancRestore`, certified from
+the circuit itself: no `DiffusionCert` argument). `hM_card` stays a hypothesis or is `hM_count`. -/
+theorem grover_certificate_coherent {n M r a : ℕ} {δ : ℝ} {g : Grade} (O : OracleCertCoh n)
+    {C : Circuit} (hM_pos : 1 ≤ M)
+    (hC : groverCircuit O.N n r none .tree .coherent = .ok C)
+    (hδ : ((groverDelta r n M : ℚ) : ℝ) = δ) (hg : Synthesis.grade C = g) (ha : C.nAnc = a)
+    (hM_card : (Finset.univ.filter fun x => O.P x = true).card = M) :
+    RealizesExact (SearchSpec O.P) (basisPOVM n) (groverChannel n C) δ g ∧
+      AncRestore n a C (groverOp O.P ^ r * hadamardU n) := by
+  let d : GroverData := ⟨n, M, hM_pos, O.P, hM_card⟩
+  obtain ⟨it, hit, hCeq⟩ := groverCircuit_ok_mode hC
+  obtain ⟨oc, dc, hoc, hd, rfl⟩ := groverIteration_ok_mode hit
+  obtain rfl : oc = O.C := Except.ok.inj (hoc.symm.trans O.hC)
+  obtain ⟨hn, mcz, hmcz, rfl⟩ := diffusion_ok_mode hd
+  obtain ⟨hDb, hDr⟩ := diffusionCoh_ancRestore hn hmcz
+  have hC' : C = groverCircuitOf O.C (diffusionCircuit n mcz) n r := by
+    rw [hCeq]
+    rfl
+  obtain ⟨h1, h2⟩ := grover_parametric_lemma_gen d O.C O.hWF.bitsOk
+    (fun _ ha => O.ancRestore ha) _ hDb hDr r hC'
+  have hs : ((solutionFraction n M : ℚ) : ℝ) = Real.sin d.θ ^ 2 := by
+    rw [d.sin_θ_eq, Real.sq_sqrt (by positivity), solutionFraction]
+    push_cast
+    rfl
+  rw [sin_sq_odd_mul _ _ hs r, ← Rat.cast_one, ← Rat.cast_sub, ← groverDelta, hδ, hg] at h1
+  rw [ha] at h2
+  exact ⟨h1, h2⟩
+
 end CQRV.Certify
 
 end

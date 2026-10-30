@@ -244,6 +244,8 @@ structure Certificate where
   diffusion : CertDiffusion := .tree
   /-- Stage 14a: how `M` was obtained (`solution_count.status`) -/
   count : CountStatus := .hypothesis
+  /-- Stage 15b: the uncomputation mode (`uncompute`, written only when it is `coherent`) -/
+  uncompute : UncomputeMode := .mbu
   deriving Repr
 
 /-- The schema version written to `schema_version` (semver): "1.6.0" for every certificate
@@ -252,6 +254,16 @@ since Stage 14a (the object `solution_count` is required; `hardware`, Stage 11b,
 the optional objects present (1.3.0 / 1.4.0 / 1.5.0) to keep older certificates byte-identical;
 Stage 14a regenerates all three committed certificates, so one version suffices. -/
 def schemaVersion : String := "1.6.0"
+
+/-- The schema version of a certificate in uncomputation mode `coherent` (Stage 15b,
+PHASE2_SPEC.md §A.0.1): "1.7.0" adds the field `uncompute`, present iff the version is "1.7.0"
+(omitted means `mbu`, as `diffusion_shape` omitted means `tree`), so every MBU certificate keeps
+"1.6.0" byte for byte. -/
+def schemaVersionCoherent : String := "1.7.0"
+
+/-- The schema version a certificate is written with. -/
+def Certificate.schemaVersion (c : Certificate) : String :=
+  if c.uncompute == .coherent then schemaVersionCoherent else Certify.schemaVersion
 
 /-- The trust-boundary note of the `hardware` object (§5.3.1). -/
 def hardwareNote : String :=
@@ -277,7 +289,7 @@ def Certificate.toJson (c : Certificate) : Json :=
   let ratStr (q : Rat) : Json := Json.str (toString q)
   let optStr : Option String → Json := fun | some s => str s | none => Json.null
   Json.mkObj <|
-    [("schema_version", str schemaVersion),
+    [("schema_version", str c.schemaVersion),
      ("pattern", str c.pattern),
      ("instance", Json.mkObj [("n", c.n), ("M", c.M), ("r", c.r)]),
      ("solution_count", Json.mkObj [("value", c.M), ("status", str c.count.name)]),
@@ -314,7 +326,8 @@ def Certificate.toJson (c : Certificate) : Json :=
      ("obligations", Json.arr (c.obligations.map str).toArray),
      ("status", str c.status.name)] ++
     (c.hardware.map fun h => [("hardware", hardwareJson h)]).getD [] ++
-    (if c.diffusion != .tree then [("diffusion_shape", str c.diffusion.name)] else [])
+    (if c.diffusion != .tree then [("diffusion_shape", str c.diffusion.name)] else []) ++
+    (if c.uncompute == .coherent then [("uncompute", str c.uncompute.toString)] else [])
 
 /-- Report §6.2.4, §6.3.2 — the restoration conjunct as stated in the certificate. -/
 def restorationText : String := "AncRestore: all ancillae |0…0⟩ on density operators"
@@ -328,7 +341,8 @@ declared front-end boundary (`FrontEndCheck.trustText` of the Stage 9b validatio
 only in the second case is it listed under `hypotheses`. -/
 def Certificate.build (src : String) (sig : SigmaIn) (entry : LibEntry) (facts : List Discharged)
     (C : Circuit) (g : Grade) (r n M : Nat) (δ : Rat) (cfg : RefConfig) (frontEnd : String)
-    (count : CountStatus := .hypothesis) : Except String Certificate := do
+    (count : CountStatus := .hypothesis) (uncompute : UncomputeMode := .mbu) :
+    Except String Certificate := do
   if sig.arity != n then throw s!"arity {sig.arity} of the signature ≠ n = {n}"
   if sig.solutionCount != some M then throw s!"solution count of the signature ≠ M = {M}"
   if C.nData != n then throw s!"the circuit has {C.nData} data qubits, n = {n}"
@@ -346,7 +360,7 @@ def Certificate.build (src : String) (sig : SigmaIn) (entry : LibEntry) (facts :
     restoration := restorationText
     predicateHash := hP, circuitHash := hC, proofHash := none
     gateCounts := G, config := cfg, axioms := [], status := .notYetAudited, theoremName := none,
-    obligations := [], frontEnd, count }
+    obligations := [], frontEnd, count, uncompute }
 
 /-! ## The matched Grover instance (shared by `cqr emit` and the certificate) -/
 
@@ -363,6 +377,8 @@ structure GroverInstance where
   circuit : Circuit
   /-- Stage 12d: the diffusion of `circuit` -/
   diffusion : CertDiffusion := .tree
+  /-- Stage 15b: the uncomputation mode of `oracle` and `circuit` -/
+  uncompute : UncomputeMode := .mbu
 
 /-- Why no Grover instance was built: a diagnostic (front end, match, synthesis), or a usage
 error (no `r` and no `M` to compute `r⋆`). -/
@@ -373,9 +389,12 @@ inductive InstanceError where
 /-- Report §4.2.4, §8 — match the signature against the library (it must match `Grover`), then
 synthesize the oracle and the Grover circuit with `r` iterations (default `r⋆` from `M`, in
 `Float`: it only chooses `r`). `sig` already carries `--solutions`. Stage 12d: with
-`diff = .fewLog` the circuit is `groverCircuitFew N n r .logDepth` (candidate B). -/
+`diff = .fewLog` the circuit is `groverCircuitFew N n r .logDepth` (candidate B). Stage 15b:
+`mode` is the uncomputation mode of the oracle and of the tree diffusion (PHASE2_SPEC.md §A.0.1);
+`few:log` with `coherent` is `unsupported_combination`. -/
 def groverInstance (tp : TypedProgram) (sig : SigmaIn) (iters : Option Nat)
-    (diff : CertDiffusion := .tree) : Except InstanceError GroverInstance := do
+    (diff : CertDiffusion := .tree) (mode : UncomputeMode := .mbu) :
+    Except InstanceError GroverInstance := do
   let (entry, facts) ← match matchLibrary library sig.toTerm.normalize with
     | .matched e _ ds => pure (e, ds)
     | _ => throw (.diagnostic (Diagnostic.at .matching .noMatchingPattern ⟨1, 1⟩
@@ -388,15 +407,19 @@ def groverInstance (tp : TypedProgram) (sig : SigmaIn) (iters : Option Nat)
         (from ℰ or --solutions M) to compute r⋆")
   let res : Except Diagnostic (Network × Circuit × Circuit) := do
     let N ← toNetwork tp
-    let o ← synthesizeOracle N
+    let o ← synthesizeOracle N mode
     let C ← match diff with
-      | .tree => groverCircuit N n r
-      | .fewLog => groverCircuitFew N n r .logDepth
+      | .tree => groverCircuit N n r none .tree mode
+      | .fewLog => do
+        if mode == .coherent then
+          throw (Diagnostic.at .synthesis .unsupportedCombination ⟨1, 1⟩ "the few-ancilla MCZ is \
+            MBU-only (Stage 15): --shape few:log does not take --uncompute coherent")
+        groverCircuitFew N n r .logDepth
     return (N, o, C)
   match res with
   | .error d => throw (.diagnostic d)
   | .ok (N, o, C) => return { entry, facts, net := N, n, M := sig.solutionCount, r, oracle := o,
-                               circuit := C, diffusion := diff }
+                               circuit := C, diffusion := diff, uncompute := mode }
 
 /-- Report §8.4.2 — the Stage 8a certificate of a source text (no kernel check, no audit):
 front end, ℰ, match, synthesis at `r` (default `r⋆`), exact `δ`, and (Stage 9b) the front-end

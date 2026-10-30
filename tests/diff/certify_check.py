@@ -75,6 +75,12 @@ Runs the built `cqr` from the project root and checks
     solution_count = 32)`, hM_card, status hypothesis); (g) --profile illustrative_sc (renamed to
     illustrative_sc, no alias) → exit 2, the unknown-profile diagnostic lists the available
     profiles.
+  * Stage 15b: `--uncompute coherent` (PHASE2_SPEC.md §A.0.1) → `certified`, schema v1.7.0 with
+    uncompute "coherent", grade (15, 200, 144, 7), no measurement / classical bit, Cert.lean with
+    OracleCertCoh and grover_certificate_coherent; with --profile illustrative_sc the depth fits
+    with equality (200 ≤ 200) and the run report shows the measured depth next to the budget; the
+    committed examples/certs/grover_pred_037_coh agrees; `--uncompute mbu` is the Phase 1 output
+    byte for byte; few:log + coherent → unsupported_combination; an unknown mode → usage.
   * Stage 14c (f′): the default --count-limit is 10 — an n = 11 predicate `x0 ∧ x10`, written by
     the test to a temporary file, certified without the flag → the conditional form (`certified
     (conditional on: solution_count = 512)`, hM_card, status hypothesis); the kernel-decided
@@ -106,6 +112,7 @@ import reparse_qir  # noqa: E402
 SCHEMA = os.path.join(ROOT, "docs", "certificate.schema.json")
 EXAMPLE = os.path.join(ROOT, "examples", "certs", "grover_pred_037")
 EXAMPLE_FEW = os.path.join(ROOT, "examples", "certs", "grover_pred_037_few")
+EXAMPLE_COH = os.path.join(ROOT, "examples", "certs", "grover_pred_037_coh")
 NAME = "grover_pred_037"
 THEOREM = "CQRV.Cert.grover_pred_037.cert"
 STANDARD = ["propext", "Classical.choice", "Quot.sound"]
@@ -510,6 +517,85 @@ def main():
         print("ok:   --shape few:log --profile illustrative_sc: fits all budgets (d = 172 <= 200), "
               "delta_hw = 7/128 + 380*1/100 = 2467/640 (vacuous); hardware recomputed; "
               "committed examples/certs/grover_pred_037_few agrees (bytes, JSON, run report)")
+
+        # --uncompute coherent (Stage 15b, PHASE2_SPEC.md §A.0.1): the adjoint uncompute, no
+        # measurement, no classical bit; schema v1.7.0 with `uncompute`; the fourth committed
+        # example; the depth 200 equals the illustrative_sc budget (fits with equality)
+        runs_coh = {}
+        for label, extra in (("plain", []), ("prof", ["--profile", PROFILE_NAME, "--report"])):
+            out = os.path.join(tmp, "coh_" + label)
+            rc, so, se = certify(args.cqr, src, out, "--uncompute", "coherent", *extra)
+            assert rc == 0, (rc, so, se)
+            runs_coh[label] = (out, so)
+        out_p, so_p = runs_coh["plain"]
+        assert so_p.rstrip("\n").split("\n")[-1] == "certified", so_p
+        cc, ctext = check_dir(out_p, validator)
+        assert cc["schema_version"] == "1.7.0" and cc["uncompute"] == "coherent", cc
+        assert "diffusion_shape" not in cc and "hardware" not in cc
+        assert cc["solution_count"] == {"value": 32, "status": "kernel_decided"}, cc
+        assert cc["status"] == "certified" and cc["obligations"] == [] and cc["axioms"] == STANDARD
+        assert cc["grade"] == {"w": 15, "d": 200, "t": 144, "a": 7}, cc["grade"]
+        assert cc["spec"]["delta"] == "7/128" and cc["instance"] == {"n": 8, "M": 32, "r": 2}
+        assert cc["theorem"] == THEOREM
+        counts_c = cc["hardware_perturbation"]["counts"]
+        assert counts_c["mid_circuit_measurements"] == 0 and counts_c["classically_controlled"] == 0
+        assert cc["hashes"]["circuit"] != cert["hashes"]["circuit"]
+        for frag in ("theorem emitted_ok : groverCircuit net 8 2 none .tree .coherent = .ok emitted",
+                     "def oracle : OracleCertCoh 8 where",
+                     "def oracleCircuit : Circuit := okPayload (synthesizeOracle net .coherent)",
+                     "  grover_certificate_coherent oracle (by decide) emitted_ok delta_eq grade_eq "
+                     "nAnc_eq hM_count",
+                     "theorem hM_count :", "theorem cert :\n    RealizesExact", "uncompute = coherent"):
+            assert ctext.count(frag) == 1, frag
+        for bad_frag in ("native_decide", "sorry", "DiffusionCert", "treeNet", ".measure ", ".ifBit ",
+                         "hM_card", "grover_certificate oracle"):
+            assert bad_frag not in ctext, bad_frag
+        out_k, so_k = runs_coh["prof"]
+        ck, _ = check_dir(out_k, validator)
+        line = check_hardware(out_k, ck, cc, so_k.rstrip("\n").split("\n")[-2:], fits=True,
+                              version="1.7.0")
+        g_coh = cc["hardware_perturbation"]["G"]
+        dhw_coh = Fraction(7, 128) + Fraction(g_coh, 100)
+        assert line == ("hardware profile illustrative_sc: fits all budgets; "
+                        f"δ_hw ≤ 7/128 + {g_coh}·1/100 = {rat(dhw_coh)} (vacuous)"), line
+        assert ck["hardware"]["components"]["d"] == {"required": 200, "budget": 200, "fits": True}
+        md_k = read(os.path.join(out_k, "run_report.md"))
+        assert "depth 200 / 200: fits" in md_k and "uncompute = coherent" in md_k, md_k[:600]
+        exc, _ = check_dir(EXAMPLE_COH, validator)
+        for f in ("Cert.lean", f"{NAME}.qir", f"{NAME}.qasm"):
+            assert read(os.path.join(out_k, f), "rb") == read(os.path.join(EXAMPLE_COH, f), "rb"), \
+                f"committed coherent example differs: {f}"
+            assert read(os.path.join(out_p, f), "rb") == read(os.path.join(out_k, f), "rb"), f
+        assert without(ck, MACHINE) == without(exc, MACHINE), "committed coherent certificate.json"
+        assert masked(read(os.path.join(out_k, "certificate.json"))) == \
+            masked(read(os.path.join(EXAMPLE_COH, "certificate.json"))), "coherent certificate.json"
+        assert exc["reference_configuration"]["kernel_check"]["runs"] == 5
+        check_report(EXAMPLE_COH, exc)
+        # the MBU certificate is untouched by the mode: `--uncompute mbu` = no flag, byte for byte
+        out_m = os.path.join(tmp, "mbu_explicit")
+        rc, so, se = certify(args.cqr, src, out_m, "--uncompute", "mbu")
+        assert rc == 0, (rc, so, se)
+        for f in ("Cert.lean", f"{NAME}.qir", f"{NAME}.qasm"):
+            assert read(os.path.join(out_m, f), "rb") == read(os.path.join(EXAMPLE, f), "rb"), f
+        assert masked(read(os.path.join(out_m, "certificate.json"))) == \
+            masked(read(os.path.join(EXAMPLE, "certificate.json"))), "mbu certificate.json"
+        # rejections: few:log with coherent, an unknown mode
+        out = os.path.join(tmp, "few_coh")
+        rc, so, se = certify(args.cqr, src, out, "--uncompute", "coherent", "--shape", "few:log")
+        dfc = json.loads(so.strip().split("\n")[-1])
+        assert rc == 1 and dfc["code"] == "unsupported_combination", (rc, so, se)
+        assert not os.path.exists(out), "a certificate was written for few:log + coherent"
+        rc, so, se = certify(args.cqr, src, os.path.join(tmp, "bogus"), "--uncompute", "bogus")
+        assert rc == 2 and not os.path.exists(os.path.join(tmp, "bogus")), (rc, so, se)
+        print("ok:   --uncompute coherent: `certified` (exit 0); schema v1.7.0, uncompute coherent, "
+              "grade (15, 200, 144, 7), 0 measurements, 0 classical bits, delta 7/128, axioms exactly "
+              "the standard three; grover_certificate_coherent, OracleCertCoh, no DiffusionCert")
+        print(f"ok:   --uncompute coherent --profile illustrative_sc: fits all budgets with d = 200 = "
+              f"200 (equality), delta_hw = 7/128 + {g_coh}*1/100 = {rat(dhw_coh)} (vacuous); hardware "
+              "recomputed; run report shows 'depth 200 / 200: fits'; committed "
+              "examples/certs/grover_pred_037_coh agrees (bytes, JSON, run report)")
+        print("ok:   --uncompute mbu = the Phase 1 certificate byte for byte; few:log + coherent -> "
+              "unsupported_combination (exit 1, nothing written); --uncompute bogus -> usage (exit 2)")
 
         # XOR predicate: certified since Stage 9a (Lemma 6.3.2 for XOR, `lemma_6_3_2_xor`)
         out = os.path.join(tmp, "xor")

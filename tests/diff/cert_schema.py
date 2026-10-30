@@ -1,4 +1,4 @@
-"""Certificate JSON schema v1.6.0 (report §8.4.2, §8.4.4, §9.5.3; Stage 8a, reviewer
+"""Certificate JSON schema v1.7.0 (report §8.4.2, §8.4.4, §9.5.3; Stage 8a, reviewer
 decisions 2 and 3; Stage 8b: theorem, obligations, machine fields; Stage 8b review:
 trust_boundary.front_end; Stage 9b: front_end after the exhaustive front-end validation;
 Stage 11b: the optional object `hardware`, present iff schema_version is "1.4.0"; Stage 12d:
@@ -234,6 +234,29 @@ def main():
         "diffusion_shape under 1.5.0 with solution_count": with_shape(version="1.5.0"),
         "diffusion_shape tree": with_shape(shape="tree"),
         "diffusion_shape free text": with_shape(shape="few:ladder"),
+    })
+    # Stage 15b: `uncompute` present iff schema_version is "1.7.0" (coherent certificates only)
+    def with_unc(mode="coherent", version="1.7.0", hardware=False):
+        def g(c):
+            c.update(schema_version=version, uncompute=mode)
+            if hardware:
+                c["hardware"] = with_hw()["hardware"]
+        return mutated(g)
+    validator.validate(with_unc())
+    validator.validate(with_unc(hardware=True))
+    validator.validate(with_unc(mode="mbu"))
+    validator.validate(mutated(lambda c: (audited(c), c.update(schema_version="1.7.0",
+                                                              uncompute="coherent"))))
+    print("ok:   schema v1.7.0: uncompute coherent validates (with and without hardware, audited); "
+          "an MBU envelope keeps 1.6.0")
+    bad.update({
+        "uncompute under 1.6.0": with_unc(version="1.6.0"),
+        "uncompute under 1.5.0 (with diffusion_shape)": mutated(lambda c: c.update(
+            schema_version="1.5.0", diffusion_shape="few:log", uncompute="coherent")),
+        "1.7.0 without uncompute": mutated(lambda c: c.update(schema_version="1.7.0")),
+        "1.7.0 without solution_count": mutated(lambda c: (c.update(schema_version="1.7.0",
+            uncompute="coherent"), c.pop("solution_count"))),
+        "uncompute free text": with_unc(mode="adjoint"),
     })
     for label, c in bad.items():
         if validator.is_valid(c):

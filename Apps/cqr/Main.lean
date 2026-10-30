@@ -97,7 +97,7 @@ def usage : String :=
     "  synthesize <file> --grover [--shape tree|chain|few:ladder|few:log] [--iterations r] [--solutions M] [--uncompute mbu|coherent] [--json] [--layers]\n" ++
     "  check <file> --truth-table\n" ++
     "  certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k] [--report]\n" ++
-    "          [--profile name|path] [--shape tree|few:log] [--count-limit k]\n" ++
+    "          [--profile name|path] [--shape tree|few:log] [--count-limit k] [--uncompute mbu|coherent]\n" ++
     "  emit <file> --format qir|qasm [--iterations r] [--solutions M] [--oracle]\n"
 
 /-- Report §4.2.2 — parse and surface-check a source file; also returns the position of the
@@ -477,10 +477,14 @@ same circuit) and, with `--report`, `run_report.md` / `run_report.json` → stat
 (`groverCircuitFew … .logDepth`), certified by `grover_certificate_few_all` (Stage 13a′).
 `--count-limit k` (Stage 14a): for `n ≤ k` the solution count is checked here by
 `Network.countSat` (a mismatch is `solution_count_mismatch`, nothing written) and decided by the
-kernel in `Cert.lean` (`hM_count`); the status line is then `certified` without condition. -/
+kernel in `Cert.lean` (`hM_count`); the status line is then `certified` without condition.
+`--uncompute coherent` (Stage 15b, PHASE2_SPEC.md §A.0.1): the oracle and the tree diffusion with
+the adjoint uncompute, certified by `grover_certificate_coherent` (`renderCertCoherent`; schema
+1.7.0 with `uncompute`); `mbu` (default) is the Phase 1 output byte for byte. -/
 def runCertify (path : String) (solutions iters : Option Nat) (out : Option String)
     (bench : Option Nat) (report : Bool) (profile : Option String)
-    (diff : CertDiffusion := .tree) (countLimit : Nat := defaultCountLimit) : IO UInt32 := do
+    (diff : CertDiffusion := .tree) (countLimit : Nat := defaultCountLimit)
+    (mode : UncomputeMode := .mbu) : IO UInt32 := do
   let src ← IO.FS.readFile path
   match ← frontEnd path, ← signature path solutions with
   | .error d, _ | _, .error d => IO.println d.toJson.compress; return 1
@@ -492,7 +496,7 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
         pure (", ".intercalate (σs.map fun (m, b) => s!"{m.name} ↦ {b.toJson.compress}"),
           ds.map fun d => s!"{d.cond.render}: {d.render}")
       | r => return (← printNoMatch "certify" t r false)
-    let gi ← match groverInstance tp sig iters diff with
+    let gi ← match groverInstance tp sig iters diff mode with
       | .ok gi => pure gi
       | .error (.diagnostic d) => IO.println d.toJson.compress; return 1
       | .error (.usage msg) => IO.eprintln s!"cqr certify: {msg}"; return 2
@@ -558,7 +562,7 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
     let cfg := { cfg with cpu := some (cpu.getD "unknown"), logicalCpus := cpus, clock,
                           leanThreads := ← IO.getEnv "LEAN_NUM_THREADS", kernelCheck := timing }
     let base ← match Certificate.build src sig gi.entry gi.facts gi.circuit gi.circuit.grade gi.r
-        gi.n M q.delta cfg feText count with
+        gi.n M q.delta cfg feText count mode with
       | .ok c => pure c
       | .error e => IO.eprintln s!"cqr certify: {e}"; return 1
     let hw := prof.map fun (p, h) =>
@@ -576,7 +580,7 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
       | _, _ => s!"certificate with tracked obligations: {", ".intercalate obligations}"
     if report then
       let dif ← match (match diff with
-          | .tree => diffusion gi.n none
+          | .tree => diffusion gi.n none .tree mode
           | .fewLog => diffusionFew gi.n .logDepth) with
         | .ok c => pure c
         | .error d => IO.println d.toJson.compress; return 1
@@ -586,7 +590,7 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
           diffusion := dif, circuit := gi.circuit, n := gi.n, M, r := gi.r, delta := q.delta,
           frontEnd := fe, theoremName := q.theoremName, certPath, timing,
           axioms := last.axioms, statusLine, certified := status == .certified,
-          hardware := hw, diffusionShape := diff, count }
+          hardware := hw, diffusionShape := diff, count, uncompute := mode }
       IO.FS.writeFile (file "run_report.md") rd.toMarkdown
       IO.FS.writeFile (file "run_report.json") (rd.toJson.pretty ++ "\n")
     let kms := match timing.kernelMs with | some k => s!", {secs k} kernel" | none => ""
@@ -644,14 +648,22 @@ def main (args : List String) : IO UInt32 := do
   | "certify" :: file :: flags =>
     match shapeFlag flags with
     | some (sh, flags) =>
-      match certDiffusionOf sh, certifyFlags flags with
-      | some dif, some (m, r, o, b, p, h, c) =>
-        runCertify file m r o b p h dif (c.getD defaultCountLimit)
-      | none, _ =>
-        IO.eprintln s!"cqr certify: --shape {shapeName sh} has no certificate path \
-          (certified: tree, few:log)"
-        return 2
-      | _, none => IO.eprint usage; return 2
+      match uncomputeFlag flags with
+      | some (mode, flags) =>
+        match certDiffusionOf sh, certifyFlags flags with
+        | some dif, some (m, r, o, b, p, h, c) =>
+          if dif == .fewLog && mode == .coherent then
+            IO.println (Diagnostic.at .synthesis .unsupportedCombination ⟨1, 1⟩
+              "the few-ancilla MCZ is MBU-only (Stage 15): --shape few:log does not take \
+              --uncompute coherent").toJson.compress
+            return 1
+          runCertify file m r o b p h dif (c.getD defaultCountLimit) mode
+        | none, _ =>
+          IO.eprintln s!"cqr certify: --shape {shapeName sh} has no certificate path \
+            (certified: tree, few:log)"
+          return 2
+        | _, none => IO.eprint usage; return 2
+      | none => IO.eprint usage; return 2
     | none => IO.eprint usage; return 2
   | "emit" :: file :: flags =>
     match emitFlags flags with

@@ -8,6 +8,8 @@
 #   cqr certify examples/simple_alu_x0_1.cqr --solutions M --out examples/certs/simple_alu_x0_1 #     --bench N --report
 #   cqr certify examples/grover_pred_037.cqr --shape few:log --profile illustrative_sc \
 #     --out examples/certs/grover_pred_037_few --bench N --report        (Stage 12d)
+#   cqr certify examples/grover_pred_037.cqr --uncompute coherent --profile illustrative_sc \
+#     --out examples/certs/grover_pred_037_coh --bench N --report        (Stage 15b)
 # (M of the second predicate is counted by the Python harness, tests/diff/benchmark_diff.py, as a
 # test oracle; since Stage 14a the certificate itself decides M by the kernel for n ≤ --count-limit (10 since 14c),
 # `hM_count`, so the three certificates are `certified` without condition), each of which
@@ -54,10 +56,12 @@ echo "mathlib: $(rev mathlib)"
 echo "physlib: $(rev Physlib)"
 M_ALU="$("$PY" -I -c 'import sys; sys.path.insert(0, "tests/diff"); import benchmark_diff as b; print(sum(1 for x in range(64) if b.reference(b.input_bits(x))))' | tr -d '\r')"
 echo "M(simple_alu_x0_1) = $M_ALU (enumerated by tests/diff/benchmark_diff.py; test oracle only)"
-# <output directory>:<source>:<extra flags> (the few:log certificate, Stage 12d, is the third)
+# <output directory>:<source>:<extra flags> (the few:log certificate, Stage 12d, is the third;
+# the coherent one, Stage 15b, the fourth)
 for spec in "grover_pred_037:grover_pred_037:" \
     "simple_alu_x0_1:simple_alu_x0_1:--solutions $M_ALU" \
-    "grover_pred_037_few:grover_pred_037:--shape few:log --profile illustrative_sc"; do
+    "grover_pred_037_few:grover_pred_037:--shape few:log --profile illustrative_sc" \
+    "grover_pred_037_coh:grover_pred_037:--uncompute coherent --profile illustrative_sc"; do
   name="${spec%%:*}"
   rest="${spec#*:}"
   src="${rest%%:*}"

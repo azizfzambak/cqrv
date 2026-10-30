@@ -198,6 +198,62 @@ def groverCertFew : String := (groverReqFew.map renderCert).getD ""
 #guard (groverCertFew.splitOn "  grover_certificate_few oracle").length == 1
 #guard (groverCertFew.splitOn "(7 / 128 : ℝ) ⟨10, 172, 96, 2⟩").length == 2
 #guard (groverCertFew.splitOn "treeNet").length == 1
+
+/-! ## Stage 15b — `--uncompute coherent` (PHASE2_SPEC.md §A.0.1): its own template -/
+
+def groverReqCoh : Option CertRequest :=
+  match parse groverSrc >>= check with
+  | .ok tp =>
+    match groverInstance tp (extract tp) none .tree .coherent with
+    | .ok gi => some (CertRequest.ofInstance tp.name groverSrc gi 32)
+    | .error _ => none
+  | .error _ => none
+
+def groverCertCoh : String := (groverReqCoh.map renderCert).getD ""
+
+-- the coherent instance: grade (15, 200, 144, 7), 7 ancillae, tree diffusion, mode coherent
+#guard groverReqCoh.map (fun q => (q.grade, q.nAnc, q.diffusion, q.uncompute)) ==
+  some (⟨15, 200, 144, 7⟩, 7, .tree, .coherent)
+#guard groverReqCoh.map (·.circuit.nBits) == some 0
+#guard (groverCertCoh.splitOn
+  "theorem emitted_ok : groverCircuit net 8 2 none .tree .coherent = .ok emitted").length == 2
+#guard (groverCertCoh.splitOn "def oracle : OracleCertCoh 8 where").length == 2
+#guard (groverCertCoh.splitOn "def oracleCircuit : Circuit := okPayload (synthesizeOracle net .coherent)").length == 2
+#guard (groverCertCoh.splitOn "  grover_certificate_coherent oracle (by decide) emitted_ok delta_eq \
+  grade_eq nAnc_eq hM_card").length == 2
+#guard (groverCertCoh.splitOn "(7 / 128 : ℝ) ⟨15, 200, 144, 7⟩").length == 2
+#guard (groverCertCoh.splitOn "uncompute = coherent").length == 2
+-- no diffusion-certificate literal, no measurement in the emitted literal, no sorry
+#guard (groverCertCoh.splitOn "DiffusionCert").length == 1
+#guard (groverCertCoh.splitOn "treeNet").length == 1
+#guard (groverCertCoh.splitOn ".measure ").length == 1
+#guard (groverCertCoh.splitOn ".ifBit ").length == 1
+#guard (groverCertCoh.splitOn "native_decide").length == 1
+#guard (groverCertCoh.splitOn "sorry").length == 1
+-- with the kernel-decided count: `hM_count`, `cert` without hypothesis
+#guard (((groverReqCoh.map fun q => renderCert { q with count := .kernelDecided }).getD "").splitOn
+  "nAnc_eq hM_count\n").length == 2
+-- the mbu request is the Phase 1 template, byte for byte (the default mode)
+#guard groverReq.map (·.uncompute) == some .mbu
+#guard groverReq.map (fun q => renderCert q == renderCert { q with uncompute := .mbu }) == some true
+#guard groverReq.map (fun q => renderCert q != renderCert { q with uncompute := .coherent }) ==
+  some true
+-- `few:log` with `coherent` is `unsupported_combination`
+#guard match parse groverSrc >>= check with
+  | .ok tp =>
+    match groverInstance tp (extract tp) none .fewLog .coherent with
+    | .error (.diagnostic d) => d.stage == .synthesis && d.code == .unsupportedCombination
+    | _ => false
+  | .error _ => false
+-- the JSON: `uncompute` and schema 1.7.0 iff coherent; the mbu envelope keeps 1.6.0
+#guard match sample with
+  | .ok c =>
+    let cc : Certificate := { c with uncompute := .coherent }
+    (c.toJson.compress.splitOn "\"uncompute\"").length == 1 &&
+      (c.toJson.compress.splitOn "\"schema_version\":\"1.6.0\"").length == 2 &&
+      (cc.toJson.compress.splitOn "\"uncompute\":\"coherent\"").length == 2 &&
+      (cc.toJson.compress.splitOn "\"schema_version\":\"1.7.0\"").length == 2
+  | .error _ => false
 #guard (groverCertFew.splitOn "nAnc_eq\n    hM_card\n").length == 2
 -- Stage 14a, few:log with the kernel-decided count
 #guard (((groverReqFew.map fun q => renderCert { q with count := .kernelDecided }).getD "").splitOn
@@ -298,6 +354,14 @@ def groverHw : Option HardwareCheck := (readProfile (profileText "200" "\"0.01\"
 /-- info: 'CQRV.Synthesis.Network.countSat_eq_card' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms Network.countSat_eq_card
+
+/-- info: 'CQRV.Grover.grover_parametric_lemma_gen' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms CQRV.Grover.grover_parametric_lemma_gen
+
+/-- info: 'CQRV.Certify.grover_certificate_coherent' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms grover_certificate_coherent
 
 /--
 info: 'CQRV.Certify.grover_certificate_few' depends on axioms: [propext, Classical.choice, Quot.sound]
