@@ -9,7 +9,7 @@
 #   cqr certify examples/grover_pred_037.cqr --shape few:log --profile illustrative_sc \
 #     --out examples/certs/grover_pred_037_few --bench N --report        (Stage 12d)
 # (M of the second predicate is counted by the Python harness, tests/diff/benchmark_diff.py, as a
-# test oracle; since Stage 14a the certificate itself decides M by the kernel for n ≤ 12,
+# test oracle; since Stage 14a the certificate itself decides M by the kernel for n ≤ --count-limit (10 since 14c),
 # `hM_count`, so the three certificates are `certified` without condition), each of which
 # kernel-checks the certificate N + 1 times (`lake env lean -Dprofiler=true Cert.lean`)
 # and records the median of the last N (the first run is excluded: cold file cache) in the

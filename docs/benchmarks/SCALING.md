@@ -87,6 +87,18 @@ The hypothesis-form timeouts carry no `hM_count`: their cost is the circuit alon
 
 `rand_a64_r1_h` (1953 instructions): outcome `oom` = a memory or stack-resource failure, classified by `bench_scaling.py classify` from the full log `bench/scaling/out/rand_a64_r1_h/lean.log` (message: `bench/scaling/out/rand_a64_r1_h/Cert.lean:449:70: error: (kernel) deep recursion detected, use `set_option maxRecDepth <num>` to increase the limit`; the profiler's `type checking` before the failure 29.60 s). The kernel's `deep recursion detected` is its native-stack guard raised while evaluating the `decide +kernel` of `emitted_ok`; no certificate was written, the `cert` theorem of that file depends on `sorryAx`.
 
+## Stack experiment (Stage 14c)
+
+`lake env lean --tstack=N -Dprofiler=true Cert.lean` (`-s, --tstack`: thread stack size in KB) on the file that hit the kernel's `deep recursion detected` guard, with the same 900 s timeout, peak-memory measurement and outcome classification as above; full output next to the Cert.lean (`bench_scaling.py stack`). Question: is the ceiling of `decide +kernel` on the `emitted` literal the thread stack or structural? At most two runs; a timeout or `oom` ends the experiment.
+
+| key | instructions | --tstack KB | outcome | kernel s | wall s | peak MB | axioms / message |
+|---|---|---|---|---|---|---|---|
+| rand_a64_r1_h | 1953 | 65536 | oom | 27.50 | 36.95 | 4786 | (kernel) deep recursion detected, use `set_option maxRecDepth <num>` to increase the limit |
+| rand_a64_r1_h | 1953 | 524288 | oom | 31.10 | 40.56 | 4760 | (kernel) deep recursion detected, use `set_option maxRecDepth <num>` to increase the limit |
+
+Both runs fail at the same position (Cert.lean:449:70) with the same message, “(kernel) deep recursion detected, use `set_option maxRecDepth <num>` to increase the limit”: kernel 27.50 s (64 MB), 31.10 s (512 MB) against 29.60 s at the default stack; peak 4786 MB (4.7 GB). The thread-stack size does not move the failure point, so either the kernel's guard is independent of the thread stack or `--tstack` does not govern the thread that runs the kernel check; the message's hint `set_option maxRecDepth` is an elaborator option, not a candidate. Either way the ceiling is not lifted from the command line in this toolchain, and lifting it needs a change of proof form (a chunked `emitted` literal, the equality in pieces), deferred to the Stage 17 review. The experiment ends here: no third run, no code change.
+No library or generator change in Stage 14c whatever the result (reviewer decision, DECISIONS.md 2026-10-30).
+
 ## Wall-time outliers
 
 - `carry_1_r1` round 5: wall 220.58 s against a median wall of 8.97 s, kernel (`type checking`) 0.17 s — the stall is outside the kernel check (process start, .olean import or an OS pause; the profiler attributes none of it to type checking).

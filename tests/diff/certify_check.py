@@ -2,7 +2,8 @@
 
 Runs the built `cqr` from the project root and checks
 
-  * grover_pred_037: exit 0, status line `certified` (Stage 14a: n = 8 ≤ --count-limit 12, so
+  * grover_pred_037: exit 0, status line `certified` (Stage 14a: n = 8 ≤ --count-limit 10, the
+    default since Stage 14c (12 in 14a–14b), so
     Cert.lean proves hM_count and `cert` has no hypothesis; solution_count.status kernel_decided),
     certificate.json valid against docs/certificate.schema.json (v1.6.0), grade (15, 134, 72, 7),
     delta "7/128", axioms exactly propext, Classical.choice, Quot.sound, no obligations,
@@ -67,13 +68,17 @@ Runs the built `cqr` from the project root and checks
   * the tree certificates are unchanged by Stage 12d: the byte-identity checks above.
   * Stage 14a: every certificate carries solution_count {value, status} (schema v1.6.0); value =
     instance.M; the status line is `certified` iff status is kernel_decided, and then Cert.lean
-    has hM_count and no hM_card (every n ≤ 12 case below is now unconditional); negative tests:
+    has hM_count and no hM_card (every n ≤ 10 case below is unconditional); negative tests:
     (e) grover_pred_037 --solutions 31 (ℰ's count) and simple_alu_x0_1 --solutions 29
     (Network.countSat's count) → solution_count_mismatch, exit 1, nothing written; (f)
     --count-limit 4 and --count-limit 0 → the conditional form (`certified (conditional on:
     solution_count = 32)`, hM_card, status hypothesis); (g) --profile illustrative_sc (renamed to
     illustrative_sc, no alias) → exit 2, the unknown-profile diagnostic lists the available
     profiles.
+  * Stage 14c (f′): the default --count-limit is 10 — an n = 11 predicate `x0 ∧ x10`, written by
+    the test to a temporary file, certified without the flag → the conditional form (`certified
+    (conditional on: solution_count = 512)`, hM_card, status hypothesis); the kernel-decided
+    form at n = 11 is not run (its cost is what Stage 14b measured). Budget: under 60 s.
 
 Usage: python -I tests/diff/certify_check.py --cqr <path to cqr>   (after `lake build`)
 """
@@ -87,6 +92,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from fractions import Fraction
 
 import jsonschema
@@ -636,6 +642,25 @@ def main():
             assert lc["hashes"]["proof"] != cert["hashes"]["proof"]
         print("ok:   (f) --count-limit 4 / 0: `certified (conditional on: solution_count = 32)`, "
               "Cert.lean with hM_card, solution_count.status hypothesis (exit 0)")
+        # (f′) Stage 14c: the default --count-limit is 10 — n = 11 without the flag is the
+        # conditional form (the kernel-decided form at n = 11 is not run: Stage 14b measured it)
+        src11 = os.path.join(tmp, "tiny11.cqr")
+        with open(src11, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("fn tiny11(x: Vec Bool 11) -> Bool {\n  idx(x, 0) and idx(x, 10)\n}\n")
+        out = os.path.join(tmp, "tiny11")
+        t0 = time.time()
+        rc, so, se = certify(args.cqr, src11, out, "--solutions", "512")
+        dt = time.time() - t0
+        last = so.rstrip("\n").split("\n")[-1]
+        assert rc == 0 and last == "certified (conditional on: solution_count = 512)", (rc, so, se)
+        c11, t11 = check_dir(out, validator)
+        assert c11["solution_count"] == {"value": 512, "status": "hypothesis"}, c11["solution_count"]
+        assert c11["hypotheses"][0] == "solution_count = 512 (hM_card, supplied, not decided)"
+        assert c11["status"] == "certified" and c11["axioms"] == STANDARD and c11["obligations"] == []
+        assert "(hM_card :" in t11 and "hM_count" not in t11 and "Network.pred net 11 " in t11
+        assert dt < 60, f"(f') took {dt:.0f} s (budget 60 s)"
+        print(f"ok:   (f') n = 11 without --count-limit (default 10): `{last}`, Cert.lean with "
+              f"hM_card, solution_count.status hypothesis (exit 0, {dt:.0f} s)")
         # (g) the renamed profile has no alias: --profile illustrative_sc is an unknown profile
         out = os.path.join(tmp, "kyiv_old")
         rc, so, se = certify(args.cqr, src, out, "--profile", "ibm_kyiv")

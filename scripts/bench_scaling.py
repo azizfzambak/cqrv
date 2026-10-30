@@ -35,6 +35,11 @@ Phases
              certify phase keeps only the output tail): the same rule as the runs
              (`classify_output`): a memory or stack-resource message → `oom`, anything else
              non-zero → `error`; the first `error:` line is recorded as `message`.
+  stack      `stack <key> --tstack N` (Stage 14c): `lean --tstack=N -Dprofiler=true <key>/Cert.lean`
+             (thread stack N KB) with the same timeout, peak-memory measurement and outcome
+             classification; the full output is saved next to the Cert.lean; the result is
+             recorded under `stack` in state.json (key, N, outcome, kernel s, wall s, peak MB,
+             message, axioms) and reported in the generated "Stack experiment" section.
   report     write the three files under docs/benchmarks/.
 
 Usage (after `lake build`, from anywhere):
@@ -43,6 +48,7 @@ Usage (after `lake build`, from anywhere):
   python -I scripts/bench_scaling.py time [--minutes 9]
   python -I scripts/bench_scaling.py committed [--minutes 9]
   python -I scripts/bench_scaling.py classify rand_a64_r1_h --log bench/scaling/out/rand_a64_r1_h/lean.log
+  python -I scripts/bench_scaling.py stack rand_a64_r1_h --tstack 65536
   python -I scripts/bench_scaling.py report
 """
 
@@ -355,6 +361,31 @@ def phase_classify(args, st):
     rec.update(planned_of(os.path.join(OUT, args.key)))
     save_state(st)
     print(f"classify {args.key}: {rec['outcome']} — {rec['message'][:160]}")
+
+
+def phase_stack(args, st):
+    key, N = args.key, args.tstack
+    if key not in st["certify"]:
+        sys.exit(f"stack: unknown certify key {key}")
+    d = os.path.join(OUT, key)
+    f = os.path.join(d, "Cert.lean")
+    lean, env = lean_env()
+    outcome, rc, out, wall, mem = run_timed([lean, f"--tstack={N}", "-Dprofiler=true", f],
+                                            args.timeout, env)
+    log = os.path.join(d, f"lean_tstack{N}.log")
+    with open(log, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(out)
+    m = re.search(r"depends on axioms: \[(.*?)\]", out)
+    rec = {"key": key, "tstack_kb": N, "outcome": "certified" if outcome == "ok" else outcome,
+           "rc": rc, "kernel_s": kernel_s(out), "wall_s": round(wall, 2), "peak_mb": mem,
+           "message": first_error(out),
+           "axioms": [a.strip() for a in m.group(1).split(",")] if (m and outcome == "ok") else None,
+           "log": os.path.relpath(log, ROOT).replace("\\", "/"),
+           "when": time.strftime("%Y-%m-%d %H:%M:%S")}
+    st.setdefault("stack", {})[f"{key}_tstack{N}"] = rec
+    save_state(st)
+    print(f"stack {key} --tstack={N}: {rec['outcome']}, kernel {rec['kernel_s']} s, wall {rec['wall_s']} s, "
+          f"peak {rec['peak_mb']} MB" + (f": {rec['message'][:120]}" if rec["message"] else ""))
 
 
 def timed_items(keys, rounds):
@@ -701,6 +732,7 @@ def findings(L, rows, st):
                  + "). The kernel's `deep recursion detected` is its native-stack guard raised while "
                  "evaluating the `decide +kernel` of `emitted_ok`; no certificate was written, the "
                  "`cert` theorem of that file depends on `sorryAx`.")
+    stack_section(L, st)
     L.append("\n## Wall-time outliers\n")
     out = []
     for key, samples in list(st["time"].items()) + list(st["committed"].items()):
@@ -738,6 +770,70 @@ def findings(L, rows, st):
              "a time, AC power). The 14a medians recorded inside the certificates (`reference_configuration."
              "kernel_check`) came from the mixed regime and are larger than this run's medians "
              "(KERNEL_TIMES.md); the certificate figures are not re-recorded here (measurement only).\n")
+
+
+def short_msg(message):
+    """The lean message without the file position (which may be an absolute path)."""
+    return (message or "").split("error: ")[-1]
+
+
+def msg_pos(message):
+    m = re.search(r"(Cert\.lean:\d+:\d+)", message or "")
+    return m.group(1) if m else "—"
+
+
+def stack_section(L, st):
+    """Stage 14c: the `stack` phase's runs (empty until one has been made)."""
+    runs = st.get("stack") or {}
+    if not runs:
+        return
+    L.append("\n## Stack experiment (Stage 14c)\n")
+    L.append("`lake env lean --tstack=N -Dprofiler=true Cert.lean` (`-s, --tstack`: thread stack size in "
+             "KB) on the file that hit the kernel's `deep recursion detected` guard, with the same 900 s "
+             "timeout, peak-memory measurement and outcome classification as above; full output next to "
+             "the Cert.lean (`bench_scaling.py stack`). Question: is the ceiling of `decide +kernel` on "
+             "the `emitted` literal the thread stack or structural? At most two runs; a timeout or `oom` "
+             "ends the experiment.\n")
+    L.append("| key | instructions | --tstack KB | outcome | kernel s | wall s | peak MB | axioms / message |")
+    L.append("|---|---|---|---|---|---|---|---|")
+    instr = None
+    for r in sorted(runs.values(), key=lambda r: r["tstack_kb"]):
+        instr = planned_of(os.path.join(OUT, r["key"])).get("instructions", "—")
+        tail = ", ".join(r["axioms"]) if r.get("axioms") else (short_msg(r.get("message")) or "—")
+        L.append(f"| {r['key']} | {instr} | {r['tstack_kb']} | {r['outcome']} | {fmt(r['kernel_s'])} | "
+                 f"{fmt(r['wall_s'])} | {fmt(r['peak_mb'], 0)} | {tail} |")
+    base = st["certify"].get(next(iter(runs.values()))["key"], {})
+    before = fmt(base.get("kernel_s_log"))
+    ok = [r for r in runs.values() if r["outcome"] == "certified"]
+    if ok:
+        r = min(ok, key=lambda r: r["tstack_kb"])
+        ax = ", ".join(r["axioms"] or [])
+        L.append(f"\nWith `--tstack={r['tstack_kb']}` the file certifies (kernel {fmt(r['kernel_s'])} s, peak "
+                 f"{r['peak_mb']} MB, axioms {ax}); with the default thread stack it failed after "
+                 f"{before} s of type checking. The ceiling at {instr} instructions is a **thread-stack "
+                 "artifact**, not a structural limit of `decide +kernel` on the literal.")
+    else:
+        rs = sorted(runs.values(), key=lambda r: r["tstack_kb"])
+        pos = {msg_pos(r.get("message")) for r in rs}
+        msgs = {short_msg(r.get("message")) for r in rs}
+        how = ("Both" if len(rs) == 2 else "All" if len(rs) > 2 else "The") + (" runs fail" if len(rs) > 1 else " run fails")
+        if len(pos) == 1 and len(msgs) == 1:
+            how += f" at the same position ({pos.pop()}) with the same message, “{msgs.pop()}”"
+        else:
+            how += " (" + "; ".join(f"{r['tstack_kb']} KB: {msg_pos(r.get('message'))} {short_msg(r.get('message'))}"
+                                   for r in rs) + ")"
+        ks = ", ".join(f"{fmt(r['kernel_s'])} s ({r['tstack_kb'] // 1024} MB)" for r in rs)
+        pk = max(r["peak_mb"] or 0 for r in rs)
+        L.append(f"\n{how}: kernel {ks} against {before} s at the default stack; peak {pk} MB "
+                 f"({pk / 1024:.1f} GB). The thread-stack size does not move the failure point, so either "
+                 "the kernel's guard is independent of the thread stack or `--tstack` does not govern the "
+                 "thread that runs the kernel check; the message's hint `set_option maxRecDepth` is an "
+                 "elaborator option, not a candidate. Either way the ceiling is not lifted from the command "
+                 "line in this toolchain, and lifting it needs a change of proof form (a chunked `emitted` "
+                 "literal, the equality in pieces), deferred to the Stage 17 review. The experiment ends "
+                 "here: no third run, no code change.")
+    L.append("No library or generator change in Stage 14c whatever the result (reviewer decision, "
+             "DECISIONS.md 2026-10-30).")
 
 
 def machine_total_mb():
@@ -800,9 +896,11 @@ def phase_report(args, st, insts):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("phase", choices=["harness", "certify", "time", "committed", "classify", "report"])
+    ap.add_argument("phase", choices=["harness", "certify", "time", "committed", "classify", "stack",
+                                      "report"])
     ap.add_argument("key", nargs="?", help="classify: the certify key, e.g. rand_a64_r1_h")
     ap.add_argument("--log", help="classify: the saved full lean output")
+    ap.add_argument("--tstack", type=int, help="stack: lean thread stack size in KB (-s/--tstack)")
     ap.add_argument("--cqr", default=os.path.join(ROOT, ".lake", "build", "bin", "cqr.exe"))
     ap.add_argument("--minutes", type=float, default=0, help="time budget (0 = unlimited)")
     ap.add_argument("--timeout", type=float, default=900)
@@ -824,6 +922,10 @@ def main():
         if not (args.key and args.log):
             ap.error("classify needs <key> and --log <file>")
         phase_classify(args, st)
+    elif args.phase == "stack":
+        if not (args.key and args.tstack):
+            ap.error("stack needs <key> and --tstack N")
+        phase_stack(args, st)
     else:
         phase_report(args, st, insts)
 

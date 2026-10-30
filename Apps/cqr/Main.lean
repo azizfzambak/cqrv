@@ -71,7 +71,7 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   whether the bound is vacuous. Hardware fitness is not part of "certified" and does not change
   the exit code; a profile that cannot be read: message, exit 2, nothing written. Without
   `--profile` every output is as before.
-  Stage 14a: `--count-limit k` (default 12; `0` disables). For `n ≤ k` the tool evaluates
+  Stage 14a: `--count-limit k` (default 10, Stage 14c; `0` disables). For `n ≤ k` the tool evaluates
   `Network.countSat net n` itself; if it differs from the supplied or extracted `M` it prints the
   diagnostic `solution_count_mismatch` (stage `hypothesis`; supplied M, computed count) and
   writes nothing (exit 1); otherwise `Cert.lean` proves `hM_count` by `Network.countSat_eq_card`
@@ -421,9 +421,11 @@ def certifyFlags : List String →
     return (m, r, o, b, p, h, some k)
   | _ => none
 
-/-- Stage 14a — the default of `--count-limit`: the solution count is decided by the kernel for
-`n ≤ 12` (DECISIONS.md 2026-10-29). -/
-def defaultCountLimit : Nat := 12
+/-- Stage 14c — the default of `--count-limit`: the solution count is decided by the kernel for
+`n ≤ 10`. Stage 14a set 12 (DECISIONS.md 2026-10-29); Stage 14b measured every n = 12
+kernel-decided certificate timing out at 900 s, while n = 10 (carry_5) takes 103 s median and
+11 371 MB (docs/benchmarks/SCALING.md; DECISIONS.md 2026-10-30). -/
+def defaultCountLimit : Nat := 10
 
 /-- The median of a non-empty list (the lower middle element for an even length). -/
 def median (xs : List Nat) : Nat :=

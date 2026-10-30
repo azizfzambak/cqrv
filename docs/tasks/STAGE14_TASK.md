@@ -1,8 +1,9 @@
 # Stage 14 — solution counts decided by the kernel, an illustrative profile name, kernel-time scaling
 
 Report sections: §5.1.3, §8.2 (M as a parameter of the search problem), §8.4.1, §8.4.4
-(certificate, status words, kernel check), §9.5.1 (master discipline). Two tasks, **two commits**:
-do **14a**, reply, and stop. Start **14b** only after the reviewer has accepted 14a.
+(certificate, status words, kernel check), §9.5.1 (master discipline). Three tasks, **three
+commits**: do **14a**, reply, and stop. Start **14b** only after the reviewer has accepted 14a.
+**14c** (added 2026-10-30 after the 14b review) starts only after the 14b review commit.
 
 Precondition: main = `beee551` (Stage 13c review). Windows: `LEAN_NUM_THREADS=4`.
 `docs/paper/`, `docs/cqrv_report_revised_v4.docx`, `docs/PHASE2_ROADMAP.md`, `docs/PHASE2_SPEC.md`
@@ -143,8 +144,72 @@ certificates. Benchmark outputs (certificates, logs) go to a gitignored director
 
 ---
 
+## 14c — the count-limit default and the stack experiment (small; one commit)
+
+Start only after 14b is accepted and main is fast-forwarded to the 14b review commit.
+`git switch -c stage-14c main`; one commit; include this file. C1 is a small code change, C2 is
+measurement only. Long Lean runs (the C2 phase, `ci_local.sh`) are run by the user in a separate
+terminal, one Lean process at a time: you prepare the exact command lines and stop.
+
+### C1. Default `--count-limit` 12 → 10
+
+14b measured: every n = 12 kernel-decided certificate timed out at 900 s; the largest that
+finished is carry_5 (n = 10, 103 s median, 11 371 MB peak on a 16 108 MB machine). Set
+`defaultCountLimit` in `Apps/cqr/Main.lean` to **10**; `--count-limit k` keeps its meaning (`0`
+disables). Update every **current** mention of the default: the doc-comments and usage text of
+`Main.lean`, `README.md` ("n ≤ 12"), `docs/PROJECT_STATUS.md` (status words, trust-boundary
+line, and the §4 open-item row, which this closes), the comments of `tests/diff/certify_check.py`
+and `scripts/check_certify.sh`. Historical records (DECISIONS.md entries, the 14a/14b text above,
+SCALING.md) are **not** edited. The committed certificates (n = 8, 8, 6) are unchanged:
+`check_certify.sh` must still find them byte-identical outside the machine fields. New test in
+`certify_check.py`, item (f′): a tiny n = 11 predicate written by the test to a temporary file
+(e.g. `x0 ∧ x10`), certified **without** the flag → `certified (conditional on: solution_count =
+M)`, `Cert.lean` with `hM_card`, `solution_count.status = hypothesis`. The kernel-decided form at
+n = 11 is **not** run (that cost is what 14b measured). Budget for the new test: under 60 s.
+
+### C2. Stack experiment on the deep-recursion ceiling (measurement only)
+
+14b: `rand_a64_r1_h` (1953 emitted instructions) fails in the kernel with `deep recursion
+detected` inside `emitted_ok` after 29.6 s of type checking. This toolchain's `lean` has
+`-s, --tstack=num` (thread stack size in KB; see `lake env lean --help`). Question: is the ceiling
+the thread stack or structural? Add a phase `stack <key> --tstack N` to `scripts/bench_scaling.py`:
+`lake env lean --tstack=N -Dprofiler=true <Cert.lean>` with the same 900 s timeout, the same
+peak-memory measurement, the full output saved next to the Cert.lean, the outcome classified as in
+`classify`, recorded in `state.json` under `stack` (key, N, outcome, kernel s, wall s, peak MB,
+message), and a generated paragraph "Stack experiment" in SCALING.md (report phase; no hand-edited
+number; `scaling.csv` unchanged, the experiment is not a scaling row). Runs: N = 65536 (64 MB)
+and, only if that run still hits the guard, N = 524288 (512 MB); at most two runs; a timeout or
+`oom` ends the experiment. Whatever the result, record it: **no library or generator change** in
+this stage, whatever the result suggests (a recommendation in DECISIONS.md is enough).
+
+### Docs (14c)
+
+`docs/DECISIONS.md`: one dated entry: the default 10 and why (the 14b figures); the alternatives
+rejected (a default tied to the network size: needs a cost model, none measured yet; keeping 12
+with a warning: the user would wait 15 minutes to learn what the warning says); the stack
+experiment's result and what it says about the ceiling. `docs/PROJECT_STATUS.md`: the new default
+in the status words; §4 rows updated (count-limit row closed; the rand_a64 row carries the
+experiment's result). SORRIES.md: no new rows.
+
+### Acceptance (14c)
+
+- `lake build` green, warning-free; `scripts/ci_local.sh` all PASS (user's terminal); the
+  committed certificates byte-identical outside the machine fields; test (f′) passes.
+- The stack experiment recorded in `state.json`; SCALING.md regenerated, `git diff` showing the
+  new paragraph only.
+
+### Stop conditions (14c)
+
+- A committed certificate would change → stop and report (it must not).
+- Test (f′) exceeds 60 s → shrink the predicate; if that does not help, report.
+- The second stack run also fails → record and stop; no third run, no `maxRecDepth`, no code change.
+
+---
+
 ## Closing reply (each task)
 
 CLAUDE.md format, under 40 lines. In (e) for 14a: the count route and its line count, the
 kernel-time change per certificate. For 14b: the threshold per family and the growth trend of
-kernel time against instruction count.
+kernel time against instruction count. For 14c: the new default and the (f′) result; the stack
+experiment (N, outcome, kernel time, peak) and, in one sentence, whether the ~2000-instruction
+ceiling is a stack-size artifact.

@@ -24,7 +24,8 @@ decided"). For small `n` the count is a finite computation, and the kernel can d
 
 A generated certificate (`CQRV.Certify.Generate`) then proves `hM_count : (Finset.univ.filter
 …).card = M` by `rw [← Network.countSat_eq_card]; decide +kernel` and `cert` takes no
-hypothesis; `cqr certify --count-limit k` (default 12) decides which certificates do so.
+hypothesis; `cqr certify --count-limit k` (default 10 since Stage 14c; 12 in Stage 14a) decides which
+certificates do so.
 -/
 
 @[expose] public section

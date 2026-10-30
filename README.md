@@ -8,7 +8,7 @@ Status: **M2 reached; Stages 0–14a complete, sorry-free (local CI)**. Two Grov
 RevLib benchmark cone `simple_alu_x0_1` (and the few-ancilla variant `grover_pred_037_few`), are
 `certified`: kernel-checked, axioms exactly `propext`, `Classical.choice`, `Quot.sound`, measured
 grades, exact δ, front end exhaustively validated, and since Stage 14a the solution count M is
-decided by the kernel for n ≤ 12 (`hM_count`; `--count-limit k`; larger n stay `certified
+decided by the kernel for n ≤ 10 (`hM_count`; `--count-limit k`, default 10 since Stage 14c; larger n stay `certified
 (conditional on: solution_count = M)`) (`examples/certs/`, with run reports). Acceptance is
 the output of `scripts/ci_local.sh` (CI is not run remotely). Summary, open obligations, trust
 boundaries and the report errata: `docs/M2_REPORT.md`.

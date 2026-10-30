@@ -23,11 +23,12 @@
 #                                with mcz_ok for a wrong n → kernel check fails (Stage 13a′:
 #                                no per-instance classical step, grover_certificate_few_all);
 #                                Stage 14a: schema v1.6.0 with solution_count {value, status};
-#                                n ≤ 12: status line `certified`, Cert.lean proves hM_count and
+#                                n ≤ 10 (default --count-limit, Stage 14c): status line `certified`, Cert.lean proves hM_count and
 #                                `cert` has no hypothesis (kernel_decided); negative tests:
 #                                grover_pred_037 --solutions 31 and simple_alu_x0_1 --solutions 29
 #                                → solution_count_mismatch, nothing written; --count-limit 4 and
 #                                --count-limit 0 → the conditional form (hM_card, hypothesis);
+#                                (f′) Stage 14c: n = 11 without the flag → the conditional form;
 #                                --profile ibm_kyiv → unknown profile listing illustrative_sc
 #   tests/diff/profile_schema.py profiles/*.json against docs/profile.schema.json;
 #                                illustrative_sc = report Table 3.5 / §3.3.3 (renamed from
