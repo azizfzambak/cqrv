@@ -437,6 +437,93 @@ def Gate.isUnitary : Gate → Bool
   | .measure _ _ | .ifBit _ _ => false
   | _ => true
 
+/-! ## The adjoint (PHASE2_SPEC.md §A.0.1, Stage 15a) -/
+
+section Adjoint
+
+variable (n a : ℕ)
+
+theorem star_phaseMat (q : Qubit) (p : ℂ) : star (phaseMat n a q p) = phaseMat n a q (star p) := by
+  rw [phaseMat, phaseMat, star_monoMat (fun _ => rfl)]
+  congr 1
+  funext s
+  simp only [id]
+  split_ifs <;> simp
+
+/-- Report §9.1.1 — `H` is self-adjoint: `hMat` has real entries and a symmetric pattern. -/
+theorem star_hMat {ι : Type} [Fintype ι] [DecidableEq ι] {b : ι → Bool} {f : ι → ι}
+    (hf : Function.Involutive f) : star (hMat b f) = hMat b f := by
+  rw [hMat, star_smul, star_add, star_monoMat (fun _ => rfl), star_monoMat hf]
+  have h1 : (fun j : ι => star (if b j = true then (-1 : ℂ) else 1)) =
+      fun j => if b j = true then -1 else 1 := by
+    funext j; split_ifs <;> simp
+  have h2 : (fun _ : ι => star (1 : ℂ)) = fun _ => 1 := by funext _; simp
+  simp only [id_eq]
+  rw [h1, h2]
+  simp
+
+/-- PHASE2_SPEC.md §A.0.1 — the matrix of `g.adjoint` is the conjugate transpose of the matrix of
+`g`, for every unitary gate (`measure` and `ifBit` are not gates of the unitary fragment). -/
+theorem gateU_adjoint (g : Gate) (hg : g.isUnitary = true) :
+    gateU n a g.adjoint = star (gateU n a g) := by
+  cases g with
+  | h q =>
+    simp only [Gate.adjoint, gateU]
+    split_ifs
+    · exact (star_hMat (Qubit.flip_involutive q)).symm
+    · simp
+  | s q => rw [Gate.adjoint, gateU_sdg, gateU_s, star_phaseMat, Complex.star_def, Complex.conj_I]
+  | sdg q =>
+    rw [Gate.adjoint, gateU_s, gateU_sdg, star_phaseMat, star_neg, Complex.star_def, Complex.conj_I,
+      neg_neg]
+  | t q => rw [Gate.adjoint, gateU_tdg, gateU_t, star_phaseMat]
+  | tdg q => rw [Gate.adjoint, gateU_t, gateU_tdg, star_phaseMat, star_star]
+  | x q =>
+    simp only [Gate.adjoint, gateU]
+    rw [star_monoMat (Qubit.flip_involutive q)]
+    simp
+  | z q =>
+    simp only [Gate.adjoint]
+    rw [gateU_z, star_phaseMat, star_neg, star_one]
+  | cnot c t =>
+    simp only [Gate.adjoint, gateU]
+    split_ifs with hct
+    · simp
+    · rw [star_monoMat (cnotPerm_involutive n a hct)]
+      simp
+  | cz p q =>
+    simp only [Gate.adjoint, gateU]
+    rw [star_monoMat (fun _ => rfl)]
+    congr 1
+    funext s
+    simp only [id]
+    split_ifs <;> simp
+  | measure q j => simp [Gate.isUnitary] at hg
+  | ifBit j g => simp [Gate.isUnitary] at hg
+  | alloc q => simp [Gate.adjoint, gateU]
+  | free q => simp [Gate.adjoint, gateU]
+
+/-- Report §9.1.1 — the unitary semantics of a concatenation (first gate applied first). -/
+theorem unitaryDenote_append (gs₁ gs₂ : List Gate) :
+    unitaryDenote n a (gs₁ ++ gs₂) = unitaryDenote n a gs₂ * unitaryDenote n a gs₁ := by
+  induction gs₁ with
+  | nil => simp [unitaryDenote]
+  | cons g gs ih => simp [unitaryDenote, ih, mul_assoc]
+
+/-- PHASE2_SPEC.md §A.0.1 — the unitary semantics of `adjointGates gs` is the conjugate transpose
+of that of `gs`, for a measurement-free gate list. -/
+theorem unitaryDenote_adjoint (gs : List Gate) (h : ∀ g ∈ gs, g.isUnitary = true) :
+    unitaryDenote n a (adjointGates gs) = star (unitaryDenote n a gs) := by
+  induction gs with
+  | nil => simp [adjointGates, unitaryDenote]
+  | cons g gs ih =>
+    rw [adjointGates, List.map_cons, List.reverse_cons, unitaryDenote_append, ← adjointGates,
+      ih (fun g' hg' => h g' (List.mem_cons_of_mem _ hg'))]
+    simp only [unitaryDenote, one_mul]
+    rw [gateU_adjoint n a g (h g List.mem_cons_self), star_mul]
+
+end Adjoint
+
 /-! ## Kraus semantics (decision 2) -/
 
 section Kraus

@@ -125,6 +125,33 @@ out="$("${cqr[@]}" synthesize examples/search_while.cqr | tr -d '')"; rc=$?
 expect_exit "synthesize search_while" 1 "$out" "$rc"
 expect_has "search_while synthesize code" '"code":"unbounded_loop"' "$out"
 
+# Stage 15a — `--uncompute coherent` (PHASE2_SPEC.md §A.0.1): the adjoint uncompute, 8 T per AND,
+# no measurement; Bennett pebbling and the few-ancilla MCZ are MBU-only (unsupported_combination).
+out="$("${cqr[@]}" synthesize examples/grover_pred_037.cqr --uncompute coherent | tr -d '\r')"; rc=$?
+expect_exit "synthesize grover_pred_037 --uncompute coherent" 0 "$out" "$rc"
+expect_has "grover_pred_037 coherent grade" '"grade": {"w": 10, "t": 16, "d": 41, "a": 2}' "$out"
+out="$("${cqr[@]}" synthesize examples/grover_pred_037.cqr --uncompute mbu | tr -d '\r')"; rc=$?
+expect_exit "synthesize grover_pred_037 --uncompute mbu" 0 "$out" "$rc"
+expect_has "grover_pred_037 mbu grade (explicit)" '"grade": {"w": 10, "t": 8, "d": 27, "a": 2}' "$out"
+out="$("${cqr[@]}" synthesize examples/and_chain_8.cqr --amax 4 --uncompute coherent | tr -d '\r')"; rc=$?
+expect_exit "synthesize and_chain_8 --amax 4 --uncompute coherent (Bennett is MBU-only)" 1 "$out" "$rc"
+expect_has "and_chain_8 coherent --amax 4 code" '"code":"unsupported_combination"' "$out"
+out="$("${cqr[@]}" synthesize examples/and_chain_8.cqr --amax 8 --uncompute coherent | tr -d '\r')"; rc=$?
+expect_exit "synthesize and_chain_8 --amax 8 --uncompute coherent (budget covers)" 0 "$out" "$rc"
+expect_has "and_chain_8 coherent --amax 8 schedule" '"schedule": "straight-line"' "$out"
+"${cqr[@]}" synthesize examples/grover_pred_037.cqr --uncompute bogus >/dev/null 2>&1; rc=$?
+expect_exit "synthesize --uncompute bogus (usage)" 2 "" "$rc"
+out="$("${cqr[@]}" synthesize --diffusion 8 --uncompute coherent | tr -d '\r')"; rc=$?
+expect_exit "synthesize --diffusion 8 --uncompute coherent" 0 "$out" "$rc"
+expect_has "diffusion 8 coherent grade" '"grade": {"w": 15, "t": 56, "d": 59, "a": 7}' "$out"
+out="$("${cqr[@]}" synthesize --diffusion 8 --shape few:log --uncompute coherent | tr -d '\r')"; rc=$?
+expect_exit "synthesize --diffusion 8 --shape few:log --uncompute coherent (few is MBU-only)" 1 "$out" "$rc"
+expect_has "diffusion few:log coherent code" '"code":"unsupported_combination"' "$out"
+out="$("${cqr[@]}" synthesize examples/grover_pred_037.cqr --grover --uncompute coherent | tr -d '\r')"; rc=$?
+expect_exit "synthesize grover_pred_037 --grover --uncompute coherent" 0 "$out" "$rc"
+expect_has "grover coherent oracle grade" '"oracle": {"w": 10, "t": 16, "d": 41, "a": 2}' "$out"
+expect_has "grover coherent circuit grade" '"circuit": {"w": 15, "t": 144, "d": 200, "a": 7}' "$out"
+
 # Stage 5b — diffusion and Grover circuit (report §8.2, §3.2.4; DECISIONS.md 2026-10-24): the
 # measured grades (Table 3.3 claims (10, 16, 28, 2) for D₈ and (10, 74, 72, 2) for r⋆ = 2).
 # Stage 12a: the default MCZ network is the balanced tree; the Stage 5b chain is `--shape chain`.

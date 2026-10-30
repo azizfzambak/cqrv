@@ -32,6 +32,39 @@ erratum fix `if m: X t` that returns the target to |0⟩. -/
 def UncomputeTempLogicalAND (a b t : Qubit) (m : Nat) : List Gate :=
   [.h t, .measure t m, .ifBit m (.cz a b), .ifBit m (.x t)]
 
+/-- PHASE2_SPEC.md §A.0.1 (extends report §6.1.4, §6.2.2, §10.1.1; Stage 15a) — how the ancilla
+of an AND is uncomputed: `mbu` (measurement-based, the §6.2.2 listing; the Phase 1 code path,
+gate for gate, and the default) or `coherent` (the adjoint of the compute block: 4 more T per
+AND, no measurement, no classical bit). -/
+inductive UncomputeMode where
+  | mbu
+  | coherent
+  deriving Repr, DecidableEq, Inhabited
+
+namespace UncomputeMode
+
+/-- The CLI / JSON name of a mode. -/
+def toString : UncomputeMode → String
+  | .mbu => "mbu"
+  | .coherent => "coherent"
+
+instance : ToString UncomputeMode := ⟨UncomputeMode.toString⟩
+
+/-- Parse a `--uncompute` value. -/
+def parse? : String → Option UncomputeMode
+  | "mbu" => some .mbu
+  | "coherent" => some .coherent
+  | _ => none
+
+end UncomputeMode
+
+/-- PHASE2_SPEC.md §A.0.1 — the coherent uncompute (4 T, 13 gates): the adjoint of the compute
+listing, `S† t; H t; CNOT t b; CNOT t a; T† t; T b; T a; CNOT t b; CNOT t a; CNOT b t;
+CNOT a t; T† t; H t`. On |a, b, a ∧ b⟩ it returns the target to |0⟩ with amplitude 1
+(`tempLogicalAND_adjoint_basis`). -/
+def UncomputeTempLogicalANDCoherent (a b t : Qubit) : List Gate :=
+  adjointGates (TempLogicalAND a b t)
+
 end CQRV.Synthesis
 
 end

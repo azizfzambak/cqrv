@@ -17,6 +17,10 @@ circuit, built from the existing synthesizer (DECISIONS.md 2026-10-24, Stage 5b 
   global phase −1. V1 (`aMax = none`): the straight-line oracle of `synthesizeOracle`
   (Lemma 6.3.2 applies, xor-free); V2 (`aMax = some k`): the Bennett pebbling of the chain
   (`pebbleChain`, Stage 5 decision 3), grade and harness only.
+* `mode : UncomputeMode := .mbu` (PHASE2_SPEC.md §A.0.1, Stage 15a) is the last defaulted
+  argument of `synthesizeWithBudget`, `diffusionWith`, `diffusion`, `groverIteration` and
+  `groverCircuit`; Bennett pebbling and the few-ancilla MCZ stay MBU: a budget below the
+  straight-line count together with mode `coherent` is `unsupported_combination`.
 * The diffusion's ancillae start at `anc[0]`, so the oracle's restored ancillae are reused
   (§3.1.4): under the scheduler `a` of an iteration is `max(a_oracle, a_diffusion)`.
 * `groverIteration P n = oracle(P).append (diffusion n)` (the shifted append of 6b-1);
@@ -105,12 +109,16 @@ name of its schedule: straight-line when the budget covers every AND of `synthes
 (or no budget is given); otherwise a Bennett pebbling, which decision 3 allows only for AND
 chains (`infeasible_budget` when no pebbling exists). This is the logic of `cqr synthesize
 --amax`, shared by the CLI and the V2 diffusion. -/
-def synthesizeWithBudget (N : Network) (aMax : Option Nat) :
+def synthesizeWithBudget (N : Network) (aMax : Option Nat) (mode : UncomputeMode := .mbu) :
     Except Diagnostic (String × Circuit) := do
-  let full ← synthesizeOracle N
+  let full ← synthesizeOracle N mode
   match aMax with
   | some k =>
     if k ≥ full.peakAncilla then return ("straight-line", full)
+    if mode == .coherent then
+      fail .unsupportedCombination s!"Bennett pebbling is MBU-only (Stage 15): --amax {k} is \
+        below the {full.peakAncilla} ancillae of the straight-line schedule and --uncompute \
+        coherent has no pebbling (PHASE2_SPEC.md §A.0.1)"
     let some lits := Bennett.chainOf N
       | fail .unsupportedNetwork s!"--amax {k} is below the {full.peakAncilla} ancillae of the \
           straight-line schedule; Bennett pebbling is implemented only for AND chains \
@@ -125,10 +133,10 @@ def synthesizeWithBudget (N : Network) (aMax : Option Nat) :
 `aMax = some k`. Ancillae from `anc[0]` (Stage 5b decision 3). The MCZ is the oracle of
 `diffusionNet shape n`, the balanced tree by default (Stage 12a decision 3); a Bennett pebbling
 exists only for the chain. -/
-def diffusionWith (n : Nat) (aMax : Option Nat) (shape : DiffusionShape := .tree) :
-    Except Diagnostic (String × Circuit) := do
+def diffusionWith (n : Nat) (aMax : Option Nat) (shape : DiffusionShape := .tree)
+    (mode : UncomputeMode := .mbu) : Except Diagnostic (String × Circuit) := do
   if n == 0 then fail .unsupportedNetwork "the diffusion needs at least one data qubit"
-  let (sched, mcz) ← synthesizeWithBudget (diffusionNet shape n) aMax
+  let (sched, mcz) ← synthesizeWithBudget (diffusionNet shape n) aMax mode
   let pre : Circuit := ⟨n, onAll .h n ++ onAll .x n⟩
   let post : Circuit := ⟨n, onAll .x n ++ onAll .h n⟩
   return (sched, (pre.append mcz).append post)
@@ -136,26 +144,28 @@ def diffusionWith (n : Nat) (aMax : Option Nat) (shape : DiffusionShape := .tree
 /-- Report §8.2, §3.1.4 (Table 3.3, diffusion row) — the diffusion circuit on `x[0..n)`
 (Stage 5b decision 1: V1 when `aMax = none`, V2 with Bennett when `aMax = some k`; the MCZ
 network a balanced tree unless `shape = .chain`, Stage 12a decision 3). -/
-def diffusion (n : Nat) (aMax : Option Nat) (shape : DiffusionShape := .tree) :
-    Except Diagnostic Circuit :=
-  (·.2) <$> diffusionWith n aMax shape
+def diffusion (n : Nat) (aMax : Option Nat) (shape : DiffusionShape := .tree)
+    (mode : UncomputeMode := .mbu) : Except Diagnostic Circuit :=
+  (·.2) <$> diffusionWith n aMax shape mode
 
 /-- Report §8.2, §3.2.4 — one Grover iteration `U_s U_P`: the straight-line oracle of `P`
 (`synthesizeOracle`, unchanged), then the diffusion on the same `n` data qubits, by the
 shifted append of 6b-1 (the diffusion's bits follow the oracle's). -/
 def groverIteration (P : Network) (n : Nat) (aMax : Option Nat := none)
-    (shape : DiffusionShape := .tree) : Except Diagnostic Circuit := do
+    (shape : DiffusionShape := .tree) (mode : UncomputeMode := .mbu) :
+    Except Diagnostic Circuit := do
   if P.nInputs != n then
     fail .unsupportedNetwork s!"the predicate has {P.nInputs} inputs, the diffusion {n}"
-  let oracle ← synthesizeOracle P
-  let d ← diffusion n aMax shape
+  let oracle ← synthesizeOracle P mode
+  let d ← diffusion n aMax shape mode
   return oracle.append d
 
 /-- Report §3.2.4 — the Grover circuit `H^{⊗n}` then `r` iterations; the final measurement of
 the data register is not part of the IR (the harness measures). -/
 def groverCircuit (P : Network) (n r : Nat) (aMax : Option Nat := none)
-    (shape : DiffusionShape := .tree) : Except Diagnostic Circuit := do
-  let it ← groverIteration P n aMax shape
+    (shape : DiffusionShape := .tree) (mode : UncomputeMode := .mbu) :
+    Except Diagnostic Circuit := do
+  let it ← groverIteration P n aMax shape mode
   return (List.replicate r it).foldl Circuit.append ⟨n, onAll .h n⟩
 
 /-- Report §3.2.4, §8 — `r⋆ = ⌊π / (4θ)⌋` with `sin²θ = M / 2ⁿ`, for `1 ≤ M ≤ 2ⁿ`; computed in

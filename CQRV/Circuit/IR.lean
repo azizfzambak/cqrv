@@ -82,6 +82,17 @@ def tCount : Gate → Nat
   | .ifBit _ g => g.tCount
   | _ => 0
 
+/-- PHASE2_SPEC.md §A.0.1 (extends report §6.2.2) — the adjoint of a unitary gate: `s ↔ sdg`,
+`t ↔ tdg`; `h`, `x`, `z`, `cnot`, `cz` are self-adjoint. `measure`, `ifBit`, `alloc`, `free` are
+returned unchanged (the function is total; the semantic theorems assume `Gate.isUnitary`,
+`CQRV.Circuit.Semantics`). -/
+def adjoint : Gate → Gate
+  | .s q => .sdg q
+  | .sdg q => .s q
+  | .t q => .tdg q
+  | .tdg q => .t q
+  | g => g
+
 /-- Report §6.2.2, §9.1.1 — shift the classical bits of a gate up by `k` (`measure q → j` writes
 `j + k`, `ifBit j g` reads `j + k`); used by `Circuit.append` and by the synthesizer, which numbers
 bits in measurement order (DECISIONS.md, Stage 6b-1 review). -/
@@ -112,6 +123,10 @@ def render : Gate → String
   | .free q => s!"free {q.render}"
 
 end Gate
+
+/-- PHASE2_SPEC.md §A.0.1 — the adjoint of a measurement-free gate list: the adjoint gates in
+reverse order (`(g₁ ⋯ gₖ)† = gₖ† ⋯ g₁†`); `unitaryDenote_adjoint` in `Semantics`. -/
+def adjointGates (gs : List Gate) : List Gate := (gs.map Gate.adjoint).reverse
 
 namespace Circuit
 

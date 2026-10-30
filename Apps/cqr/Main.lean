@@ -23,7 +23,10 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
 * `cqr match <file> [--solutions M] [--text]` — check → extract → Algorithm 2 against the
   library. One match: `{pattern, subst, side_conditions}` JSON, exit 0. Otherwise one repair
   hint (Table 4; stage `match`, code `no_matching_pattern`), exit 1; `--text` prints it as text.
-* `cqr synthesize <file> [--amax k] [--json] [--layers]` — check → `toNetwork` → oracle
+* `cqr synthesize <file> [--amax k] [--uncompute mbu|coherent] [--json] [--layers]` — check →
+  `toNetwork` → oracle (`--uncompute coherent`: the adjoint uncompute of PHASE2_SPEC.md §A.0.1,
+  Stage 15a; MBU-only paths — Bennett below the straight-line count, `few:` shapes — are
+  `unsupported_combination`)
   synthesis (report §6.1.4; straight-line, or Bennett pebbling of an AND chain when `k < ĉ∧`,
   §6.1.3). Prints `{name, schedule, and_complexity, grade: {w, d, t, a}}` (exit 0); `--json`
   adds the IR (`circuit`, the flat format of `tests/diff/`) and prints one line; `--layers`
@@ -89,9 +92,9 @@ def subcommands : List (String × Nat) :=
 def usage : String :=
   "usage: cqr <command> [args]\n\ncommands:\n" ++
     "  check <file>\n  extract <file> [--solutions M]\n  match <file> [--solutions M] [--text]\n" ++
-    "  synthesize <file> [--amax k] [--json] [--layers]\n" ++
-    "  synthesize --diffusion n [--shape tree|chain|few:ladder|few:log] [--amax k] [--json] [--layers]\n" ++
-    "  synthesize <file> --grover [--shape tree|chain|few:ladder|few:log] [--iterations r] [--solutions M] [--json] [--layers]\n" ++
+    "  synthesize <file> [--amax k] [--uncompute mbu|coherent] [--json] [--layers]\n" ++
+    "  synthesize --diffusion n [--shape tree|chain|few:ladder|few:log] [--amax k] [--uncompute mbu|coherent] [--json] [--layers]\n" ++
+    "  synthesize <file> --grover [--shape tree|chain|few:ladder|few:log] [--iterations r] [--solutions M] [--uncompute mbu|coherent] [--json] [--layers]\n" ++
     "  check <file> --truth-table\n" ++
     "  certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k] [--report]\n" ++
     "          [--profile name|path] [--shape tree|few:log] [--count-limit k]\n" ++
@@ -191,10 +194,10 @@ def matchFlags : List String → Option (Option Nat × Bool)
 /-- Report §6.1.3–6.1.4 — the oracle circuit of a typed program under ancilla budget `aMax`
 (`synthesizeWithBudget`: straight-line, or a Bennett pebbling of an AND chain). Returns the
 schedule name and ĉ∧ of the network. -/
-def synthesizeWith (tp : TypedProgram) (aMax : Option Nat) :
+def synthesizeWith (tp : TypedProgram) (aMax : Option Nat) (mode : UncomputeMode := .mbu) :
     Except Diagnostic (String × Nat × Circuit) := do
   let N ← toNetwork tp
-  let (sched, c) ← synthesizeWithBudget N aMax
+  let (sched, c) ← synthesizeWithBudget N aMax mode
   return (sched, N.andCount, c)
 
 /-- Report §3.1.1 — a grade as JSON `{w, d, t, a}`. -/
@@ -209,12 +212,14 @@ def printResult (base extra : List (String × Lean.Json)) (c : Circuit) (json la
   else IO.println (Lean.Json.mkObj base).pretty
   if layers then IO.println c.layerDump
 
-/-- `cqr synthesize <file> [--amax k] [--json] [--layers]` — report §6.1.4, §6.3.1 (Eq. 5). -/
-def runSynthesize (path : String) (aMax : Option Nat) (json layers : Bool) : IO UInt32 := do
+/-- `cqr synthesize <file> [--amax k] [--uncompute mbu|coherent] [--json] [--layers]` — report
+§6.1.4, §6.3.1 (Eq. 5); `--uncompute` PHASE2_SPEC.md §A.0.1 (Stage 15a). -/
+def runSynthesize (path : String) (aMax : Option Nat) (mode : UncomputeMode) (json layers : Bool) :
+    IO UInt32 := do
   match ← frontEnd path with
   | .error d => IO.println d.toJson.compress; return 1
   | .ok (tp, _) =>
-    match synthesizeWith tp aMax with
+    match synthesizeWith tp aMax mode with
     | .error d => IO.println d.toJson.compress; return 1
     | .ok (sched, cand, c) =>
       let base := [("name", Lean.toJson tp.name), ("schedule", Lean.toJson sched),
@@ -269,13 +274,16 @@ def shapeFlag : List String → Option (ShapeArg × List String)
 /-- `cqr synthesize --diffusion n [--shape tree|chain|few:ladder|few:log] [--amax k] [--json]
 [--layers]` — report §8.2, Stage 5b; the MCZ network is the balanced tree unless `--shape chain`
 (Stage 12a); `few:<variant>` is the unproved few-ancilla MCZ (Stage 12b, no `--amax`). -/
-def runDiffusion (n : Nat) (aMax : Option Nat) (shape : ShapeArg) (json layers : Bool) :
-    IO UInt32 := do
+def runDiffusion (n : Nat) (aMax : Option Nat) (shape : ShapeArg) (mode : UncomputeMode)
+    (json layers : Bool) : IO UInt32 := do
   let res : Except Diagnostic (String × Circuit) := match shape with
-    | .std sh => diffusionWith n aMax sh
+    | .std sh => diffusionWith n aMax sh mode
     | .few v => do
       if aMax.isSome then
         Diffusion.fail .unsupportedNetwork s!"--amax does not apply to --shape few:{v.name}"
+      if mode == .coherent then
+        Diffusion.fail .unsupportedCombination s!"the few-ancilla MCZ is MBU-only (Stage 15): \
+          --shape few:{v.name} does not take --uncompute coherent"
       return (s!"few:{v.name} ({v.source})", ← diffusionFew n v)
   match res with
   | .error d => IO.println d.toJson.compress; return 1
@@ -291,7 +299,7 @@ def runDiffusion (n : Nat) (aMax : Option Nat) (shape : ShapeArg) (json layers :
 (default r⋆) iterations; balanced-tree diffusion unless `--shape chain` (Stage 12a); `few:` shapes
 are unproved (Stage 12b). -/
 def runGrover (path : String) (iters solutions : Option Nat) (shape : ShapeArg)
-    (json layers : Bool) : IO UInt32 := do
+    (mode : UncomputeMode) (json layers : Bool) : IO UInt32 := do
   match ← frontEnd path, ← signature path solutions with
   | .error d, _ | _, .error d => IO.println d.toJson.compress; return 1
   | .ok (tp, _), .ok sig =>
@@ -305,9 +313,12 @@ def runGrover (path : String) (iters solutions : Option Nat) (shape : ShapeArg)
       let N ← toNetwork tp
       match shape with
       | .std sh =>
-        return (← synthesizeOracle N, ← diffusion n none sh, ← groverIteration N n none sh,
-          ← groverCircuit N n r none sh)
+        return (← synthesizeOracle N mode, ← diffusion n none sh mode,
+          ← groverIteration N n none sh mode, ← groverCircuit N n r none sh mode)
       | .few v =>
+        if mode == .coherent then
+          Diffusion.fail .unsupportedCombination s!"the few-ancilla MCZ is MBU-only (Stage 15): \
+            --shape few:{v.name} does not take --uncompute coherent"
         return (← synthesizeOracle N, ← diffusionFew n v, ← groverIterationFew N n v,
           ← groverCircuitFew N n r v)
     match res with
@@ -324,6 +335,16 @@ def runGrover (path : String) (iters solutions : Option Nat) (shape : ShapeArg)
       printResult base [("circuit", g.toJson), ("iteration_circuit", it.toJson)] g json layers
       return 0
 
+/-- Remove `--uncompute mbu|coherent` from the flags (PHASE2_SPEC.md §A.0.1, Stage 15a); the
+default is `mbu`; an unknown value is a usage error. -/
+def uncomputeFlag : List String → Option (UncomputeMode × List String)
+  | [] => some (.mbu, [])
+  | "--uncompute" :: m :: rest => do
+    let mode ← UncomputeMode.parse? m
+    let (_, rest) ← uncomputeFlag rest
+    return (mode, rest)
+  | f :: rest => (uncomputeFlag rest).map fun (m, r) => (m, f :: r)
+
 /-- Parse `[--iterations r] [--solutions M] [--json] [--layers]` (after `--grover`). -/
 def groverFlags : List String → Option (Option Nat × Option Nat × Bool × Bool)
   | [] => some (none, none, false, false)
@@ -339,7 +360,8 @@ def groverFlags : List String → Option (Option Nat × Option Nat × Bool × Bo
     return (r, some m, j, l)
   | _ => none
 
-/-- Parse `[--amax k] [--json] [--layers]` in any order. -/
+/-- Parse `[--amax k] [--json] [--layers]` in any order (`--uncompute` is removed first by
+`uncomputeFlag`). -/
 def synthFlags : List String → Option (Option Nat × Bool × Bool)
   | [] => some (none, false, false)
   | "--json" :: rest => (synthFlags rest).map fun (k, _, l) => (k, true, l)
@@ -595,20 +617,29 @@ def main (args : List String) : IO UInt32 := do
   | "synthesize" :: "--diffusion" :: n :: flags =>
     match n.toNat?, shapeFlag flags with
     | some n, some (sh, flags) =>
-      match synthFlags flags with
-      | some (k, j, l) => runDiffusion n k sh j l
+      match uncomputeFlag flags with
+      | some (mode, flags) =>
+        match synthFlags flags with
+        | some (k, j, l) => runDiffusion n k sh mode j l
+        | none => IO.eprint usage; return 2
       | none => IO.eprint usage; return 2
     | _, _ => IO.eprint usage; return 2
   | "synthesize" :: file :: "--grover" :: flags =>
     match shapeFlag flags with
     | some (sh, flags) =>
-      match groverFlags flags with
-      | some (r, m, j, l) => runGrover file r m sh j l
+      match uncomputeFlag flags with
+      | some (mode, flags) =>
+        match groverFlags flags with
+        | some (r, m, j, l) => runGrover file r m sh mode j l
+        | none => IO.eprint usage; return 2
       | none => IO.eprint usage; return 2
     | none => IO.eprint usage; return 2
   | "synthesize" :: file :: flags =>
-    match synthFlags flags with
-    | some (k, j, l) => runSynthesize file k j l
+    match uncomputeFlag flags with
+    | some (mode, flags) =>
+      match synthFlags flags with
+      | some (k, j, l) => runSynthesize file k mode j l
+      | none => IO.eprint usage; return 2
     | none => IO.eprint usage; return 2
   | "certify" :: file :: flags =>
     match shapeFlag flags with

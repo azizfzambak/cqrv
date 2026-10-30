@@ -1,6 +1,6 @@
 # CQRV — project status (2026-10-30)
 
-One-page state of the repository after Stages 0–14b. The specification is report v3
+One-page state of the repository after Stages 0–15a. The specification is report v3
 (`docs/cqrv_report_revised_v3.docx`, tracked changes over v2, errata appendix). Details:
 `docs/M2_REPORT.md` (milestone M2, frozen, with post-M2 notes), `docs/DECISIONS.md` (every decision),
 `docs/SORRIES.md` (obligations). Toolchain: Lean 4.35.0, Mathlib v4.35.0, Physlib 96a6bc5.
@@ -51,7 +51,16 @@ Scaling (Stage 14b, measurement only; `docs/benchmarks/SCALING.md`, `scaling.csv
 | `--count-limit` default 12 → 10 (Stage 14c, from 14b's measurement: every n = 12 kernel-decided count timed out at 900 s; n = 10 takes 103 s median and 11 371 MB) | closed (DECISIONS.md 2026-10-30) |
 | rand_a64 hypothesis form: kernel `deep recursion detected` in `emitted_ok` at 1953 emitted instructions (Stage 14b); `--tstack` 64 MB / 512 MB: no effect, same position and message (Stage 14c) | open; proof-form change (chunked `emitted` literal) deferred to the Stage 17 review |
 
-## 5. Reproduce
+## 5. Phase 2 (`docs/PHASE2_ROADMAP.md`, `docs/PHASE2_SPEC.md`)
+
+Phase 2 extends the Phase 1 pipeline towards certified amplitude estimation and a hardware track; the
+roadmap and the specification addendum (report v4 → v5) are the reviewer's documents named above.
+
+| Stage | Result | Spec § |
+|---|---|---|
+| 15a (2026-10-30) | Coherent uncomputation mode: `UncomputeMode` (`mbu` default, the Phase 1 code path gate for gate; `coherent` = the adjoint of the compute block, 8 T per AND, no measurement, no classical bit) as the last defaulted argument of the synthesizer, diffusion and Grover builders; `Gate.adjoint`, `adjointGates`, `gateU_adjoint`, `unitaryDenote_adjoint`; Lemma 6.3.2, well-formedness and success proved for both modes (`lemma_6_3_2_coherent`, `synthesizeOracle_WF'`, `synthesizeOracle_succeeds'`; the Phase 1 names are the `.mbu` instances); `cqr synthesize … --uncompute mbu\|coherent`; Bennett and the few-ancilla MCZ stay MBU-only (`unsupported_combination`). Measured, running example: oracle (10, 41, 16, 2) vs (10, 27, 8, 2); D₈ (15, 59, 56, 7) vs (15, 41, 28, 7); Grover r = 2 (15, 200, 144, 7) vs (15, 134, 72, 7). Certificates in mode `coherent`: Stage 15b. | A.0.1 |
+
+## 6. Reproduce
 
 ```bash
 lake exe cache get && lake build

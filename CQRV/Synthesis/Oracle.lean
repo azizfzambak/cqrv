@@ -14,7 +14,11 @@ straight-line full-ancilla schedule (DECISIONS.md 2026-10-23, Stage 5 decisions 
   computed by `TempLogicalAND` (4 T) in topological order;
 * `Z` on the qubit holding P(x) — the ancilla of the last AND, or a data qubit when ĉ∧ = 0
   (§6.1.1: no phase qubit);
-* every AND uncomputed by MBU (`UncomputeTempLogicalAND`, 0 T) in reverse order.
+* every AND uncomputed in reverse order: by MBU (`UncomputeTempLogicalAND`, 0 T) in the
+  default mode `mbu`, or by the adjoint of its compute block (`UncomputeTempLogicalANDCoherent`,
+  4 T, no measurement) in mode `coherent` (PHASE2_SPEC.md §A.0.1, Stage 15a; the mode is the
+  last, defaulted argument of `step` and `synthesizeOracle`, so `mbu` is the Phase 1 code path
+  gate for gate).
 
 NOT and XOR nodes cost no ancilla. A node's value is kept as an affine function `(lin, c)`
 over *atoms* (input bits, AND results; atom = its home qubit): `lin` is a set of atoms, `c` a
@@ -105,8 +109,11 @@ structure St where
   uncompute : Array (List Gate) := #[]
   nextAnc : Nat := 0
 
-/-- Report §6.1.2, §6.2.2 — one node of the cone. -/
-def step (N : Network) (mark : Array Bool) (st : St) (k : Nat) : Except Diagnostic St := do
+/-- Report §6.1.2, §6.2.2 — one node of the cone. The uncompute block of a non-folded AND is
+chosen by `mode` (PHASE2_SPEC.md §A.0.1): MBU, measuring into bit 0 (shifted to its
+measurement-order bit when emitted), or the coherent adjoint (no bit). -/
+def step (N : Network) (mark : Array Bool) (st : St) (k : Nat)
+    (mode : UncomputeMode := .mbu) : Except Diagnostic St := do
   if !mark.getD k false then return { st with vals := st.vals.push none }
   let get (i : Nat) : Except Diagnostic Aff :=
     match st.vals.getD i none with
@@ -129,7 +136,9 @@ def step (N : Network) (mark : Array Bool) (st : St) (k : Nat) : Except Diagnost
     let (pre, pu, pv) ← prepare u v
     let t := Qubit.anc st.nextAnc
     let cmp := pre ++ [.alloc t] ++ TempLogicalAND pu pv t ++ pre.reverse
-    let unc := pre ++ UncomputeTempLogicalAND pu pv t 0 ++ [.free t] ++ pre.reverse
+    let unc := pre ++ (match mode with
+      | .mbu => UncomputeTempLogicalAND pu pv t 0
+      | .coherent => UncomputeTempLogicalANDCoherent pu pv t) ++ [.free t] ++ pre.reverse
     return { vals := st.vals.push (some ⟨[t], false⟩), compute := st.compute.push cmp,
              uncompute := st.uncompute.push unc, nextAnc := st.nextAnc + 1 }
   | none => fail "internal: node index out of range"
@@ -151,13 +160,15 @@ open Oracle in
 `anc[0..ĉ∧)`: compute blocks, phase flip, uncompute blocks in reverse order. Classical bits
 are numbered in measurement order: the `i`-th executed uncompute block measures into bit `i`
 (DECISIONS.md, Stage 6b-1 review: the oracle is literally a shifted `Circuit.append` of its
-pieces). -/
-def synthesizeOracle (N : Network) : Except Diagnostic Circuit := do
+pieces). `mode` (PHASE2_SPEC.md §A.0.1, Stage 15a): `mbu` (default) or `coherent`; in mode
+`coherent` no block has a bit, so the shift is the identity on every block. -/
+def synthesizeOracle (N : Network) (mode : UncomputeMode := .mbu) :
+    Except Diagnostic Circuit := do
   let out ← match N.outputs with
     | [o] => pure o
     | os => fail s!"the oracle needs a one-bit predicate, the network has {os.length} outputs"
   let mark := cone N out
-  let st ← (List.range N.nodes.size).foldlM (step N mark) { vals := #[] }
+  let st ← (List.range N.nodes.size).foldlM (fun st k => step N mark st k mode) { vals := #[] }
   let p ← match st.vals.getD out none with
     | some p => pure p
     | none => fail "internal: output outside the cone"

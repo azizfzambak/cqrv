@@ -52,8 +52,11 @@ SHAPES = ["tree", "chain"]
 BENNETT = [(4, 2), (5, 3), (8, 3), (8, 4)]
 
 
+MODE = "mbu"  # --uncompute mode of every `cqr synthesize` call (Stage 15a)
+
+
 def cqr_json(cqr, args):
-    cmd = [cqr, "synthesize"] + args + ["--json"]
+    cmd = [cqr, "synthesize"] + args + ["--json"] + (["--uncompute", MODE] if MODE != "mbu" else [])
     out = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
     line = out.stdout.strip().splitlines()[0] if out.stdout.strip() else ""
     if out.returncode != 0:
@@ -137,7 +140,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cqr", required=True)
     ap.add_argument("--seed", type=int, default=20261024)
+    ap.add_argument("--uncompute", choices=["mbu", "coherent"], default="mbu",
+                    help="the --uncompute mode of every synthesize call (Stage 15a)")
     args = ap.parse_args()
+    global MODE
+    MODE = args.uncompute
     cqr = os.path.abspath(args.cqr)
     sys.stdout.reconfigure(encoding="utf-8")
     rng = np.random.default_rng(args.seed)
@@ -145,8 +152,9 @@ def main():
     ok = True
 
     # (a) diffusion, V1 (tree and chain) and V2 (chain), every branch.
+    # Stage 15a: Bennett (V2) is MBU-only; in mode coherent the V2 cases are rejected instead.
     cases = ([(n, sh, None) for sh in SHAPES for n in range(1, MAX_DATA + 1)]
-             + [(n, "chain", k) for n, k in BENNETT])
+             + ([(n, "chain", k) for n, k in BENNETT] if MODE == "mbu" else []))
     passed, branches = 0, 0
     for n, sh, k in cases:
         try:
@@ -159,7 +167,19 @@ def main():
         except (AssertionError, RuntimeError, sv.RestorationError) as e:
             ok = False
             print(f"FAIL (a) diffusion n={n} shape={sh} amax={k}: {e}")
-    print(f"(a) diffusion: {passed}/{len(cases)} pass, {branches} measurement branches checked")
+    print(f"(a) diffusion ({MODE}): {passed}/{len(cases)} pass, {branches} measurement branches checked")
+    if MODE == "coherent":
+        for n, k in BENNETT:
+            try:
+                check_diffusion(cqr, n, "chain", k, rng)
+                ok = False
+                print(f"FAIL (a) V2 n={n} amax={k} accepted in mode coherent")
+            except RuntimeError as e:
+                if "unsupported_combination" not in str(e):
+                    ok = False
+                    print(f"FAIL (a) V2 n={n} amax={k}: {e}")
+        print(f"(a) V2 (Bennett) in mode coherent: {len(BENNETT)} budgets rejected with "
+              f"unsupported_combination")
     # Negative control: the n = 3 diffusion (tree) without its final H on x[0] must be rejected.
     circ = cqr_json(cqr, ["--diffusion", "3"])["circuit"]
     bad = {**circ, "gates": circ["gates"][:-3] + circ["gates"][-2:]}
@@ -202,11 +222,24 @@ def main():
             print(f"FAIL (c) full Grover ({sh}): {e}")
 
     # (e) the certified few-ancilla Grover circuit of grover_pred_037 (Stage 12d): 121/128.
-    try:
-        check_full(cqr, "(e) grover_pred_037", grover, [], n, pred, 2, exact_c, "few:log", rng)
-    except (AssertionError, RuntimeError, sv.RestorationError) as e:
-        ok = False
-        print(f"FAIL (e) full Grover (few:log): {e}")
+    # Stage 15a: the few-ancilla MCZ is MBU-only; in mode coherent it is rejected.
+    if MODE == "mbu":
+        try:
+            check_full(cqr, "(e) grover_pred_037", grover, [], n, pred, 2, exact_c, "few:log", rng)
+        except (AssertionError, RuntimeError, sv.RestorationError) as e:
+            ok = False
+            print(f"FAIL (e) full Grover (few:log): {e}")
+    else:
+        try:
+            cqr_json(cqr, [grover, "--grover"] + shape_args("few:log"))
+            ok = False
+            print("FAIL (e) few:log accepted in mode coherent")
+        except RuntimeError as e:
+            if "unsupported_combination" not in str(e):
+                ok = False
+                print(f"FAIL (e) few:log in mode coherent: {e}")
+            else:
+                print("(e) few:log in mode coherent: rejected with unsupported_combination")
 
     # (d) full Grover of simple_alu_x0_1 at r* = 1 (M = 30 from the SyReC reference):
     # exactly 1215/2048.

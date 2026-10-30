@@ -30,7 +30,14 @@ generalized in Stage 9a; basis-vector route of DECISIONS.md, Stage 6b-2):
 * `synthesizeOracle_succeeds` (Stage 13c): `N.WF → N.outputs.length = 1 → ∃ C,
   synthesizeOracle N = .ok C`, by the cone-closure invariant `ConeInv` (`cone_closed`) and the
   forward invariant `SuccInv` of the fold (a value for every marked node; linear parts
-  duplicate-free and sorted by `Qubit.key`, `KeySorted`), with `prepare_succeeds`.
+  duplicate-free and sorted by `Qubit.key`, `KeySorted`), with `prepare_succeeds`;
+* Stage 15a (PHASE2_SPEC.md §A.0.1): every statement above is proved for both uncomputation
+  modes — `AndRec.uncM` / `uncBlocksM` select the MBU block or the coherent block (the adjoint
+  of the compute listing, `unc_kraus_coherent`, amplitude `ampM mode`), `InvM`, `step_ok_invM`,
+  `fold_invM`, `chain_kraus_mode`, `lemma_6_3_2_mode_of_le`, `synthesizeOracle_WF'`,
+  `synthesizeOracle_succeeds'` take the mode; the Phase 1 names are their `.mbu` instances
+  (definitionally the old statements) and `lemma_6_3_2_coherent_of_le` / `lemma_6_3_2_coherent`
+  the `.coherent` ones.
 
 The synthesizer is unchanged: the AND records exist only in the invariant (existentially).
 -/
@@ -63,6 +70,17 @@ def cmp (r : AndRec) (j : ℕ) : List Gate :=
 into the classical bit `b`. -/
 def unc (r : AndRec) (j b : ℕ) : List Gate :=
   r.pre ++ UncomputeTempLogicalAND r.p r.q (.anc j) b ++ [.free (.anc j)] ++ r.pre.reverse
+
+/-- PHASE2_SPEC.md §A.0.1 (Stage 15a) — the coherent uncompute block of the AND with target
+`anc j`: the adjoint of its compute listing between `pre` and `preᴿ`; no classical bit. -/
+def uncC (r : AndRec) (j : ℕ) : List Gate :=
+  r.pre ++ UncomputeTempLogicalANDCoherent r.p r.q (.anc j) ++ [.free (.anc j)] ++ r.pre.reverse
+
+/-- The uncompute block of the mode: `unc` (bit `b`) for `mbu`, `uncC` for `coherent`
+(`uncM r .mbu j b` is `r.unc j b` definitionally). -/
+def uncM (r : AndRec) : UncomputeMode → ℕ → ℕ → List Gate
+  | .mbu, j, b => r.unc j b
+  | .coherent, j, _ => r.uncC j
 
 /-- Report §6.1.2 — the value of the AND on a basis state: `u ∧ v`. -/
 def val {n a : ℕ} (r : AndRec) (s : Reg n × Reg a) : Bool :=
@@ -117,6 +135,34 @@ def cmpBlocks : List AndRec → ℕ → List Gate
 def uncBlocks : List AndRec → ℕ → List Gate
   | [], _ => []
   | r :: rs, j => uncBlocks rs (j + 1) ++ r.unc j rs.length
+
+/-- PHASE2_SPEC.md §A.0.1 — the coherent uncompute blocks of `rs`, in reverse order (no bits). -/
+def uncBlocksC : List AndRec → ℕ → List Gate
+  | [], _ => []
+  | r :: rs, j => uncBlocksC rs (j + 1) ++ r.uncC j
+
+/-- The uncompute blocks of the mode; `uncBlocksM .mbu` is `uncBlocks` definitionally. -/
+def uncBlocksM : UncomputeMode → List AndRec → ℕ → List Gate
+  | .mbu, rs, j => uncBlocks rs j
+  | .coherent, rs, j => uncBlocksC rs j
+
+theorem uncBlocksM_nil (mode : UncomputeMode) (j : ℕ) : uncBlocksM mode [] j = [] := by
+  cases mode <;> rfl
+
+theorem uncBlocksM_cons (mode : UncomputeMode) (r : AndRec) (rs : List AndRec) (j : ℕ) :
+    uncBlocksM mode (r :: rs) j = uncBlocksM mode rs (j + 1) ++ r.uncM mode j rs.length := by
+  cases mode <;> rfl
+
+/-- The amplitude of one uncompute block on a basis state: `1/√2` for MBU (`unc_kraus`), `1` for
+the coherent block (`unc_kraus_coherent`). -/
+noncomputable def ampM : UncomputeMode → ℂ
+  | .mbu => ((Real.sqrt 2)⁻¹ : ℂ)
+  | .coherent => 1
+
+/-- The classical bits of `K` uncompute blocks: `K` for MBU, none for the coherent blocks. -/
+def nBitsM : UncomputeMode → ℕ → ℕ
+  | .mbu, K => K
+  | .coherent, _ => 0
 
 /-- Report §6.3.2 — the basis state after the compute blocks of `rs` (the first with target
 `anc j`): ancilla `j + k` holds the value of the `k`-th AND. On `(x, 0…0)` from `j = 0` this is
@@ -225,6 +271,36 @@ theorem unc_kraus {r : AndRec} {j : ℕ} (b : ℕ) (hr : r.Ok j) (hok : GatesOk 
     Matrix.mulVec_smul, single_kraus_one nb c _ rfl, Matrix.mulVec_smul,
     perm_kraus nb c hr.isPerm_rev, permRun_set_comm hr.avoid_rev, permRun_reverse hr.2.2.2.1]
 
+/-- PHASE2_SPEC.md §A.0.1 (Stage 15a, proof plan step 2) — the coherent uncompute block of one
+AND, in every branch `c`: on a basis state whose `anc j` holds the AND value, it resets `anc j`
+with amplitude `1` (`tempLogicalAND_adjoint_basis` between `pre` and `preᴿ`). -/
+theorem unc_kraus_coherent {r : AndRec} {j : ℕ} (hr : r.Ok j) (hok : GatesOk n a (r.cmp j))
+    (s : Reg n × Reg a) (hs : (Qubit.anc j).get s = r.val s) :
+    krausOps n a nb (r.uncC j) c *ᵥ basisVec s = basisVec ((Qubit.anc j).set false s) := by
+  obtain ⟨hp, hq, ht, hpt, hqt⟩ := AndRec.ok_of_gatesOk hok
+  have hsem := hr.2.2.2.2.2 s hp hq
+  have hs1 : (Qubit.anc j).get (permRun r.pre s) =
+      (r.p.get (permRun r.pre s) && r.q.get (permRun r.pre s)) := by
+    rw [get_permRun_of_avoid hr.avoid, hs, hsem.1, hsem.2]
+    rfl
+  rw [AndRec.uncC, krausOps_append_mulVec, krausOps_append_mulVec, krausOps_append_mulVec,
+    perm_kraus nb c hr.2.2.2.1, UncomputeTempLogicalANDCoherent,
+    tempLogicalAND_adjoint_basis nb c r.p r.q _ hr.1 hpt hqt hp hq ht _ hs1,
+    single_kraus_one nb c _ rfl, perm_kraus nb c hr.isPerm_rev, permRun_set_comm hr.avoid_rev,
+    permRun_reverse hr.2.2.2.1]
+
+/-- The uncompute block of the mode on a basis state: the ancilla reset with amplitude
+`ampM mode` (`unc_kraus`, `unc_kraus_coherent`). -/
+theorem unc_krausM (mode : UncomputeMode) {r : AndRec} {j : ℕ} (b : ℕ) (hr : r.Ok j)
+    (hok : GatesOk n a (r.cmp j)) (s : Reg n × Reg a) (hs : (Qubit.anc j).get s = r.val s) :
+    krausOps n a nb (r.uncM mode j b) c *ᵥ basisVec s =
+      ampM mode • basisVec ((Qubit.anc j).set false s) := by
+  cases mode with
+  | mbu => exact unc_kraus nb c b hr hok s hs
+  | coherent =>
+    simp only [AndRec.uncM, ampM, one_smul]
+    exact unc_kraus_coherent nb c hr hok s hs
+
 /-! ## Nesting: compute blocks, phase, uncompute blocks in reverse order -/
 
 theorem runC_fst (rs : List AndRec) (j : ℕ) (s : Reg n × Reg a) : (runC rs j s).1 = s.1 := by
@@ -240,15 +316,15 @@ if the middle part `Φ` is diagonal on basis vectors (`φ`), the compute blocks 
 the uncompute blocks in reverse order map `|s⟩` (ancillae `≥ j` at 0) to
 `(1/√2)^{|rs|} · φ(runC rs j s) · |s⟩`. Induction on `rs`: the outermost compute block sets
 `anc j`, the inner part acts as a scalar, the outermost uncompute block resets `anc j`. -/
-theorem chain_kraus (Φ : List Gate) (φ : Reg n × Reg a → ℂ)
+theorem chain_kraus_mode (mode : UncomputeMode) (Φ : List Gate) (φ : Reg n × Reg a → ℂ)
     (hΦ : ∀ s, krausOps n a nb Φ c *ᵥ basisVec s = φ s • basisVec s) :
     ∀ (rs : List AndRec) (j : ℕ) (s : Reg n × Reg a), GatesOk n a (cmpBlocks rs j) →
       RecsOk rs j → (∀ i, j ≤ i → (Qubit.anc i).get s = false) →
-      krausOps n a nb (cmpBlocks rs j ++ Φ ++ uncBlocks rs j) c *ᵥ basisVec s =
-        (((Real.sqrt 2)⁻¹ : ℂ) ^ rs.length * φ (runC rs j s)) • basisVec s
+      krausOps n a nb (cmpBlocks rs j ++ Φ ++ uncBlocksM mode rs j) c *ᵥ basisVec s =
+        (ampM mode ^ rs.length * φ (runC rs j s)) • basisVec s
   | [], j, s, _, _, _ => by
-    simp only [cmpBlocks, uncBlocks, List.nil_append, List.append_nil, hΦ, runC, List.length_nil,
-      pow_zero, one_mul]
+    simp only [cmpBlocks, uncBlocksM_nil, List.nil_append, List.append_nil, hΦ, runC,
+      List.length_nil, pow_zero, one_mul]
   | r :: rs, j, s, hok, hrs, hs => by
     have hokr : GatesOk n a (r.cmp j) := hok.of_subset (by simp [cmpBlocks])
     have hokrs : GatesOk n a (cmpBlocks rs (j + 1)) := hok.of_subset (by simp [cmpBlocks])
@@ -259,20 +335,31 @@ theorem chain_kraus (Φ : List Gate) (φ : Reg n × Reg a → ℂ)
       intro i hi
       rw [hs', Qubit.get_set_ne (by simp; omega)]
       exact hs i (by omega)
-    have ih := chain_kraus Φ φ hΦ rs (j + 1) s' hokrs hrs.2 hs''
-    have hsplit : cmpBlocks (r :: rs) j ++ Φ ++ uncBlocks (r :: rs) j =
-        r.cmp j ++ (cmpBlocks rs (j + 1) ++ Φ ++ uncBlocks rs (j + 1)) ++ r.unc j rs.length := by
-      simp only [cmpBlocks, uncBlocks, List.append_assoc]
+    have ih := chain_kraus_mode mode Φ φ hΦ rs (j + 1) s' hokrs hrs.2 hs''
+    have hsplit : cmpBlocks (r :: rs) j ++ Φ ++ uncBlocksM mode (r :: rs) j =
+        r.cmp j ++ (cmpBlocks rs (j + 1) ++ Φ ++ uncBlocksM mode rs (j + 1)) ++
+          r.uncM mode j rs.length := by
+      simp only [cmpBlocks, uncBlocksM_cons, List.append_assoc]
     have hval : (Qubit.anc j).get s' = r.val s' := by
       rw [hs', Qubit.get_set_self _ ht, AndRec.val, AndRec.val, Aff.eval_set_anc hr.2.1,
         Aff.eval_set_anc hr.2.2.1]
     have hback : (Qubit.anc j).set false s' = s := by
       rw [hs', Qubit.set_set, ← hs j le_rfl, Qubit.set_get]
     rw [hsplit, krausOps_append_mulVec, krausOps_append_mulVec, cmp_kraus nb c hr hokr s
-      (hs j le_rfl), ← hs', ih, Matrix.mulVec_smul, unc_kraus nb c _ hr hokr s' hval, hback,
+      (hs j le_rfl), ← hs', ih, Matrix.mulVec_smul, unc_krausM nb c mode _ hr hokr s' hval, hback,
       smul_smul, runC, List.length_cons, pow_succ]
     congr 1
     ring
+
+/-- Report §6.2.4, §6.3.2 — `chain_kraus_mode` in mode `mbu`: the Stage 6b-3 statement, with
+`(1/√2)^{|rs|}` and `uncBlocks`. -/
+theorem chain_kraus (Φ : List Gate) (φ : Reg n × Reg a → ℂ)
+    (hΦ : ∀ s, krausOps n a nb Φ c *ᵥ basisVec s = φ s • basisVec s) :
+    ∀ (rs : List AndRec) (j : ℕ) (s : Reg n × Reg a), GatesOk n a (cmpBlocks rs j) →
+      RecsOk rs j → (∀ i, j ≤ i → (Qubit.anc i).get s = false) →
+      krausOps n a nb (cmpBlocks rs j ++ Φ ++ uncBlocks rs j) c *ᵥ basisVec s =
+        (((Real.sqrt 2)⁻¹ : ℂ) ^ rs.length * φ (runC rs j s)) • basisVec s :=
+  chain_kraus_mode nb c .mbu Φ φ hΦ
 
 end Blocks
 
@@ -394,13 +481,16 @@ def Good (N : Network) (n k : ℕ) (recs : List AndRec) (i : ℕ) (u : Aff) : Pr
 /-- Report §6.3.2 — the invariant of the synthesizer's fold after the nodes `< k`: the non-folded
 ANDs so far are the records `recs` (the `j`-th has target `anc j` and satisfies `AndRec.Ok`),
 the compute / uncompute blocks are theirs, and every recorded value is `Good`. -/
-def Inv (N : Network) (n k : ℕ) (st : Oracle.St) : Prop :=
+def InvM (mode : UncomputeMode) (N : Network) (n k : ℕ) (st : Oracle.St) : Prop :=
   ∃ recs : List AndRec,
     st.vals.size = k ∧ st.nextAnc = recs.length ∧
     st.compute.toList = recs.mapIdx (fun j r => r.cmp j) ∧
-    st.uncompute.toList = recs.mapIdx (fun j r => r.unc j 0) ∧
+    st.uncompute.toList = recs.mapIdx (fun j r => r.uncM mode j 0) ∧
     RecsOk recs 0 ∧
     ∀ i u, st.vals.getD i none = some u → Good N n k recs i u
+
+/-- The invariant in mode `mbu` (the Stage 6b-3 / 9a statement): `InvM .mbu`. -/
+def Inv (N : Network) (n k : ℕ) (st : Oracle.St) : Prop := InvM .mbu N n k st
 
 theorem runC_append (rs : List AndRec) (r : AndRec) (j : ℕ) (s : Reg n × Reg a) :
     runC (rs ++ [r]) j s =
@@ -444,9 +534,9 @@ theorem vals_push {N : Network} {n k : ℕ} {recs : List AndRec} {vals : Array (
 
 /-- Report §6.1.2, §6.3.2 (Stage 9a item 3) — one step of the synthesizer preserves the
 invariant, for every node kind (XOR included; node `k` in range, the step succeeded). -/
-theorem step_ok_inv {N : Network} (mark : Array Bool) {n k : ℕ}
-    (hk : k < N.nodes.size) {st st' : Oracle.St} (h : Oracle.step N mark st k = .ok st')
-    (hinv : Inv N n k st) : Inv N n (k + 1) st' := by
+theorem step_ok_invM (mode : UncomputeMode) {N : Network} (mark : Array Bool) {n k : ℕ}
+    (hk : k < N.nodes.size) {st st' : Oracle.St} (h : Oracle.step N mark st k mode = .ok st')
+    (hinv : InvM mode N n k st) : InvM mode N n (k + 1) st' := by
   obtain ⟨recs, hsize, hnext, hcmp, hunc, hrecs, hvals⟩ := hinv
   have hval : ∀ x : Reg n, (valuesUpTo N (inputOf x) (k + 1)).getD k false =
       nodeVal (inputOf x) (valuesUpTo N (inputOf x) k) N.nodes[k] := fun x => by
@@ -454,7 +544,7 @@ theorem step_ok_inv {N : Network} (mark : Array Bool) {n k : ℕ}
     simp
   -- a value pushed with unchanged records
   have keep : ∀ e : Option Aff, (∀ u, e = some u → Good N n (k + 1) recs k u) →
-      Inv N n (k + 1) { st with vals := st.vals.push e } := fun e he =>
+      InvM mode N n (k + 1) { st with vals := st.vals.push e } := fun e he =>
     ⟨recs, by simp [hsize], hnext, hcmp, hunc, hrecs, vals_push hk hsize hvals e he⟩
   unfold Oracle.step at h
   split at h
@@ -572,7 +662,7 @@ theorem step_ok_inv {N : Network} (mark : Array Bool) {n k : ℕ}
         rfl
       · simp only [Array.toList_push, hunc, List.mapIdx_append, List.mapIdx_cons, List.mapIdx_nil,
           hnext, Nat.zero_add]
-        rfl
+        cases mode <;> rfl
       · refine vals_push hk hsize (fun i w hw => good_lift_recs _ (hvals i w hw)) _ (fun w hw => ?_)
         cases hw
         refine ⟨by simp, fun q' hq' j' hj' => ?_, fun a ha x => ?_⟩
@@ -585,12 +675,19 @@ theorem step_ok_inv {N : Network} (mark : Array Bool) {n k : ℕ}
             Qubit.get_set_self _ (by simp [Qubit.inRange, ha']), hval x, nodeVal, AndRec.val,
             ← gu.2.2 a ha'.le x, ← gv.2.2 a ha'.le x]
 
+/-- Report §6.1.2, §6.3.2 — `step_ok_invM` in mode `mbu` (the Stage 9a statement). -/
+theorem step_ok_inv {N : Network} (mark : Array Bool) {n k : ℕ}
+    (hk : k < N.nodes.size) {st st' : Oracle.St} (h : Oracle.step N mark st k = .ok st')
+    (hinv : Inv N n k st) : Inv N n (k + 1) st' :=
+  step_ok_invM .mbu mark hk h hinv
+
 /-- Report §6.3.2 — the invariant holds after the synthesizer's fold over the first `m` nodes
-(`List.foldlM` induction; every `step` returned `.ok`). -/
-theorem fold_inv {N : Network} (mark : Array Bool) (n : ℕ) :
+(`List.foldlM` induction; every `step` returned `.ok`), in either mode. -/
+theorem fold_invM (mode : UncomputeMode) {N : Network} (mark : Array Bool) (n : ℕ) :
     ∀ m, m ≤ N.nodes.size → ∀ st,
-      (List.range m).foldlM (Oracle.step N mark) ({ vals := #[] } : Oracle.St) = .ok st →
-        Inv N n m st
+      (List.range m).foldlM (fun st k => Oracle.step N mark st k mode)
+        ({ vals := #[] } : Oracle.St) = .ok st →
+        InvM mode N n m st
   | 0, _, st, h => by
     rw [List.range_zero, List.foldlM_nil, except_pure_eq_ok] at h
     subst h
@@ -599,7 +696,14 @@ theorem fold_inv {N : Network} (mark : Array Bool) (n : ℕ) :
     rw [List.range_succ, List.foldlM_append, except_bind_eq_ok] at h
     obtain ⟨st₁, h₁, h⟩ := h
     simp only [List.foldlM_cons, List.foldlM_nil, bind_pure] at h
-    exact step_ok_inv mark (by omega) h (fold_inv mark n m (by omega) st₁ h₁)
+    exact step_ok_invM mode mark (by omega) h (fold_invM mode mark n m (by omega) st₁ h₁)
+
+/-- Report §6.3.2 — `fold_invM` in mode `mbu` (the Stage 6b-3 statement). -/
+theorem fold_inv {N : Network} (mark : Array Bool) (n : ℕ) :
+    ∀ m, m ≤ N.nodes.size → ∀ st,
+      (List.range m).foldlM (Oracle.step N mark) ({ vals := #[] } : Oracle.St) = .ok st →
+        Inv N n m st :=
+  fold_invM .mbu mark n
 
 /-! ## Item 6 — ranges, bits, and the gate list of the synthesized oracle -/
 
@@ -720,6 +824,44 @@ theorem unc_map_shift {r : AndRec} (hp : ∀ g ∈ r.pre, g.isPerm = true) (j b 
   have h2 := map_shift_perm (fun g hg => hp g (List.mem_reverse.mp hg)) k
   simp [AndRec.unc, UncomputeTempLogicalAND, Gate.shiftBits, map_shift_perm hp, h2]
 
+/-- PHASE2_SPEC.md §A.0.1 — the coherent block writes no classical bit. -/
+theorem written_uncC {r : AndRec} (hp : ∀ g ∈ r.pre, g.isPerm = true) (j : ℕ) :
+    Circuit.written (r.uncC j) = [] := by
+  have h2 : r.pre.reverse.flatMap Gate.writes = [] :=
+    written_perm (fun g hg => hp g (List.mem_reverse.mp hg))
+  simp [Circuit.written, AndRec.uncC, UncomputeTempLogicalANDCoherent, adjointGates,
+    TempLogicalAND, Gate.adjoint, Gate.writes, written_perm hp, h2]
+
+theorem written_uncBlocksC {rs : List AndRec} (hp : ∀ r ∈ rs, ∀ g ∈ r.pre, g.isPerm = true)
+    (j : ℕ) : Circuit.written (uncBlocksC rs j) = [] := by
+  induction rs generalizing j with
+  | nil => rfl
+  | cons r rs ih =>
+    rw [uncBlocksC, Circuit.written, List.flatMap_append, ← Circuit.written, ← Circuit.written,
+      written_uncC (hp r (by simp)), ih (fun r' hr' => hp r' (by simp [hr']))]
+    rfl
+
+/-- The classical bits of the uncompute blocks of the mode: `nBitsM mode |rs|`. -/
+theorem written_uncBlocksM_length (mode : UncomputeMode) {rs : List AndRec}
+    (hp : ∀ r ∈ rs, ∀ g ∈ r.pre, g.isPerm = true) (j : ℕ) :
+    (Circuit.written (uncBlocksM mode rs j)).length = nBitsM mode rs.length := by
+  cases mode with
+  | mbu => exact written_uncBlocks_length hp j
+  | coherent => simp only [uncBlocksM, nBitsM, written_uncBlocksC hp j, List.length_nil]
+
+/-- The coherent block has no bit to shift. -/
+theorem uncC_map_shift {r : AndRec} (hp : ∀ g ∈ r.pre, g.isPerm = true) (j k : ℕ) :
+    (r.uncC j).map (Gate.shiftBits k) = r.uncC j := by
+  have h2 := map_shift_perm (fun g hg => hp g (List.mem_reverse.mp hg)) k
+  simp [AndRec.uncC, UncomputeTempLogicalANDCoherent, adjointGates, TempLogicalAND, Gate.adjoint,
+    Gate.shiftBits, map_shift_perm hp, h2]
+
+theorem unc_map_shiftM (mode : UncomputeMode) {r : AndRec} (hp : ∀ g ∈ r.pre, g.isPerm = true)
+    (j b k : ℕ) : (r.uncM mode j b).map (Gate.shiftBits k) = r.uncM mode j (b + k) := by
+  cases mode with
+  | mbu => exact unc_map_shift hp j b k
+  | coherent => simp only [AndRec.uncM]; exact uncC_map_shift hp j k
+
 /-- The synthesizer's compute list (`st.compute.toList.flatten`) is `cmpBlocks`. -/
 theorem flatten_mapIdx_cmp (rs : List AndRec) (j : ℕ) :
     (rs.mapIdx (fun i r => r.cmp (j + i))).flatten = cmpBlocks rs j := by
@@ -747,12 +889,29 @@ theorem flatten_mapIdx_unc {rs : List AndRec} (hp : ∀ r ∈ rs, ∀ g ∈ r.pr
       ih (fun r' hr' => hp r' (by simp [hr'])), uncBlocks, Nat.add_zero]
     simp [unc_map_shift (hp r (by simp))]
 
-/-- Report §6.1.4 — what `synthesizeOracle N = .ok C` means: one output `out`, the fold over
-the nodes succeeded with final state `st`, `out` has the value `pp`, and `C` is the compute
+/-- The synthesizer's uncompute list in mode `mode` is `uncBlocksM mode` (`flatten_mapIdx_unc`
+for both modes; in mode `coherent` the shift is the identity). -/
+theorem flatten_mapIdx_uncM (mode : UncomputeMode) {rs : List AndRec}
+    (hp : ∀ r ∈ rs, ∀ g ∈ r.pre, g.isPerm = true) (j : ℕ) :
+    ((rs.mapIdx (fun i r => r.uncM mode (j + i) 0)).reverse.mapIdx
+      (fun i blk => blk.map (Gate.shiftBits i))).flatten = uncBlocksM mode rs j := by
+  induction rs generalizing j with
+  | nil => cases mode <;> rfl
+  | cons r rs ih =>
+    have hf : (fun i r => AndRec.uncM r mode (j + (i + 1)) 0) =
+        (fun i r => r.uncM mode (j + 1 + i) 0) := by
+      funext i r'; congr 1; omega
+    rw [List.mapIdx_cons, hf, List.reverse_cons, List.mapIdx_append, List.flatten_append,
+      ih (fun r' hr' => hp r' (by simp [hr'])), uncBlocksM_cons]
+    simp [unc_map_shiftM mode (hp r (by simp))]
+
+/-- Report §6.1.4 — what `synthesizeOracle N mode = .ok C` means: one output `out`, the fold
+over the nodes succeeded with final state `st`, `out` has the value `pp`, and `C` is the compute
 blocks, the phase flip of `pp`, and the shifted uncompute blocks in reverse order. -/
-theorem synthesizeOracle_ok {N : Network} {C : Circuit} (hC : synthesizeOracle N = .ok C) :
+theorem synthesizeOracle_okM {mode : UncomputeMode} {N : Network} {C : Circuit}
+    (hC : synthesizeOracle N mode = .ok C) :
     ∃ out st pp, N.outputs = [out] ∧
-      (List.range N.nodes.size).foldlM (Oracle.step N (Oracle.cone N out))
+      (List.range N.nodes.size).foldlM (fun st k => Oracle.step N (Oracle.cone N out) st k mode)
         ({ vals := #[] } : Oracle.St) = .ok st ∧
       st.vals.getD out none = some pp ∧
       C = { nData := N.nInputs,
@@ -775,6 +934,18 @@ theorem synthesizeOracle_ok {N : Network} {C : Circuit} (hC : synthesizeOracle N
   · rw [except_bind_eq_ok] at hC
     obtain ⟨_, hf, _⟩ := hC
     exact absurd hf (fail_ne_ok _ _)
+
+/-- Report §6.1.4 — `synthesizeOracle_okM` in mode `mbu` (the Stage 6b-3 statement). -/
+theorem synthesizeOracle_ok {N : Network} {C : Circuit} (hC : synthesizeOracle N = .ok C) :
+    ∃ out st pp, N.outputs = [out] ∧
+      (List.range N.nodes.size).foldlM (Oracle.step N (Oracle.cone N out))
+        ({ vals := #[] } : Oracle.St) = .ok st ∧
+      st.vals.getD out none = some pp ∧
+      C = { nData := N.nInputs,
+            gates := st.compute.toList.flatten ++ Oracle.phaseFlip pp ++
+              (st.uncompute.toList.reverse.mapIdx
+                fun i blk => blk.map (Gate.shiftBits i)).flatten } :=
+  synthesizeOracle_okM hC
 
 /-! ## Item 4 — the phase flip -/
 
@@ -851,16 +1022,16 @@ CNOTs, `prepare_ok`): the synthesizer's fold keeps `Inv`
 in every branch `c` it maps `|x, 0…0⟩` to `(1/√2)^K · ε · (−1)^{P(x)} |x, 0…0⟩` (`chain_kraus`,
 `phaseFlip_kraus`; `ε = ±1` is the global sign of a constant `P`, whose phase flip has no
 gate), there are `K` classical bits, and `ancRestore_of_kraus` concludes. -/
-theorem lemma_6_3_2_xor_of_le (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C)
-    (hWF : C.WF) (a : ℕ) (ha : C.nAnc ≤ a) :
+theorem lemma_6_3_2_mode_of_le (mode : UncomputeMode) (N : Network) (C : Circuit)
+    (hC : synthesizeOracle N mode = .ok C) (hWF : C.WF) (a : ℕ) (ha : C.nAnc ≤ a) :
     AncRestore C.nData a C (phaseOracle (N.pred C.nData)) := by
-  obtain ⟨out, st, pp, hout, hst, hpp, hCeq⟩ := synthesizeOracle_ok hC
+  obtain ⟨out, st, pp, hout, hst, hpp, hCeq⟩ := synthesizeOracle_okM hC
   obtain ⟨recs, -, -, hcmp, hunc, hrecs, hvals⟩ :=
-    fold_inv (Oracle.cone N out) C.nData N.nodes.size le_rfl st hst
+    fold_invM mode (Oracle.cone N out) C.nData N.nodes.size le_rfl st hst
   have hperm := hrecs.isPerm
-  have hgates : C.gates = cmpBlocks recs 0 ++ Oracle.phaseFlip pp ++ uncBlocks recs 0 := by
+  have hgates : C.gates = cmpBlocks recs 0 ++ Oracle.phaseFlip pp ++ uncBlocksM mode recs 0 := by
     have h1 := flatten_mapIdx_cmp recs 0
-    have h2 := flatten_mapIdx_unc hperm 0
+    have h2 := flatten_mapIdx_uncM mode hperm 0
     simp only [Nat.zero_add] at h1 h2
     rw [hCeq, hcmp, hunc, h1, h2]
   have hok := hWF.gatesOk.mono ha
@@ -873,10 +1044,10 @@ theorem lemma_6_3_2_xor_of_le (N : Network) (C : Circuit) (hC : synthesizeOracle
     rcases cmpBlocks_length_le hokc with h | h
     · simp [h]
     · omega
-  have hnb : C.nBits = recs.length := by
+  have hnb : C.nBits = nBitsM mode recs.length := by
     rw [Circuit.nBits, hgates, Circuit.written, List.flatMap_append, List.flatMap_append,
       ← Circuit.written, ← Circuit.written, ← Circuit.written, written_cmpBlocks hperm,
-      written_phaseFlip, List.nil_append, List.nil_append, written_uncBlocks_length hperm]
+      written_phaseFlip, List.nil_append, List.nil_append, written_uncBlocksM_length mode hperm]
   have gp := hvals out pp hpp
   -- the predicate is the value of the output on the atom state
   have hpred : ∀ x, N.pred C.nData x =
@@ -897,24 +1068,51 @@ theorem lemma_6_3_2_xor_of_le (N : Network) (C : Circuit) (hC : synthesizeOracle
       simp only [hl, ↓reduceIte, hε]
       cases pp.c <;> norm_num
     · simp [hl, hε]
-  refine ancRestore_of_kraus hWF _ (fun _ => ((Real.sqrt 2)⁻¹ : ℂ) ^ recs.length * ε) ?_
-    (fun c => ?_)
+  refine ancRestore_of_kraus hWF _ (fun _ => ampM mode ^ recs.length * ε) ?_ (fun c => ?_)
   · have hεn : ‖ε‖ = 1 := by
       rw [hε]
       split_ifs <;> simp
-    simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fun, Fintype.card_bool,
-      Fintype.card_fin, hnb, norm_mul, hεn, mul_one, norm_pow, norm_inv, Complex.norm_real,
-      Real.norm_eq_abs, abs_of_nonneg (Real.sqrt_nonneg 2), nsmul_eq_mul]
-    rw [← pow_mul, mul_comm recs.length 2, pow_mul, inv_pow,
-      Real.sq_sqrt (by norm_num : (0 : ℝ) ≤ 2)]
-    push_cast
-    rw [← mul_pow]
-    norm_num
+    cases mode with
+    | mbu =>
+      simp only [ampM, nBitsM, Finset.sum_const, Finset.card_univ, Fintype.card_fun,
+        Fintype.card_bool, Fintype.card_fin, hnb, norm_mul, hεn, mul_one, norm_pow, norm_inv,
+        Complex.norm_real, Real.norm_eq_abs, abs_of_nonneg (Real.sqrt_nonneg 2), nsmul_eq_mul]
+      rw [← pow_mul, mul_comm recs.length 2, pow_mul, inv_pow,
+        Real.sq_sqrt (by norm_num : (0 : ℝ) ≤ 2)]
+      push_cast
+      rw [← mul_pow]
+      norm_num
+    | coherent =>
+      -- no classical bit: one branch, amplitude `ε`
+      simp [ampM, nBitsM, Finset.sum_const, hnb, hεn]
   · apply kraus_mul_ancProj
     intro x
-    rw [hgates, chain_kraus C.nBits c (Oracle.phaseFlip pp) (phaseVal pp)
+    rw [hgates, chain_kraus_mode C.nBits c mode (Oracle.phaseFlip pp) (phaseVal pp)
       (fun s => phaseFlip_kraus C.nBits c pp gp.1 hokp s) recs 0 _ hokc hrecs
       (fun i _ => by simp [Qubit.get]), hphase, mul_assoc]
+
+/-- Report §6.3.2, Lemma 6.3.2 in mode `mbu`, on any ancilla register `a ≥ C.nAnc`: the Stage 9a
+statement, `lemma_6_3_2_mode_of_le .mbu`. -/
+theorem lemma_6_3_2_xor_of_le (N : Network) (C : Circuit) (hC : synthesizeOracle N = .ok C)
+    (hWF : C.WF) (a : ℕ) (ha : C.nAnc ≤ a) :
+    AncRestore C.nData a C (phaseOracle (N.pred C.nData)) :=
+  lemma_6_3_2_mode_of_le .mbu N C hC hWF a ha
+
+/-- PHASE2_SPEC.md §A.0.1 (Stage 15a), Lemma 6.3.2 in mode `coherent`, on any ancilla register
+`a ≥ C.nAnc`: the oracle synthesized with the adjoint uncompute restores its ancillae and
+applies the phase oracle of `N`'s predicate; it has no classical bit, so the Kraus sum has one
+term of modulus 1. -/
+theorem lemma_6_3_2_coherent_of_le (N : Network) (C : Circuit)
+    (hC : synthesizeOracle N .coherent = .ok C) (hWF : C.WF) (a : ℕ) (ha : C.nAnc ≤ a) :
+    AncRestore C.nData a C (phaseOracle (N.pred C.nData)) :=
+  lemma_6_3_2_mode_of_le .coherent N C hC hWF a ha
+
+/-- PHASE2_SPEC.md §A.0.1 (Stage 15a), Lemma 6.3.2 in mode `coherent` at the circuit's own
+ancilla register. -/
+theorem lemma_6_3_2_coherent (N : Network) (C : Circuit)
+    (hC : synthesizeOracle N .coherent = .ok C) (hWF : C.WF) :
+    AncRestore C.nData C.nAnc C (phaseOracle (N.pred C.nData)) :=
+  lemma_6_3_2_coherent_of_le N C hC hWF C.nAnc le_rfl
 
 /-- Report §6.3.2, Lemma 6.3.2 for networks with XOR nodes (Stage 9a; SORRIES.md row
 `lemma_6_3_2_xor`): `lemma_6_3_2` without `N.xorFree`, at the circuit's own ancilla register. -/
@@ -1067,6 +1265,31 @@ theorem and_blocks_qubitsOk {nI j : ℕ} {pre : List Gate} {p q : Qubit}
     rcases hg with ((hg | hg) | rfl) | hg
     exacts [hpre g hg, hunc g hg, rfl, hpre g hg]
 
+/-- The adjoint of a gate acts on the same qubits, so it passes `qubitsOk` iff the gate does. -/
+theorem Gate.qubitsOk_adjoint (nI : ℕ) (g : Gate) : g.adjoint.qubitsOk nI = g.qubitsOk nI := by
+  cases g <;> rfl
+
+/-- PHASE2_SPEC.md §A.0.1 (Stage 15a) — the coherent uncompute block of one AND passes `qubitsOk`
+under the hypotheses of `and_blocks_qubitsOk` (its gates are the adjoints of the compute
+listing's). -/
+theorem and_blocks_qubitsOk_coherent {nI j : ℕ} {pre : List Gate} {p q : Qubit}
+    (hpre : ∀ g ∈ pre, g.qubitsOk nI = true)
+    (hp : ∀ d, p = .data d → d < nI) (hq : ∀ d, q = .data d → d < nI)
+    (hpq : p ≠ q) (hpt : p ≠ .anc j) (hqt : q ≠ .anc j) :
+    ∀ g ∈ pre ++ UncomputeTempLogicalANDCoherent p q (.anc j) ++ [.free (.anc j)] ++ pre.reverse,
+      g.qubitsOk nI = true := by
+  have hand := (and_blocks_qubitsOk hpre hp hq hpq hpt hqt).1
+  have hadj : ∀ g ∈ UncomputeTempLogicalANDCoherent p q (.anc j), g.qubitsOk nI = true := by
+    intro g hg
+    rw [UncomputeTempLogicalANDCoherent, adjointGates, List.mem_reverse, List.mem_map] at hg
+    obtain ⟨g', hg', rfl⟩ := hg
+    rw [Gate.qubitsOk_adjoint]
+    exact hand g' (by simp [hg'])
+  intro g hg
+  simp only [List.mem_append, List.mem_reverse, List.mem_singleton] at hg
+  rcases hg with ((hg | hg) | rfl) | hg
+  exacts [hpre g hg, hadj g hg, rfl, hpre g hg]
+
 /-- Report §6.1.2 — in a well-formed network every `input i` node has `i < nInputs`. -/
 theorem Network.WF.input_lt {N : Network} (hN : N.WF) {k i : ℕ}
     (h : N.nodes[k]? = some (.input i)) : i < N.nInputs := by
@@ -1082,9 +1305,10 @@ theorem Network.WF.input_lt {N : Network} (hN : N.WF) {k i : ℕ}
 
 /-- Report §6.1.2, §9.1.1 (Stage 11a) — one step of the synthesizer preserves `InvQ`, given `Inv`
 before the step and `N.WF` (for the `input` nodes). -/
-theorem step_ok_invQ {N : Network} (hN : N.WF) (mark : Array Bool) {n k : ℕ}
-    (hk : k < N.nodes.size) {st st' : Oracle.St} (h : Oracle.step N mark st k = .ok st')
-    (hinv : Inv N n k st) (hq : InvQ N.nInputs st) : InvQ N.nInputs st' := by
+theorem step_ok_invQM (mode : UncomputeMode) {N : Network} (hN : N.WF) (mark : Array Bool)
+    {n k : ℕ} (hk : k < N.nodes.size) {st st' : Oracle.St}
+    (h : Oracle.step N mark st k mode = .ok st') (hinv : InvM mode N n k st)
+    (hq : InvQ N.nInputs st) : InvQ N.nInputs st' := by
   obtain ⟨recs, -, hnext, -, -, -, hvals⟩ := hinv
   obtain ⟨hd, hcq, huq⟩ := hq
   have keep : ∀ e : Option Aff, (∀ u, e = some u → DataBelow N.nInputs u) →
@@ -1193,6 +1417,15 @@ theorem step_ok_invQ {N : Network} (hN : N.WF) (mark : Array Bool) {n k : ℕ}
         Gate.qubitsOk_of_isPerm (hperm g hg) (fun q hq => atomD q (hqub g hg q hq)) (hcn g hg)
       obtain ⟨hc, hu⟩ := and_blocks_qubitsOk hpre (atomD pu hpu) (atomD pv hpv) hpq
         (atomA pu hpu) (atomA pv hpv)
+      have huC := and_blocks_qubitsOk_coherent hpre (atomD pu hpu) (atomD pv hpv) hpq
+        (atomA pu hpu) (atomA pv hpv)
+      have huM : ∀ g ∈ pre ++ (match mode with
+          | .mbu => UncomputeTempLogicalAND pu pv (.anc st.nextAnc) 0
+          | .coherent => UncomputeTempLogicalANDCoherent pu pv (.anc st.nextAnc)) ++
+          [.free (.anc st.nextAnc)] ++ pre.reverse, g.qubitsOk N.nInputs = true := by
+        cases mode
+        · exact hu
+        · exact huC
       refine ⟨vals_push_data hd _ (fun w hw q hq d hdq => ?_), ?_, ?_⟩
       · cases hw
         simp only [List.mem_singleton] at hq
@@ -1205,12 +1438,20 @@ theorem step_ok_invQ {N : Network} (hN : N.WF) (mark : Array Bool) {n k : ℕ}
       · intro blk hblk
         rw [Array.toList_push, List.mem_append, List.mem_singleton] at hblk
         rcases hblk with hblk | rfl
-        exacts [huq blk hblk, hu]
+        exacts [huq blk hblk, huM]
 
-/-- Report §9.1.1 (Stage 11a) — `InvQ` after the synthesizer's fold over the first `m` nodes. -/
-theorem fold_invQ {N : Network} (hN : N.WF) (mark : Array Bool) :
+/-- Report §9.1.1 (Stage 11a) — `step_ok_invQM` in mode `mbu`. -/
+theorem step_ok_invQ {N : Network} (hN : N.WF) (mark : Array Bool) {n k : ℕ}
+    (hk : k < N.nodes.size) {st st' : Oracle.St} (h : Oracle.step N mark st k = .ok st')
+    (hinv : Inv N n k st) (hq : InvQ N.nInputs st) : InvQ N.nInputs st' :=
+  step_ok_invQM .mbu hN mark hk h hinv hq
+
+/-- Report §9.1.1 (Stage 11a) — `InvQ` after the synthesizer's fold over the first `m` nodes, in
+either mode. -/
+theorem fold_invQM (mode : UncomputeMode) {N : Network} (hN : N.WF) (mark : Array Bool) :
     ∀ m, m ≤ N.nodes.size → ∀ st,
-      (List.range m).foldlM (Oracle.step N mark) ({ vals := #[] } : Oracle.St) = .ok st →
+      (List.range m).foldlM (fun st k => Oracle.step N mark st k mode)
+        ({ vals := #[] } : Oracle.St) = .ok st →
         InvQ N.nInputs st
   | 0, _, st, h => by
     rw [List.range_zero, List.foldlM_nil, except_pure_eq_ok] at h
@@ -1220,8 +1461,15 @@ theorem fold_invQ {N : Network} (hN : N.WF) (mark : Array Bool) :
     rw [List.range_succ, List.foldlM_append, except_bind_eq_ok] at h
     obtain ⟨st₁, h₁, h⟩ := h
     simp only [List.foldlM_cons, List.foldlM_nil, bind_pure] at h
-    exact step_ok_invQ hN mark (by omega) h (fold_inv mark 0 m (by omega) st₁ h₁)
-      (fold_invQ hN mark m (by omega) st₁ h₁)
+    exact step_ok_invQM mode hN mark (by omega) h (fold_invM mode mark 0 m (by omega) st₁ h₁)
+      (fold_invQM mode hN mark m (by omega) st₁ h₁)
+
+/-- Report §9.1.1 (Stage 11a) — `fold_invQM` in mode `mbu`. -/
+theorem fold_invQ {N : Network} (hN : N.WF) (mark : Array Bool) :
+    ∀ m, m ≤ N.nodes.size → ∀ st,
+      (List.range m).foldlM (Oracle.step N mark) ({ vals := #[] } : Oracle.St) = .ok st →
+        InvQ N.nInputs st :=
+  fold_invQM .mbu hN mark
 
 /-- Report §6.1.1, §9.1.1 — the phase flip passes `qubitsOk` when the data atoms of `P` are in
 range. -/
@@ -1318,6 +1566,25 @@ theorem phaseFlip_quiet (pp : Aff) : ∀ g ∈ Oracle.phaseFlip pp, g.quiet = tr
         rfl
     · exact hP g (List.mem_reverse.mp hg)
 
+/-- PHASE2_SPEC.md §A.0.1 — the coherent uncompute blocks are quiet: no measurement, no
+classically controlled gate. -/
+theorem uncBlocksC_quiet {rs : List AndRec} (hp : ∀ r ∈ rs, ∀ g ∈ r.pre, g.isPerm = true)
+    (j : ℕ) : ∀ g ∈ uncBlocksC rs j, g.quiet = true := by
+  induction rs generalizing j with
+  | nil => simp [uncBlocksC]
+  | cons r rs ih =>
+    intro g hg
+    rw [uncBlocksC, List.mem_append] at hg
+    rcases hg with hg | hg
+    · exact ih (fun r' hr' => hp r' (by simp [hr'])) (j + 1) g hg
+    · have ht : ∀ g ∈ UncomputeTempLogicalANDCoherent r.p r.q (.anc j), g.quiet = true := by
+        simp [UncomputeTempLogicalANDCoherent, adjointGates, TempLogicalAND, Gate.adjoint,
+          Gate.quiet]
+      simp only [AndRec.uncC, List.mem_append, List.mem_reverse, List.mem_singleton] at hg
+      rcases hg with ((hg | hg) | rfl) | hg
+      exacts [Gate.quiet_of_isPerm (hp r (by simp) g hg), ht g hg, rfl,
+        Gate.quiet_of_isPerm (hp r (by simp) g hg)]
+
 /-- Report §6.2.2, §9.1.1 — the uncompute blocks of `rs`, run in reverse order, measure into the
 bits `0, 1, …, |rs| − 1` in that order (each fresh and below `K`), and each `ifBit` reads the bit
 just measured. -/
@@ -1350,22 +1617,22 @@ qubits below `nInputs` (the `input` atoms, `N.WF`), distinct CNOT / CZ operands 
 `gather` CNOTs, the AND records `p ≠ q`, ancilla atoms below the target), and the classical-bit
 discipline (the uncompute blocks measure into `0, 1, …` in execution order). The hypothesis
 `N.WF` is needed: `⟨0, #[.input 5], [0]⟩` synthesizes to `Z x[5]` (Stage 9a). -/
-theorem synthesizeOracle_WF {N : Network} {C : Circuit} (hN : N.WF)
-    (hC : synthesizeOracle N = .ok C) : C.WF := by
-  obtain ⟨out, st, pp, hout, hst, hpp, hCeq⟩ := synthesizeOracle_ok hC
+theorem synthesizeOracle_WF' (mode : UncomputeMode) {N : Network} {C : Circuit} (hN : N.WF)
+    (hC : synthesizeOracle N mode = .ok C) : C.WF := by
+  obtain ⟨out, st, pp, hout, hst, hpp, hCeq⟩ := synthesizeOracle_okM hC
   obtain ⟨recs, -, -, hcmp, hunc, hrecs, -⟩ :=
-    fold_inv (Oracle.cone N out) 0 N.nodes.size le_rfl st hst
-  obtain ⟨hd, hcq, huq⟩ := fold_invQ hN (Oracle.cone N out) N.nodes.size le_rfl st hst
+    fold_invM mode (Oracle.cone N out) 0 N.nodes.size le_rfl st hst
+  obtain ⟨hd, hcq, huq⟩ := fold_invQM mode hN (Oracle.cone N out) N.nodes.size le_rfl st hst
   have hperm := hrecs.isPerm
-  have hgates : C.gates = cmpBlocks recs 0 ++ Oracle.phaseFlip pp ++ uncBlocks recs 0 := by
+  have hgates : C.gates = cmpBlocks recs 0 ++ Oracle.phaseFlip pp ++ uncBlocksM mode recs 0 := by
     have h1 := flatten_mapIdx_cmp recs 0
-    have h2 := flatten_mapIdx_unc hperm 0
+    have h2 := flatten_mapIdx_uncM mode hperm 0
     simp only [Nat.zero_add] at h1 h2
     rw [hCeq, hcmp, hunc, h1, h2]
-  have hnb : C.nBits = recs.length := by
+  have hnb : C.nBits = nBitsM mode recs.length := by
     rw [Circuit.nBits, hgates, Circuit.written, List.flatMap_append, List.flatMap_append,
       ← Circuit.written, ← Circuit.written, ← Circuit.written, written_cmpBlocks hperm,
-      written_phaseFlip, List.nil_append, List.nil_append, written_uncBlocks_length hperm]
+      written_phaseFlip, List.nil_append, List.nil_append, written_uncBlocksM_length mode hperm]
   unfold Circuit.WF Circuit.wf
   rw [Bool.and_eq_true]
   refine ⟨?_, ?_⟩
@@ -1389,7 +1656,16 @@ theorem synthesizeOracle_WF {N : Network} {C : Circuit} (hN : N.WF)
     unfold Circuit.bitsOk
     rw [hnb, hgates, bitsOkFrom_append_list, bitsOkFrom_append_list,
       bitsOkFrom_quiet (cmpBlocks_quiet hperm 0), bitsOkFrom_quiet (phaseFlip_quiet pp), hw]
-    simpa using (bitsOk_uncBlocks hperm 0 recs.length le_rfl).1
+    cases mode with
+    | mbu => simpa [nBitsM, uncBlocksM] using (bitsOk_uncBlocks hperm 0 recs.length le_rfl).1
+    | coherent =>
+      simpa [nBitsM, uncBlocksM] using bitsOkFrom_quiet (m := 0) (uncBlocksC_quiet hperm 0) []
+
+/-- Report §6.3.2, §9.1.1 (Stage 11a) — `synthesizeOracle_WF'` in mode `mbu`: every oracle
+synthesized from a well-formed network is well formed. -/
+theorem synthesizeOracle_WF {N : Network} {C : Circuit} (hN : N.WF)
+    (hC : synthesizeOracle N = .ok C) : C.WF :=
+  synthesizeOracle_WF' .mbu hN hC
 
 /-! ## Stage 13c — `synthesizeOracle_succeeds` -/
 
@@ -1697,9 +1973,9 @@ theorem succInv_push {mark : Array Bool} {k : ℕ} {vals : Array (Option Aff)}
 
 /-- Report §6.1.2 (Stage 13c items 2, 3, 5, 6) — one step of the synthesizer succeeds on a node
 of a well-formed network whose marks are closed, and keeps `SuccInv`. -/
-theorem step_succeeds {N : Network} (hN : N.WF) {out : ℕ} {mark : Array Bool}
-    (hcl : ConeInv N out 0 mark) {k : ℕ} (hk : k < N.nodes.size) {st : Oracle.St}
-    (h : SuccInv mark k st) : ∃ st', Oracle.step N mark st k = .ok st' ∧
+theorem step_succeedsM (mode : UncomputeMode) {N : Network} (hN : N.WF) {out : ℕ}
+    {mark : Array Bool} (hcl : ConeInv N out 0 mark) {k : ℕ} (hk : k < N.nodes.size)
+    {st : Oracle.St} (h : SuccInv mark k st) : ∃ st', Oracle.step N mark st k mode = .ok st' ∧
       SuccInv mark (k + 1) st' := by
   have hst : SuccInv mark k { vals := st.vals } := h
   obtain ⟨hsize, hdef, hval⟩ := h
@@ -1754,18 +2030,34 @@ theorem step_succeeds {N : Network} (hN : N.WF) {out : ℕ} {mark : Array Bool}
       exact ⟨_, rfl, succInv_push hst _ (fun _ => ⟨_, rfl⟩)
         (fun w hw => by cases hw; simp [KeySorted]) _ rfl⟩
 
+/-- Report §6.1.2 (Stage 13c) — `step_succeedsM` in mode `mbu`. -/
+theorem step_succeeds {N : Network} (hN : N.WF) {out : ℕ} {mark : Array Bool}
+    (hcl : ConeInv N out 0 mark) {k : ℕ} (hk : k < N.nodes.size) {st : Oracle.St}
+    (h : SuccInv mark k st) : ∃ st', Oracle.step N mark st k = .ok st' ∧
+      SuccInv mark (k + 1) st' :=
+  step_succeedsM .mbu hN hcl hk h
+
+theorem fold_succeedsM (mode : UncomputeMode) {N : Network} (hN : N.WF) {out : ℕ}
+    {mark : Array Bool} (hcl : ConeInv N out 0 mark) :
+    ∀ m, m ≤ N.nodes.size → ∃ st,
+      (List.range m).foldlM (fun st k => Oracle.step N mark st k mode)
+        ({ vals := #[] } : Oracle.St) = .ok st ∧
+        SuccInv mark m st
+  | 0, _ => ⟨_, rfl, rfl, fun i hi => absurd hi (Nat.not_lt_zero _), fun i u hu => by simp at hu⟩
+  | m + 1, hm => by
+    obtain ⟨st₁, h₁, hinv⟩ := fold_succeedsM mode hN hcl m (by omega)
+    obtain ⟨st₂, h₂, hinv₂⟩ := step_succeedsM mode hN hcl (by omega) hinv
+    refine ⟨st₂, ?_, hinv₂⟩
+    rw [List.range_succ, List.foldlM_append, except_bind_eq_ok]
+    exact ⟨st₁, h₁, by simpa using h₂⟩
+
+/-- Report §6.1.2 (Stage 13c) — `fold_succeedsM` in mode `mbu`. -/
 theorem fold_succeeds {N : Network} (hN : N.WF) {out : ℕ} {mark : Array Bool}
     (hcl : ConeInv N out 0 mark) :
     ∀ m, m ≤ N.nodes.size → ∃ st,
       (List.range m).foldlM (Oracle.step N mark) ({ vals := #[] } : Oracle.St) = .ok st ∧
-        SuccInv mark m st
-  | 0, _ => ⟨_, rfl, rfl, fun i hi => absurd hi (Nat.not_lt_zero _), fun i u hu => by simp at hu⟩
-  | m + 1, hm => by
-    obtain ⟨st₁, h₁, hinv⟩ := fold_succeeds hN hcl m (by omega)
-    obtain ⟨st₂, h₂, hinv₂⟩ := step_succeeds hN hcl (by omega) hinv
-    refine ⟨st₂, ?_, hinv₂⟩
-    rw [List.range_succ, List.foldlM_append, except_bind_eq_ok]
-    exact ⟨st₁, h₁, by simpa using h₂⟩
+        SuccInv mark m st :=
+  fold_succeedsM .mbu hN hcl
 
 /-- Report §6.1.2, §6.1.4, §6.3.2, §9.1.1 (Stage 13c) — **synthesis never fails on a well-formed
 one-output network**. Every failure point of `synthesizeOracle` is unreachable: the output count
@@ -1774,16 +2066,22 @@ with `SuccInv`), the output outside the cone (`cone` marks it, `N.WF`), and both
 `prepare` (`prepare_succeeds`: `fold` catches constants and equal linear parts, and linear parts
 are sorted by `Qubit.key`). The hypothesis `h1` is needed: `⟨1, #[.input 0], []⟩` is well formed
 and fails (no output). -/
-theorem synthesizeOracle_succeeds {N : Network} (hN : N.WF) (h1 : N.outputs.length = 1) :
-    ∃ C, synthesizeOracle N = .ok C := by
+theorem synthesizeOracle_succeeds' (mode : UncomputeMode) {N : Network} (hN : N.WF)
+    (h1 : N.outputs.length = 1) : ∃ C, synthesizeOracle N mode = .ok C := by
   obtain ⟨out, hout⟩ := List.length_eq_one_iff.mp h1
   have hlt : out < N.nodes.size := Network.WF.output_lt hN (by simp [hout])
   have hcl := cone_closed hN hlt
-  obtain ⟨st, hst, -, hdef, -⟩ := fold_succeeds hN hcl N.nodes.size le_rfl
+  obtain ⟨st, hst, -, hdef, -⟩ := fold_succeedsM mode hN hcl N.nodes.size le_rfl
   obtain ⟨p, hp⟩ := hdef out hlt hcl.2.1
   unfold synthesizeOracle
   simp only [hout, except_bind_eq_ok]
   exact ⟨_, out, rfl, st, hst, by simp only [hp]; rfl⟩
+
+/-- Report §6.1.2, §6.1.4, §6.3.2, §9.1.1 (Stage 13c) — `synthesizeOracle_succeeds'` in mode
+`mbu`: synthesis never fails on a well-formed one-output network. -/
+theorem synthesizeOracle_succeeds {N : Network} (hN : N.WF) (h1 : N.outputs.length = 1) :
+    ∃ C, synthesizeOracle N = .ok C :=
+  synthesizeOracle_succeeds' .mbu hN h1
 
 /-- Report §8, §6.3.2 — the `grover_pred_037` instance of Lemma 6.3.2: the synthesized Grover
 oracle on `x[0..8) × anc[0..2)` restores its ancillae and applies `(−1)^(x0 ∧ x3 ∧ x7)`.

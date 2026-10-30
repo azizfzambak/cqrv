@@ -199,6 +199,79 @@ def row (aMax : Nat) : Bool × Nat × Nat × Nat :=
 #guard ((typed groverSrc >>= toNetwork).map Bennett.chainOf).toOption == some (some [0, 3, 7])
 #guard ((typed orSrc >>= toNetwork).map Bennett.chainOf).toOption == some none
 
+/-! ## Stage 15a — coherent uncomputation (PHASE2_SPEC.md §A.0.1) -/
+
+-- The adjoint of the §6.2.2 compute listing, gate for gate (13 gates, 4 T).
+#guard adjointGates (TempLogicalAND a b t) ==
+  [.sdg t, .h t, .cnot t b, .cnot t a, .tdg t, .t b, .t a, .cnot t b, .cnot t a, .cnot b t,
+   .cnot a t, .tdg t, .h t]
+#guard UncomputeTempLogicalANDCoherent a b t == adjointGates (TempLogicalAND a b t)
+#guard (UncomputeTempLogicalANDCoherent a b t).foldl (· + ·.tCount) 0 == 4
+/-- A gate of the unitary fragment (`Gate.isUnitary` of `CQRV.Circuit.Semantics`, restated here:
+the test imports the synthesizer only). -/
+def unitaryGate : Gate → Bool
+  | .measure _ _ | .ifBit _ _ => false
+  | _ => true
+
+#guard (UncomputeTempLogicalANDCoherent a b t).all unitaryGate
+#guard adjointGates (adjointGates (TempLogicalAND a b t)) == TempLogicalAND a b t
+#guard UncomputeMode.parse? "coherent" == some .coherent &&
+  UncomputeMode.parse? "mbu" == some .mbu && UncomputeMode.parse? "x" == none
+
+/-- Front end + network + oracle in mode `coherent`. -/
+def oracleC (src : String) : Except Diagnostic Circuit :=
+  typed src >>= toNetwork >>= (synthesizeOracle · .coherent)
+
+/-- A circuit without `measure` and `ifBit`. -/
+def measurementFree (c : Circuit) : Bool := c.gates.all unitaryGate
+
+-- The running example in mode `coherent`: 8 T per AND (16), no classical bit, no measurement,
+-- same width and ancillae as MBU, (10, 41, 16, 2) against (10, 27, 8, 2); the gate list is the
+-- §6.1.4 listing with the adjoint blocks in place of the MBU blocks.
+#guard ((oracleC groverSrc).map (·.tCount)).toOption == some 16
+#guard ((oracleC groverSrc).map (·.nBits)).toOption == some 0
+#guard ((oracleC groverSrc).map measurementFree).toOption == some true
+#guard ((oracleC groverSrc).map (·.validate.isOk)).toOption == some true
+#guard ((oracleC groverSrc).map grade).toOption == some ⟨10, 41, 16, 2⟩
+#guard ((oracleC groverSrc).map (·.gates)).toOption == some
+  ([.alloc (.anc 0)] ++ TempLogicalAND (.data 0) (.data 3) (.anc 0) ++
+   [.alloc (.anc 1)] ++ TempLogicalAND (.anc 0) (.data 7) (.anc 1) ++
+   [.z (.anc 1)] ++
+   UncomputeTempLogicalANDCoherent (.anc 0) (.data 7) (.anc 1) ++ [.free (.anc 1)] ++
+   UncomputeTempLogicalANDCoherent (.data 0) (.data 3) (.anc 0) ++ [.free (.anc 0)])
+-- Mode `mbu` is the Phase 1 synthesizer gate for gate (the default argument), on the corpus.
+#guard [groverSrc, orSrc, chainSrc, ifSrc, callSrc, letSrc, forSrc].all fun s =>
+  (typed s >>= toNetwork >>= synthesizeOracle).toOption ==
+    (typed s >>= toNetwork >>= (synthesizeOracle · .mbu)).toOption
+-- In mode `coherent` every corpus oracle is measurement-free, bit-free, valid, with twice the T
+-- count and the same width and ancillae as in mode `mbu`.
+#guard [groverSrc, orSrc, chainSrc, ifSrc, callSrc, letSrc, forSrc].all fun s =>
+  match oracle s, oracleC s with
+  | .ok m, .ok c => measurementFree c && c.nBits == 0 && c.validate.isOk &&
+      c.tCount == 2 * m.tCount && c.grade.w == m.grade.w && c.grade.a == m.grade.a
+  | _, _ => false
+-- The tree diffusion D₈ in both modes: (15, 41, 28, 7) MBU, (15, 59, 56, 7) coherent.
+#guard ((diffusion 8 none).map grade).toOption == some ⟨15, 41, 28, 7⟩
+#guard ((diffusion 8 none .tree .coherent).map grade).toOption == some ⟨15, 59, 56, 7⟩
+#guard ((diffusion 8 none .tree .coherent).map (·.validate.isOk)).toOption == some true
+#guard ((diffusion 8 none .tree .coherent).map measurementFree).toOption == some true
+-- The Grover circuit of the running example, r = 2: (15, 134, 72, 7) MBU, (15, 200, 144, 7)
+-- coherent (no classical bit).
+#guard ((typed groverSrc >>= toNetwork >>= (groverCircuit · 8 2 none .tree .coherent)).map
+  grade).toOption == some ⟨15, 200, 144, 7⟩
+#guard ((typed groverSrc >>= toNetwork >>= (groverCircuit · 8 2 none .tree .coherent)).map
+  (·.nBits)).toOption == some 0
+#guard ((typed groverSrc >>= toNetwork >>= (groverCircuit · 8 2)).map grade).toOption ==
+  some ⟨15, 134, 72, 7⟩
+-- Bennett pebbling is MBU-only: a budget below the straight-line count with mode `coherent` is
+-- `unsupported_combination`; a budget that covers it is the straight-line coherent oracle.
+#guard match synthesizeWithBudget (allNet 8) (some 3) .coherent with
+  | .error d => d.stage == .synthesis && d.code == .unsupportedCombination
+  | .ok _ => false
+#guard ((synthesizeWithBudget (allNet 8) (some 7) .coherent).map (·.1)).toOption ==
+  some "straight-line"
+#guard ((synthesizeWithBudget (allNet 8) (some 3)).map (·.1)).toOption == some "bennett(amax=3)"
+
 /-! ## Stage 9a review — `Network.WF` on the corpus -/
 
 def xorPredSrc : String := include_str "../../tests/certify/xor_pred.cqr"

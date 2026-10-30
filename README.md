@@ -4,7 +4,7 @@ Implementation of *Applying Certified Quantum Realization: A Practical Implement
 (`docs/cqrv_report_revised_v3.docx`). The report is the specification; `docs/PLAN.md` is the
 stage-by-stage execution plan; `CLAUDE.md` holds the rules every Claude Code session follows.
 
-Status: **M2 reached; Stages 0–14a complete, sorry-free (local CI)**. Two Grover certificates, `grover_pred_037` and the
+Status: **M2 reached; Stages 0–15a complete, sorry-free (local CI)**; Phase 2 started (coherent uncomputation mode `--uncompute coherent`, Stage 15a; `docs/PHASE2_ROADMAP.md`). Two Grover certificates, `grover_pred_037` and the
 RevLib benchmark cone `simple_alu_x0_1` (and the few-ancilla variant `grover_pred_037_few`), are
 `certified`: kernel-checked, axioms exactly `propext`, `Classical.choice`, `Quot.sound`, measured
 grades, exact δ, front end exhaustively validated, and since Stage 14a the solution count M is

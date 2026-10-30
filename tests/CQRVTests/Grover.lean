@@ -51,6 +51,24 @@ example (n : ℕ) : ((List.range n).map Node.input).toArray = (Array.range n).ma
 -- Item 4 (restoration; `lemma_6_3_2_of_le` is the 6b-3 proof at a larger register).
 #print axioms lemma_6_3_2_of_le
 #print axioms lemma_6_3_2
+
+/-! ## Stage 15a — Lemma 6.3.2, well-formedness and success in mode `coherent` (PHASE2_SPEC.md §A.0.1) -/
+
+/-- info: 'CQRV.lemma_6_3_2_coherent' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms lemma_6_3_2_coherent
+
+/-- info: 'CQRV.synthesizeOracle_WF'' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms synthesizeOracle_WF'
+
+/-- info: 'CQRV.synthesizeOracle_succeeds'' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms synthesizeOracle_succeeds'
+
+/-- info: 'CQRV.unitaryDenote_adjoint' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms unitaryDenote_adjoint
 #print axioms allNet_pred
 #print axioms unitaryDenote_hLayer
 #print axioms unitaryDenote_xLayer

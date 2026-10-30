@@ -274,6 +274,31 @@ theorem tempLogicalAND_kraus_basis {n m : ℕ} (nb : ℕ) (c : Fin nb → Bool) 
   rw [krausOps_of_unitary n m nb _ (by simp [TempLogicalAND, Gate.isUnitary]) c,
     tempLogicalAND_correct_lift a b t hab hat hbt ha hb ht s hs]
 
+/-- PHASE2_SPEC.md §A.0.1 (Stage 15a, proof plan step 1) — the coherent uncompute block
+`adjointGates (TempLogicalAND a b t)` on a basis state whose target holds `a ∧ b`, in any
+branch: `|s⟩ ↦ |s[t ↦ 0]⟩` with amplitude 1. Route: `tempLogicalAND_correct_lift` gives
+`U |s[t ↦ 0]⟩ = |s⟩`, `unitaryDenote_adjoint` gives the Kraus operator `U†`, and `U† U = 1`. -/
+theorem tempLogicalAND_adjoint_basis {n m : ℕ} (nb : ℕ) (c : Fin nb → Bool) (a b t : Qubit)
+    (hab : a ≠ b) (hat : a ≠ t) (hbt : b ≠ t) (ha : a.inRange n m = true)
+    (hb : b.inRange n m = true) (ht : t.inRange n m = true) (s : Reg n × Reg m)
+    (hs : t.get s = (a.get s && b.get s)) :
+    krausOps n m nb (adjointGates (TempLogicalAND a b t)) c *ᵥ basisVec s =
+      basisVec (t.set false s) := by
+  have hu : ∀ g ∈ TempLogicalAND a b t, g.isUnitary = true := by
+    simp [TempLogicalAND, Gate.isUnitary]
+  have hall : (adjointGates (TempLogicalAND a b t)).all Gate.isUnitary = true := by
+    simp [adjointGates, TempLogicalAND, Gate.isUnitary, Gate.adjoint]
+  have hUU : star (unitaryDenote n m (TempLogicalAND a b t)) *
+      unitaryDenote n m (TempLogicalAND a b t) = 1 :=
+    Matrix.mem_unitaryGroup_iff'.mp (unitaryDenote_mem_unitaryGroup n m _)
+  have h0 : t.get (t.set false s) = false := Qubit.get_set_self t ht false s
+  have hfwd : unitaryDenote n m (TempLogicalAND a b t) *ᵥ basisVec (t.set false s) =
+      basisVec s := by
+    rw [tempLogicalAND_correct_lift a b t hab hat hbt ha hb ht _ h0, Qubit.get_set_ne hat,
+      Qubit.get_set_ne hbt, Qubit.set_set, ← hs, Qubit.set_get]
+  rw [krausOps_of_unitary n m nb _ hall c, unitaryDenote_adjoint n m _ hu, ← hfwd,
+    Matrix.mulVec_mulVec, hUU, Matrix.one_mulVec]
+
 /-! ## Item 3 — the MBU block, every branch -/
 
 /-- Report §6.2.2, §6.2.4 Layer 2 — the uncompute block (`H t; measure t → j; if j: CZ a b;
