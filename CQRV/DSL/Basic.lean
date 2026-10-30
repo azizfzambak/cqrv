@@ -7,6 +7,7 @@ public import CQRV.DSL.Check
 public import CQRV.DSL.Signature
 public import CQRV.DSL.Extract
 public import CQRV.DSL.Eval
+public import CQRV.DSL.Scope
 
 /-!
 # CQRV.DSL

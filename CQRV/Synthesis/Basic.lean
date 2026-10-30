@@ -1,6 +1,7 @@
 module
 
 public import CQRV.Synthesis.Network
+public import CQRV.Synthesis.NetworkCorrect
 public import CQRV.Synthesis.TempAnd
 public import CQRV.Synthesis.Oracle
 public import CQRV.Synthesis.Bennett

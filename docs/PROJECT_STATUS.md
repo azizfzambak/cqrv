@@ -1,6 +1,6 @@
 # CQRV — project status (2026-10-30)
 
-One-page state of the repository after Stages 0–15b. The specification is report v3
+One-page state of the repository after Stages 0–16a. The specification is report v3
 (`docs/cqrv_report_revised_v3.docx`, tracked changes over v2, errata appendix). Details:
 `docs/M2_REPORT.md` (milestone M2, frozen, with post-M2 notes), `docs/DECISIONS.md` (every decision),
 `docs/SORRIES.md` (obligations). Toolchain: Lean 4.35.0, Mathlib v4.35.0, Physlib 96a6bc5.
@@ -39,7 +39,7 @@ Scaling (Stage 14b, measurement only; `docs/benchmarks/SCALING.md`, `scaling.csv
 
 ## 3. Declared trust boundaries (outside the kernel)
 
-- **Front end**: DSL → network (`toNetwork`) — exhaustively validated on all 2ⁿ inputs (n ≤ 16), not proved.
+- **Front end**: typed term → network: proved (`toNetwork_pred`, `toNetwork_WF`, `toNetwork_succeeds`, Stage 16a, under the decidable scoping hypothesis `tp.scoped`); parser and surface checker unverified; certificates state it from Stage 16b (until then `cqr certify` still runs the exhaustive validation on all 2ⁿ inputs, n ≤ 16).
 - **Emitter**: QIR (Adaptive Profile) / OpenQASM 3 text — unverified, translation-validated by re-parse; QIR verified with llvmlite.
 - **Solution count M**: decided by the kernel for n ≤ 10 (the default `--count-limit`, Stage 14c; `hM_count`, `Network.countSat_eq_card`; `cqr certify --count-limit k`); a hypothesis (`hM_card`) only for larger n or with `--count-limit 0`.
 - **Hardware**: routing, native-gate translation and calibration noise are the backend's; the profile check uses the report's illustrative figures (`profiles/illustrative_sc.json`, not calibration data of any device). δ_hw is vacuous at p̄ = 10⁻² (G·p̄ ≥ 1) — needs error correction or mitigation.
@@ -48,7 +48,8 @@ Scaling (Stage 14b, measurement only; `docs/benchmarks/SCALING.md`, `scaling.csv
 
 | Item | Kind |
 |---|---|
-| Theorem 3.1 in categorical form; `toNetwork` well-formedness proof | documented gaps |
+| Theorem 3.1 in categorical form | documented gap |
+| `toNetwork` well-formedness and correctness | proved in Stage 16a (`toNetwork_WF`, `toNetwork_pred`); stated in certificates from 16b |
 | Remote CI (only `scripts/ci_local.sh` has run) | not planned (user decision 2026-10-28) |
 | `--count-limit` default 12 → 10 (Stage 14c, from 14b's measurement: every n = 12 kernel-decided count timed out at 900 s; n = 10 takes 103 s median and 11 371 MB) | closed (DECISIONS.md 2026-10-30) |
 | rand_a64 hypothesis form: kernel `deep recursion detected` in `emitted_ok` at 1953 emitted instructions (Stage 14b); `--tstack` 64 MB / 512 MB: no effect, same position and message (Stage 14c) | open; proof-form change (chunked `emitted` literal) deferred to the Stage 17 review |
@@ -61,6 +62,7 @@ roadmap and the specification addendum (report v4 → v5) are the reviewer's doc
 | Stage | Result | Spec § |
 |---|---|---|
 | 15a (2026-10-30) | Coherent uncomputation mode: `UncomputeMode` (`mbu` default, the Phase 1 code path gate for gate; `coherent` = the adjoint of the compute block, 8 T per AND, no measurement, no classical bit) as the last defaulted argument of the synthesizer, diffusion and Grover builders; `Gate.adjoint`, `adjointGates`, `gateU_adjoint`, `unitaryDenote_adjoint`; Lemma 6.3.2, well-formedness and success proved for both modes (`lemma_6_3_2_coherent`, `synthesizeOracle_WF'`, `synthesizeOracle_succeeds'`; the Phase 1 names are the `.mbu` instances); `cqr synthesize … --uncompute mbu\|coherent`; Bennett and the few-ancilla MCZ stay MBU-only (`unsupported_combination`). Measured, running example: oracle (10, 41, 16, 2) vs (10, 27, 8, 2); D₈ (15, 59, 56, 7) vs (15, 41, 28, 7); Grover r = 2 (15, 200, 144, 7) vs (15, 134, 72, 7). Certificates in mode `coherent`: Stage 15b. | A.0.1 |
+| 16a (2026-10-30) | The front end proved: `TExpr.scoped` / `TypedProgram.scoped` (decidable scoping, `CQRV/DSL/Scope.lean`); `CQRV/Synthesis/NetworkCorrect.lean`: `build_ok` (correctness of `ToNetwork.build` given success, no `hasLoop`), `build_succeeds`, `build_spec`, `toNetwork_succeeds`, `toNetwork_WF`, `toNetwork_pred` (`N.pred tp.arity x = evalProgram tp x` for every input); `evalExpr`, `build`, `toNetwork`, `Network.pred`, `Network.wf`, `check` unchanged; standard axioms; `#guard` scoping on the corpus; `toNetwork_pred` on `grover_pred_037` agrees with `validateFrontEnd`. Certificates state the theorem in 16b. | — (report §7.2–7.4, §5.3.3) |
 | 15b (2026-10-30) | Certificates in mode `coherent`: `GroverData` and `grover_parametric_lemma_gen` (the Grover parametric lemma with the oracle abstract; `grover_parametric_lemma_diff` and the `GroverParams` statements are its instances), `OracleCertCoh`, `grover_certificate_coherent` (the tree MCZ certified from the circuit), `cqr certify … --uncompute mbu\|coherent`, schema v1.7.0 (`uncompute`, coherent certificates only), the fourth committed certificate `examples/certs/grover_pred_037_coh`: (15, 200, 144, 7), kernel 15.50 s median of 5 against (15, 134, 72, 7) / 12.30 s; `illustrative_sc` depth at its budget (200 / 200, fits). Phase 1 certificates byte-identical. | A.0.1 |
 
 ## 6. Reproduce
