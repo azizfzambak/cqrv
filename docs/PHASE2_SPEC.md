@@ -89,7 +89,7 @@ structure GradeExt where
 
 `Synthesis.gradeExt C : GradeExt`; every certificate states `theorem gradeExt_eq :
 Synthesis.gradeExt emitted = ⟨…⟩ := by decide +kernel` and records it as `grade_ext` in the
-JSON (schema 1.8.0; 1.6.0 is Stage 14a's `solution_count`, 1.7.0 Stage 15b's `uncompute`). The paper's "no two-qubit count, no T-depth" item is answered here; the
+JSON (schema 1.9.0; 1.6.0 is Stage 14a's `solution_count`, 1.7.0 Stage 15b's `uncompute` on coherent certificates, 1.8.0 Stage 16b's proved front end with `uncompute` explicit in every certificate — renumbered 2026-10-30). The paper's "no two-qubit count, no T-depth" item is answered here; the
 Clifford+T cost of `rot` gates is deliberately *not* folded into `t` (it depends on a synthesis
 precision that is a hardware matter, §C).
 

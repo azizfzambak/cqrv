@@ -831,3 +831,9 @@ Why: the 15b stop condition and acceptance ("the three Phase 1 certificates byte
 Rejected: "1.7.0" for every certificate with the three Phase 1 JSONs regenerated (the stop condition); writing `uncompute` for MBU while keeping "1.6.0" (breaks the "present iff version" discipline of the schema).
 Reviewer (2026-10-30): accepted for 15b; at the next whole regeneration of the committed certificates (Stage 17, schema 1.8.0) `uncompute` is written explicitly in every certificate and the omission convention is retired.
 Report §: 8.4.2, 8.4.4, 9.5.3.
+
+## 2026-10-30 — Stage 15b review (reviewer decisions)
+Decision: (1) Stage 15b accepted (commit d4cbdc7). (2) **The dropped `hOn` confirmed**: `grover_parametric_lemma_gen` takes no `Oc.nData = n`; no proof needs it (the channel and `AncRestore` fix the data register by `n`). (3) The committed Phase 1 run reports take the words `uncompute = mbu` at the **Stage 16b** regeneration of the certificates. (4) **The 15b omission convention for `uncompute` retires at Stage 16b** (schema 1.8.0, the proved front end, `uncompute` written explicitly in every certificate), not at Stage 17; **Stage 17's schema (`grade_ext`) becomes 1.9.0** (PHASE2_SPEC.md §A.1 renumbered). Reviewer edits committed unedited: PHASE2_ROADMAP.md (15b row done; the Stage 16 row rewritten as 16a–b), PHASE2_SPEC.md §A.1 (schema renumbering).
+Why: review of the 15b closing reply; the regeneration that 16b's front end forces is the natural point to retire the convention.
+Rejected: keeping the omission convention until Stage 17; a decorative `hOn`.
+Report §: 8.4.2, 8.4.4, 9.5.3; PHASE2_SPEC.md §A.0.1, §A.1.
