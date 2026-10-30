@@ -48,8 +48,8 @@ Scaling (Stage 14b, measurement only; `docs/benchmarks/SCALING.md`, `scaling.csv
 |---|---|
 | Theorem 3.1 in categorical form; `toNetwork` well-formedness proof | documented gaps |
 | Remote CI (only `scripts/ci_local.sh` has run) | not planned (user decision 2026-10-28) |
-| `--count-limit` default 12: the kernel-decided count is memory- and time-bound at n = 12 on a 16 GB machine (kernel median ×9.7 from n = 8 to n = 10; Stage 14b) | recommendation, not changed |
-| rand_a64 hypothesis form (1953 instructions): kernel `deep recursion detected` in `emitted_ok` (Stage 14b, classified as a stack-resource failure) | open, not fixed |
+| `--count-limit` default 12: the kernel-decided count is memory- and time-bound at n = 12 on a 16 GB machine (kernel median ×9.7 from n = 8 to n = 10; Stage 14b) | recommendation, not changed → Stage 14c |
+| rand_a64 hypothesis form (1953 instructions): kernel `deep recursion detected` in `emitted_ok` (Stage 14b, classified as a stack-resource failure) | open, not fixed → Stage 14c |
 
 ## 5. Reproduce
 
