@@ -1,0 +1,23 @@
+key,instance,family,n,r,M,r_star,and_nodes,xor_nodes,net_nodes,oracle_w,oracle_d,oracle_t,oracle_a,w,d,t,a,instructions,G,delta,solution_count,kernel_runs,kernel_min_s,kernel_median_s,wall_median_s,peak_mb,certify_wall_s,outcome,message,harness,harness_detail,kernel_all_s
+carry_1_r1,carry_1,carry_k,2,1,1,1,1,0,3,3,15,4,1,3,32,8,1,50,48,0,kernel_decided,6,0.171,0.17400000000000002,8.99,1839,12.9,certified,,pass,all 2 branches,0.18 0.18 0.17 0.17 0.17 0.17
+carry_2_r1,carry_2,carry_k,4,1,6,1,3,2,9,7,29,12,3,7,58,24,3,142,134,5/32,kernel_decided,6,0.96,0.991,9.78,2079,18.9,certified,,pass,all 8 branches,0.99 1.04 0.99 0.98 1.01 0.96
+carry_3_r1,carry_3,carry_k,6,1,28,1,5,4,15,11,43,20,5,11,84,40,5,236,222,81/256,kernel_decided,6,3.1,3.13,11.99,2546,34.4,certified,,pass,all 32 branches,3.17 3.27 3.24 3.12 3.13 3.10
+carry_4_r1,carry_4,carry_k,8,1,120,1,7,6,21,15,57,28,7,15,98,56,7,330,310,833/2048,kernel_decided,6,10.6,10.6,19.57,3637,60.0,certified,,pass,8 Born-sampled branches (8 distinct),10.60 10.90 10.60 10.70 10.60 10.60
+carry_5_r1,carry_5,carry_k,10,1,496,1,9,8,27,19,71,36,9,19,124,72,9,424,398,7425/16384,kernel_decided,6,92.9,103.0,113.73,11371,351.3,certified,,pass,8 Born-sampled branches (8 distinct),106.00 120.00 98.90 92.90 103.00 125.00
+carry_6_r1,carry_6,carry_k,12,1,2016,1,11,10,33,,,,,,,,,518,,,kernel_decided,,,,,,900.4,timeout,,infeasible,n + a = 23 qubits in the statevector,
+carry_6_r1_h,carry_6,carry_k,12,1,2016,1,11,10,33,23,85,44,11,23,138,88,11,518,486,62465/131072,hypothesis,6,12.0,12.5,61.31,5250,71.9,certified,,infeasible,n + a = 23 qubits in the statevector,12.30 12.80 12.50 12.00 12.00 12.50
+carry_7_r1,carry_7,carry_k,14,1,8128,1,13,12,39,27,99,52,13,27,152,104,13,612,574,512001/1048576,hypothesis,6,16.7,16.8,25.89,6583,30.8,certified,,n/a (n > 12),,17.00 16.70 16.80 17.50 17.60 16.70
+carry_8_r1,carry_8,carry_k,16,1,32640,1,15,14,45,31,113,60,15,31,166,120,15,706,662,4145153/8388608,hypothesis,6,23.0,23.1,32.18,8167,37.9,certified,,n/a (n > 12),,23.00 23.00 23.10 23.20 23.20 23.10
+rand_a4_r1,rand_a4,rand_a,12,1,2304,0,4,2,20,,,,,,,,,361,,,kernel_decided,,,,,,900.2,timeout,,pass,all 16 branches,
+rand_a4_r1_h,rand_a4,rand_a,12,1,2304,0,4,2,20,16,55,16,4,23,108,60,11,361,343,175/256,hypothesis,6,5.66,5.71,14.66,3512,41.5,certified,,pass,all 16 branches,5.81 5.66 5.72 5.74 5.69 5.71
+rand_a8_r1,rand_a8,rand_a,12,1,256,3,10,16,50,,,,,,,,,515,,,kernel_decided,,,,,,900.2,timeout,,pass,8 Born-sampled branches (8 distinct),
+rand_a8_r1_h,rand_a8,rand_a,12,1,256,3,10,16,50,20,87,32,8,23,139,76,11,515,489,135/256,hypothesis,6,12.4,12.5,21.46,5206,49.4,certified,,pass,8 Born-sampled branches (8 distinct),12.70 12.40 12.50 12.50 12.50 12.40
+rand_a8_r3,rand_a8,rand_a,12,3,256,3,10,16,50,,,,,,,,,1521,,,kernel_decided,,,,,,900.5,timeout,,pass,8 Born-sampled branches (8 distinct),
+rand_a8_r3_h,rand_a8,rand_a,12,3,256,3,10,16,50,,,,,,,,,1521,,,hypothesis,,,,,,900.4,timeout,,pass,8 Born-sampled branches (8 distinct),
+rand_a16_r1,rand_a16,rand_a,6,1,32,0,22,24,83,22,157,64,16,22,198,84,16,551,515,1/2,kernel_decided,6,38.5,38.6,47.83,8576,82.7,certified,,infeasible,n + a = 22 qubits in the statevector,39.50 38.60 38.60 38.50 38.80 38.70
+rand_a32_r1,rand_a32,rand_a,12,1,28,9,36,37,127,,,,,,,,,1123,,,kernel_decided,,,,,,900.3,timeout,,infeasible,n + a = 44 qubits in the statevector,
+rand_a32_r1_h,rand_a32,rand_a,12,1,28,9,36,37,127,,,,,,,,,1123,,,hypothesis,,,,,,900.3,timeout,,infeasible,n + a = 44 qubits in the statevector,
+rand_a64_r1,rand_a64,rand_a,12,1,1853,1,68,65,214,,,,,,,,,1953,,,kernel_decided,,,,,,900.3,timeout,,infeasible,n + a = 76 qubits in the statevector,
+rand_a64_r1_h,rand_a64,rand_a,12,1,1853,1,68,65,214,,,,,,,,,1953,,,hypothesis,,,,,,69.2,oom,"bench/scaling/out/rand_a64_r1_h/Cert.lean:449:70: error: (kernel) deep recursion detected, use `set_option maxRecDepth <num>` to increase the limit",infeasible,n + a = 76 qubits in the statevector,
+simple_alu_x0_0_r1,simple_alu_x0_0,alu_bits,4,1,7,1,7,9,24,11,76,28,7,11,105,40,7,248,232,81/256,kernel_decided,6,3.18,3.2,12.0,2611,16.0,certified,,pass,8 Born-sampled branches (7 distinct),3.21 3.20 3.19 3.18 3.27 3.23
+simple_alu_x0_2_r1,simple_alu_x0_2,alu_bits,8,1,124,1,18,18,51,26,127,72,18,26,167,100,18,601,559,7425/16384,kernel_decided,6,41.7,42.0,51.23,9204,55.0,certified,,infeasible,n + a = 26 qubits in the statevector,42.60 42.00 41.70 42.00 43.10 41.90

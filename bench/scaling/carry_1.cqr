@@ -1,0 +1,4 @@
+fn carry_1(x: Vec Bool 2) -> Bool {
+  let c0 = idx(x, 0) and idx(x, 1) in
+  c0
+}

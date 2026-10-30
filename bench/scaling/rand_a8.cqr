@@ -1,0 +1,4 @@
+-- Stage 14b, family rand_a: oracle_diff.gen_tree(rng, 12, leaves, ["and", "xor", "if"]), seed 20261037, attempt 28, target a = 8 AND nodes after synthesis.
+fn rand_a8(x: Vec Bool 12) -> Bool {
+  ((idx(x, 3) and (if (if ((not idx(x, 7)) xor (not idx(x, 4))) then ((not idx(x, 4)) and (not idx(x, 4))) else (idx(x, 7) xor idx(x, 9))) then ((if ((not idx(x, 5)) xor idx(x, 1)) then (not idx(x, 8)) else idx(x, 8)) xor (idx(x, 2) xor (if (not idx(x, 8)) then (idx(x, 3) and idx(x, 1)) else (not idx(x, 11))))) else (if idx(x, 0) then (not idx(x, 6)) else (not idx(x, 10))))) and ((idx(x, 5) xor (not idx(x, 11))) and (not idx(x, 0))))
+}

@@ -1,0 +1,13 @@
+-- Stage 14b, family alu_bits: RevLib Simple ALU (simple_alu_234.src), bit 0 of x0;
+-- transcription rules of examples/simple_alu_x0_1.cqr (DECISIONS.md 2026-10-25).
+-- Input layout: x[0] = op.0, x[1] = op.1, x[2..2] = x1.0..0, x[3..3] = x2.0..0.
+fn simple_alu_x0_0(x: Vec Bool 4) -> Bool {
+  let op0 = idx(x, 0) in
+  let op1 = idx(x, 1) in
+  let a0 = idx(x, 2) in
+  let b0 = idx(x, 3) in
+  if (not op1) and (not op0) then a0 xor b0
+  else if (not op1) and op0 then a0 xor b0
+  else if op1 and (not op0) then a0 and b0
+  else a0 xor b0
+}

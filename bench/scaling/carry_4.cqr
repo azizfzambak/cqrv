@@ -1,0 +1,7 @@
+fn carry_4(x: Vec Bool 8) -> Bool {
+  let c0 = idx(x, 0) and idx(x, 4) in
+  let c1 = (idx(x, 1) and idx(x, 5)) xor (c0 and (idx(x, 1) xor idx(x, 5))) in
+  let c2 = (idx(x, 2) and idx(x, 6)) xor (c1 and (idx(x, 2) xor idx(x, 6))) in
+  let c3 = (idx(x, 3) and idx(x, 7)) xor (c2 and (idx(x, 3) xor idx(x, 7))) in
+  c3
+}
