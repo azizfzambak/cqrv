@@ -847,3 +847,9 @@ Decision: (1) **The scoping predicate** (`CQRV/DSL/Scope.lean`, 83 lines): `Scop
 Why: STAGE16_TASK.md A1–A3 (report §7.2–7.4, §5.3.3, §6.1.2, §8.4.1); the invariants (`evalExpr`, `evalProgram`, `build`, `toNetwork`, `Network.pred`, `Network.wf`, `check` unchanged) hold.
 Rejected: a single induction with success and correctness in one conclusion (every constructor case would carry both, and `toNetwork_pred` would inherit `hasLoop`); a positional environment invariant (shadowing by `let`/`for` would need alignment lemmas); proving that `check` produces scoped terms (not in Stage 16); a Mathlib import in the Synthesis layer for `split_ifs`/`linarith`.
 Report §: 7.2–7.4, 5.3.3, 6.1.2, 8.4.1.
+
+## 2026-10-30 — Stage 16a review (reviewer decisions)
+Decision: (1) The two-induction shape is the intended reading of "say which": `build_ok` (correctness given success, no `hasLoop`) and `build_succeeds` (existence under `hasLoop = false`), `build_spec` their conjunction; `toNetwork_pred` from `build_ok` alone. (2) The scoping predicate `tp.scoped` is accepted as the hypothesis of the front-end theorems; the declared trust boundary of the front end is now parser + surface checker (+ the typed-term printer from Stage 16b), no longer the term-to-network step. (3) Recorded for 16b: run equations of `build` are consumed with `run_bind_ok.mp` and the injections `Except.ok.inj` / `Prod.mk.inj` (no `rw` through `build`); the do-block `match` on an `IdxArg` constructor and the lookup under it reduce with `simp only [hN] at h`, not `dsimp`.
+Why: reviewer acceptance of 52ad73b (report §7.2–7.4, §5.3.3).
+Rejected: nothing new; the alternatives are those of the Stage 16a entry.
+Report §: 7.2–7.4, 5.3.3.
