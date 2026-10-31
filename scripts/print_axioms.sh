@@ -9,8 +9,9 @@
 #   2. the committed example certificates examples/certs/{grover_pred_037,simple_alu_x0_1,
 #      grover_pred_037_few,grover_pred_037_coh}/Cert.lean (the second since Stage 9b, the third
 #      since Stage 14a, the fourth — mode coherent — since Stage 15b) must
-#      kernel-check and their theorem `cert` must pass the same audit (scripts/CertifyTool.lean
-#      `audit`); since Stage 14a `cert` has no hypothesis there (`hM_count`).
+#      kernel-check and their theorems `cert` and (Stage 16b) `front_end` must pass the same
+#      audit (scripts/CertifyTool.lean `audit`, one Lean run per file); since Stage 14a `cert` has
+#      no hypothesis there (`hM_count`).
 # Exits non-zero on any failure. Run after `lake build`.
 #
 # Portable: bash only; ubuntu and Git Bash on Windows.
@@ -23,5 +24,6 @@ lake env lean scripts/PrintAxioms.lean 2>&1 | tr -d '\r' \
 for spec in grover_pred_037:grover_pred_037 simple_alu_x0_1:simple_alu_x0_1 \
     grover_pred_037_few:grover_pred_037 grover_pred_037_coh:grover_pred_037; do
   lake env lean --run scripts/CertifyTool.lean audit \
-    "examples/certs/${spec%%:*}/Cert.lean" "CQRV.Cert.${spec#*:}.cert"
+    "examples/certs/${spec%%:*}/Cert.lean" "CQRV.Cert.${spec#*:}.cert" \
+    "CQRV.Cert.${spec#*:}.front_end"
 done

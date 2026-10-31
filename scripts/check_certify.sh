@@ -34,7 +34,12 @@
 #                                grade (15, 200, 144, 7), no measurement; the profile fits with
 #                                d = 200 = 200), the committed examples/certs/grover_pred_037_coh,
 #                                --uncompute mbu byte-identical to Phase 1, few:log + coherent →
-#                                unsupported_combination
+#                                unsupported_combination;
+#                                Stage 16b: every Cert.lean carries prog / prog_scoped / net_ok /
+#                                front_end between net and emitted and is byte-identical to the
+#                                Stage 16a file (git 52ad73b) outside that block; schema v1.8.0
+#                                with uncompute explicit and the proved front_end wording; run
+#                                report row 1b kernel-checked
 #   tests/diff/profile_schema.py profiles/*.json against docs/profile.schema.json;
 #                                illustrative_sc = report Table 3.5 / §3.3.3 (renamed from
 #                                ibm_kyiv in Stage 14a, no alias); mutated profiles rejected by

@@ -11,11 +11,12 @@ Run with `lake env lean --run scripts/CertifyTool.lean <command>` (after `lake b
 * `sample <file.cqr>`: print the Stage 8a certificate JSON of a source file (compact, keys
   sorted): no kernel check, no axiom audit, `status` "not yet audited"; the reference
   configuration is read from `lean-toolchain` and `lake-manifest.json`.
-* `audit <Cert.lean> <theorem>` (Stage 8b): kernel-check a certificate file (`lake env lean`) and
-  audit the axioms of its `#print axioms <theorem>` line (`CQRV.Certify.checkAndAudit`); exit 0
-  if the audit passes, 3 if it fails (the offending axioms are printed), 1 if Lean fails. Used by
-  `scripts/print_axioms.sh` (blocking) and by the injected-`sorry` test of
-  `scripts/check_certify.sh`.
+* `audit <Cert.lean> <theorem> [<theorem> …]` (Stage 8b; several theorems since Stage 16b):
+  kernel-check a certificate file once (`lake env lean`) and audit the axioms of each
+  `#print axioms <theorem>` line (`CQRV.Certify.checkAndAudit`, `parseAxioms`); exit 0 if every
+  audit passes, 3 if one fails (the offending axioms are printed), 1 if Lean fails or a line is
+  missing. Used by `scripts/print_axioms.sh` (blocking; `cert` and `front_end` of every committed
+  certificate) and by the injected-`sorry` test of `scripts/check_certify.sh`.
 -/
 
 open CQRV.Certify
@@ -49,15 +50,25 @@ def main (args : List String) : IO UInt32 := do
     match certificateOf (← IO.FS.readFile file) cfg with
     | .ok c => IO.println c.toJson.compress; return 0
     | .error e => IO.eprintln e; return 1
-  | ["audit", file, thm] =>
+  | "audit" :: file :: thm :: more =>
     match ← checkAndAudit file thm with
     | .error e => IO.eprintln s!"audit {file}: {e}"; return 1
     | .ok o =>
-      IO.println s!"{thm}: {", ".intercalate o.axioms}"
-      match o.result with
-      | .pass => IO.println s!"axiom audit: {file}: pass"; return 0
-      | .fail bad =>
+      -- Stage 16b: further theorems of the same file are audited from the same Lean run
+      let mut results : List (String × List String × AuditResult) := [(thm, o.axioms, o.result)]
+      for t in more do
+        match parseAxioms t o.check.output with
+        | none => IO.eprintln s!"audit {file}: no `#print axioms {t}` line in the Lean output"; return 1
+        | some axs => results := results ++ [(t, axs, auditAxioms axs)]
+      let mut bad : List String := []
+      for (t, axs, r) in results do
+        IO.println s!"{t}: {", ".intercalate axs}"
+        if let .fail b := r then bad := bad ++ b
+      if bad.isEmpty then
+        IO.println s!"axiom audit: {file}: pass"; return 0
+      else
         IO.println s!"axiom audit: {file}: FAILED ({", ".intercalate bad})"
         return 3
-  | _ => IO.eprintln "usage: CertifyTool (sha3 | sample <file.cqr> | audit <Cert.lean> <theorem>)"
+  | _ => IO.eprintln "usage: CertifyTool (sha3 | sample <file.cqr> | audit <Cert.lean> <theorem> \
+      [<theorem> …])"
          return 2

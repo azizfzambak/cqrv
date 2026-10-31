@@ -6,13 +6,24 @@ public import CQRV.Synthesis.Network
 /-!
 # CQRV.Certify.FrontEnd
 
-Report §5.3.3 (declared trust boundaries), §7.2, §9.5.1 — exhaustive validation of the front end
-(Stage 9b, reviewer decision 1; DECISIONS.md 2026-10-25). The certificate theorem is about the
-network literal `net` of `Cert.lean`; the translation DSL → network (`toNetwork`) is not verified.
-For `n ≤ 16` inputs, `cqr certify` compares the reference evaluator `evalProgram` with
-`Network.pred (toNetwork …)` on all `2ⁿ` inputs and declares the outcome in
-`trust_boundary.front_end`; for `n > 16` the Stage 8b wording stays. Both sides are unverified
-Lean code; the check is a differential test, not a proof, and it is not kernel-checked.
+Report §5.3.3 (declared trust boundaries), §7.2–7.4, §9.5.1 — the front-end boundary of a
+certificate.
+
+Stage 16b (docs/tasks/STAGE16_TASK.md B1–B2): the translation typed term → network is **proved**
+(`toNetwork_pred`, `CQRV/Synthesis/NetworkCorrect.lean`, Stage 16a) and every `Cert.lean` states
+it at its instance (`prog`, `prog_scoped`, `net_ok`, `front_end`, kernel-checked;
+`CertRequest.progBlock`); `cqr certify` declares `frontEndProvedText` in `trust_boundary.front_end`
+(schema 1.8.0) and no longer runs the validation below. The parser, the surface checker and the
+typed-term printer (`TypedProgram.renderLean`) remain outside the kernel; `predicate_hash` binds
+the source.
+
+Stages 9b–16a (reviewer decision 1; DECISIONS.md 2026-10-25): for `n ≤ 16` inputs, `cqr certify`
+compared the reference evaluator `evalProgram` with `Network.pred (toNetwork …)` on all `2ⁿ`
+inputs (`validateFrontEnd`) and declared the outcome; for `n > 16` the Stage 8b wording stayed.
+The validation, its wordings and the diagnostic `front_end_mismatch` stay here as the regression
+test of the executable path against the Python reference (`cqr check --truth-table`,
+`tests/diff/frontend_diff.py`, `tests/CQRVTests/Eval.lean`); `front_end_mismatch` is unreachable
+from `cqr certify` since Stage 16b.
 -/
 
 @[expose] public section
@@ -61,6 +72,14 @@ def frontEndValidatedText (n : Nat) : String :=
   s!"DSL → network: exhaustively validated (2^{n} inputs) by the unverified evaluator; \
     not kernel-checked"
 
+/-- Report §5.3.3, §7.2–7.4 (Stage 16b) — the declared front-end boundary of every certificate
+since schema 1.8.0: the step typed term → network is proved (`toNetwork_pred`) and kernel-checked
+at the instance (`net_ok`, `front_end` in `Cert.lean`); what stays unverified is named. -/
+def frontEndProvedText : String :=
+  "DSL typed term → network: proved (toNetwork_pred; kernel-checked net_ok and front_end in \
+    Cert.lean); parser, surface checker and the typed-term printer unverified; predicate_hash \
+    binds the source"
+
 /-- Report §5.3.3 — the text of `trust_boundary.front_end` for a validation outcome (`none` when
 there is no certificate to write: a mismatch or a `loop`). -/
 def FrontEndCheck.trustText : FrontEndCheck → Option String
@@ -73,7 +92,8 @@ def bitString (n x : Nat) : String :=
   String.ofList ((List.range n).map fun k => if (x >>> k) % 2 == 1 then '1' else '0')
 
 /-- Report §5.3.3 — the diagnostic of a failed validation (stage `validate`, code
-`front_end_mismatch`). -/
+`front_end_mismatch`; unreachable from `cqr certify` since Stage 16b, kept for the regression
+tests). -/
 def FrontEndCheck.diagnostic? (c : FrontEndCheck) (name : String) (p : Pos) :
     Option Diagnostic :=
   match c with

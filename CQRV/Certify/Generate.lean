@@ -25,7 +25,13 @@ The generated file imports `CQRV` and contains
   of the theorem (§5.2.4), or, since Stage 14a (`CertRequest.count = .kernelDecided`, `cqr
   certify --count-limit k` with `n ≤ k`), `theorem hM_count : (Finset.univ.filter …).card = M`
   by `Network.countSat_eq_card` and `decide +kernel`, and `theorem cert` takes no hypothesis;
-* `#print axioms cert` (parsed by `CQRV.Certify.Audit`).
+* `#print axioms cert` (parsed by `CQRV.Certify.Audit`);
+* since Stage 16b (docs/tasks/STAGE16_TASK.md B1), between `net` and `emitted`
+  (`CertRequest.progBlock`): `prog`, the typed-term literal of the request
+  (`TypedProgram.renderLean`), `prog_scoped` (`decide`), `net_ok : toNetwork prog = .ok net`
+  (`decide +kernel`: the kernel re-runs the translation on the literal) and
+  `front_end : ∀ x, evalProgram prog x = Network.pred net n x` from `toNetwork_pred` (Stage 16a),
+  with `#print axioms front_end`; every other declaration is byte-identical to Stage 16a.
 
 Stage 12d (decision 4), Stage 13a′ (decision 2): for `cqr certify --shape few:log` the file
 instead names the few-ancilla MCZ (`okPayload (mczFewK n .logDepth)`), proves
@@ -108,6 +114,8 @@ re-checks (exact δ, measured grade, ancilla count). -/
 structure CertRequest where
   name : String
   net : Network
+  /-- Stage 16b: the typed term of the request (`prog` in `Cert.lean`) -/
+  prog : DSL.TypedProgram
   n : Nat
   M : Nat
   r : Nat
@@ -123,10 +131,10 @@ structure CertRequest where
   /-- Stage 15b: the uncomputation mode (`--uncompute`; `coherent` has its own template) -/
   uncompute : UncomputeMode := .mbu
 
-/-- The request of a matched Grover instance with solution count `M`. -/
-def CertRequest.ofInstance (name src : String) (gi : GroverInstance) (M : Nat)
+/-- The request of a matched Grover instance (typed program `tp`) with solution count `M`. -/
+def CertRequest.ofInstance (tp : DSL.TypedProgram) (src : String) (gi : GroverInstance) (M : Nat)
     (count : CountStatus := .hypothesis) : CertRequest :=
-  { name, net := gi.net, n := gi.n, M, r := gi.r, circuit := gi.circuit,
+  { name := tp.name, prog := tp, net := gi.net, n := gi.n, M, r := gi.r, circuit := gi.circuit,
     delta := groverDelta gi.r gi.n M, grade := gi.circuit.grade, nAnc := gi.circuit.nAnc,
     predicateHash := CQRV.Certify.predicateHash src, diffusion := gi.diffusion, count,
     uncompute := gi.uncompute }
@@ -186,6 +194,31 @@ def CertRequest.statement (q : CertRequest) : String :=
         {realLit q.delta} ⟨{g.w}, {g.d}, {g.t}, {g.a}⟩ ∧
       AncRestore {q.n} {q.nAnc} emitted (groverOp {q.predText} ^ {q.r} * hadamardU {q.n}) :="
 
+/-- Report §7.2–7.4, §5.3.3, §8.4.4 (Stage 16b; docs/tasks/STAGE16_TASK.md B1) — the front-end
+declarations of `Cert.lean`, placed between `net` and `emitted` in every template: the typed-term
+literal `prog` (`TypedProgram.renderLean`), its scoping, the kernel link `net_ok` and the theorem
+`front_end`. Every other declaration of the file is as in Stage 16a. -/
+def CertRequest.progBlock (q : CertRequest) : String :=
+  s!"/-- The typed term of the request (report §7.2.2; Stage 16b): the output of the surface checker as
+a Lean literal (`TypedProgram.renderLean`, an unverified printer; `net_ok` ties it to `net`). -/
+def prog : DSL.TypedProgram :=
+  {q.prog.renderLean}
+
+/-- Report §7.2 (Stage 16a) — `prog` is scoped: the hypothesis of the front-end theorems. -/
+theorem prog_scoped : prog.scoped = true := by decide
+
+/-- The front-end link (Stage 16b): the kernel re-runs the translation `toNetwork` on `prog` and
+compares with `net`. -/
+theorem net_ok : toNetwork prog = .ok net := except_ok_of_check _ _ (by decide +kernel)
+
+/-- Report §7.2–7.4, §5.3.3 (Stage 16b) — the front end at this instance: the reference evaluator on
+`prog` agrees with the predicate of `net` on every input (`toNetwork_pred`, Stage 16a). -/
+theorem front_end : ∀ x : Fin {q.n} → Bool, DSL.evalProgram prog x = Network.pred net {q.n} x :=
+  fun x => (toNetwork_pred prog net net_ok prog_scoped x).symm
+
+#print axioms front_end
+"
+
 /-- Report §5.1.3, §8.4.1, §8.4.4, §8.2 (Stage 12d decision 4, Stage 13a′ decision 2) — the text
 of `Cert.lean` for the few-ancilla diffusion (`--shape few:log`, LF line endings). -/
 def renderCertFew (q : CertRequest) : String :=
@@ -213,6 +246,7 @@ open CQRV CQRV.Synthesis CQRV.Grover CQRV.Certify
 /-- The Boolean network of the request (`toNetwork`, §6.1.2). -/
 def net : Network := {networkLit q.net}
 
+{q.progBlock}
 /-- The emitted circuit (IR, §6.1.4): QIR / OpenQASM 3 and `circuit_hash` are of this literal. -/
 def emitted : Circuit := {circuitLit q.circuit}
 
@@ -293,6 +327,7 @@ open CQRV CQRV.Synthesis CQRV.Grover CQRV.Certify
 /-- The Boolean network of the request (`toNetwork`, §6.1.2). -/
 def net : Network := {networkLit q.net}
 
+{q.progBlock}
 /-- The emitted circuit (IR, §6.1.4): QIR / OpenQASM 3 and `circuit_hash` are of this literal. -/
 def emitted : Circuit := {circuitLit q.circuit}
 
@@ -355,6 +390,7 @@ open CQRV CQRV.Synthesis CQRV.Grover CQRV.Certify
 /-- The Boolean network of the request (`toNetwork`, §6.1.2). -/
 def net : Network := {networkLit q.net}
 
+{q.progBlock}
 /-- The emitted circuit (IR, §6.1.4): QIR / OpenQASM 3 and `circuit_hash` are of this literal. -/
 def emitted : Circuit := {circuitLit q.circuit}
 

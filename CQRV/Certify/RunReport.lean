@@ -14,9 +14,10 @@ boundary`, `unverified`, and **measured** resources only (never the report's tar
 number is computed from the run's own objects: the signature, the network, the synthesized
 circuits, the kernel-check timing and the audit. Each row also carries a note saying what the
 status covers; the Markdown file lists the notes under the table. Stage 1 has two rows (Stage 9b
-review, item 4): 1a the parser and surface checker (declared trust boundary, shared by both sides
-of the front-end comparison) and 1b the typed AST → network translation (exhaustively validated
-on 2ⁿ inputs; declared trust boundary for n > 16). With `--profile` (Stage 11b, decision 2 of
+review, item 4): 1a the parser, the surface checker and (Stage 16b) the typed-term printer
+(declared trust boundary) and 1b the typed AST → network translation (kernel-checked since
+Stage 16b: `front_end` of `Cert.lean` from `toNetwork_pred`; exhaustively validated on 2ⁿ inputs
+in Stages 9b–16a). With `--profile` (Stage 11b, decision 2 of
 the tasks) a last row "Hardware profile" reports the check against the declared profile, with
 its own status `checked against declared profile (not a proof about hardware)`; without it the
 report is unchanged. Stage 14a: the header and the stage-2 note say whether `M` is decided by
@@ -76,7 +77,6 @@ structure RunData where
   M : Nat
   r : Nat
   delta : Rat
-  frontEnd : FrontEndCheck
   theoremName : String
   certPath : String
   timing : KernelTiming
@@ -125,25 +125,25 @@ def RunData.rows (d : RunData) : List ReportRow :=
   let G := gateCounts d.circuit
   let andNodes := d.net.andCount
   let m := match d.sig.solutionCount with | some m => s!"{m}" | none => "unknown"
-  let feRow : Verification × String × String := match d.frontEnd with
-    | .validated n =>
-      (.exhaustivelyValidated, s!"n = {n} input bits; 2^{n} = {2 ^ n} inputs compared, 0 disagree",
-       s!"typed AST → network: exhaustively validated (2^{n} inputs), `evalProgram` (reference \
-        evaluator) vs `Network.pred (toNetwork …)` on every input; both are unverified Lean \
-        code and the check is not kernel-checked; declared as \
-        trust_boundary.front_end = \"{frontEndValidatedText n}\"")
-    | .tooLarge n =>
-      (.declaredTrustBoundary, s!"n = {n} input bits (> {frontEndLimit}: not enumerated)",
-       s!"trust_boundary.front_end = \"{frontEndTrust}\"")
-    | _ => (.unverified, "—", "no validation outcome")
+  -- Stage 16b: the typed AST → network step is a theorem of Cert.lean (`front_end`), kernel-checked
+  let feRow : Verification × String × String :=
+    (.kernelChecked,
+     s!"n = {d.n} input bits; `front_end` covers all 2^{d.n} = {2 ^ d.n} inputs (a theorem, not \
+      an enumeration)",
+     s!"typed AST → network: proved (`toNetwork_pred`, Stage 16a) and kernel-checked at this \
+      instance in Cert.lean — `prog` (the typed-term literal), `prog_scoped` (decide), \
+      `net_ok : toNetwork prog = .ok net` (decide +kernel), `front_end : ∀ x, evalProgram prog x \
+      = Network.pred net {d.n} x`; the literal printer is unverified (a wrong literal gives a \
+      different network and fails net_ok); declared as \
+      trust_boundary.front_end = \"{frontEndProvedText}\"")
   let kms := match d.timing.kernelMs with | some k => s!"kernel {msText k}, " | none => ""
   [ { stage := "1a. DSL Input: parser, surface checker",
       input := s!"{d.source} (predicate_hash {d.predicateHash.take 12}…)",
       output := s!"Typed AST `{d.name}`",
       verification := .declaredTrustBoundary, resources := "—",
-      note := "parser and surface checker: declared trust boundary (shared by both sides of the \
-        comparison in 1b, so 1b cannot detect their errors); the source text is bound by \
-        predicate_hash only" },
+      note := "parser, surface checker and the typed-term printer: declared trust boundary (the \
+        theorem of 1b starts at the typed-term literal `prog` of Cert.lean, so an error before it \
+        is not detected there); the source text is bound by predicate_hash only" },
     { stage := "1b. DSL Input: typed AST → network", input := s!"Typed AST `{d.name}`",
       output := "Boolean network (toNetwork)",
       verification := feRow.1, resources := feRow.2.1, note := feRow.2.2 },

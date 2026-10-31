@@ -5,9 +5,9 @@ Runs the built `cqr` from the project root and checks
   * grover_pred_037: exit 0, status line `certified` (Stage 14a: n = 8 ≤ --count-limit 10, the
     default since Stage 14c (12 in 14a–14b), so
     Cert.lean proves hM_count and `cert` has no hypothesis; solution_count.status kernel_decided),
-    certificate.json valid against docs/certificate.schema.json (v1.6.0), grade (15, 134, 72, 7),
+    certificate.json valid against docs/certificate.schema.json (v1.8.0), grade (15, 134, 72, 7),
     delta "7/128", axioms exactly propext, Classical.choice, Quot.sound, no obligations,
-    trust_boundary.front_end = the exhaustive-validation wording for 2^8 inputs (Stage 9b);
+    trust_boundary.front_end = the proved wording and uncompute "mbu" (Stage 16b);
   * the hash link, independently of the CLI: the `emitted` IR literal of Cert.lean (the circuit
     the kernel-checked theorem is about) is parsed here, its canonical JSON hashed with hashlib
     and compared with hashes.circuit; the .qasm / .qir files re-parse to exactly that literal;
@@ -19,7 +19,7 @@ Runs the built `cqr` from the project root and checks
   * the second worked predicate examples/simple_alu_x0_1.cqr (RevLib Simple ALU, bit 1 of x0;
     Stage 9b): M = 30 recounted here from the SyReC semantics (benchmark_diff.reference),
     --solutions 30 → exit 0, `certified (conditional on: solution_count = 30)`, r = 1, delta
-    833/2048, grade (16, 121, 60, 10), front end validated on 2^6 inputs; the committed
+    833/2048, grade (16, 121, 60, 10), the proved front-end wording; the committed
     examples/certs/simple_alu_x0_1/ agrees with the run;
   * the committed run reports (run_report.md / run_report.json, Stage 9b decision 4) of both
     examples: 9 rows in the order of Table 8.5.2 (stage 1 as 1a parser / surface checker and 1b
@@ -85,6 +85,14 @@ Runs the built `cqr` from the project root and checks
     the test to a temporary file, certified without the flag → the conditional form (`certified
     (conditional on: solution_count = 512)`, hM_card, status hypothesis); the kernel-decided
     form at n = 11 is not run (its cost is what Stage 14b measured). Budget: under 60 s.
+  * Stage 16b: every Cert.lean (all templates, every run below) carries, between `net` and
+    `emitted`, `prog` (the typed-term literal), `prog_scoped`, `net_ok : toNetwork prog = .ok net`
+    and `front_end : ∀ x : Fin n → Bool, DSL.evalProgram prog x = Network.pred net n x` with
+    `#print axioms front_end`; the four committed Cert.lean files are byte-identical to the
+    Stage 16a files (git 52ad73b) outside that block; certificate.json says schema_version
+    "1.8.0" with uncompute "mbu" / "coherent" and the proved front_end wording; run report row 1b
+    is kernel-checked and names net_ok / front_end, row 1a names the typed-term printer; `cqr
+    certify` no longer runs the exhaustive validation (cqr check --truth-table keeps it).
 
 Usage: python -I tests/diff/certify_check.py --cqr <path to cqr>   (after `lake build`)
 """
@@ -124,9 +132,33 @@ VERIFICATION = {"kernel-checked", "exhaustively validated", "declared trust boun
                 "unverified"}
 
 
-def validated(n):
-    return (f"DSL → network: exhaustively validated (2^{n} inputs) by the unverified evaluator; "
-            "not kernel-checked")
+PROVED = ("DSL typed term → network: proved (toNetwork_pred; kernel-checked net_ok and front_end in "
+          "Cert.lean); parser, surface checker and the typed-term printer unverified; "
+          "predicate_hash binds the source")
+STAGE16A = "52ad73b"  # the Stage 16a commit: its Cert.lean files have no front-end block
+RE_FRONT_END = re.compile(r"/-- The typed term of the request.*?#print axioms front_end\n\n", re.S)
+
+
+def check_front_end(text, n, name):
+    """Cert.lean states the front end at its instance (Stage 16b): the four declarations between
+    `net` and `emitted`, the theorem at the arity n of the request."""
+    frags = (f"def prog : DSL.TypedProgram :=\n  {{ name := \"{name}\", params := [",
+             "theorem prog_scoped : prog.scoped = true := by decide\n",
+             "theorem net_ok : toNetwork prog = .ok net := except_ok_of_check _ _ (by decide +kernel)\n",
+             f"theorem front_end : ∀ x : Fin {n} → Bool, DSL.evalProgram prog x = "
+             f"Network.pred net {n} x :=\n  fun x => (toNetwork_pred prog net net_ok prog_scoped x).symm\n",
+             "#print axioms front_end\n\n/-- The emitted circuit")
+    for f in frags:
+        assert text.count(f) == 1, f
+    assert text.index("def net : Network") < text.index("def prog :") < text.index("def emitted :")
+    assert len(RE_FRONT_END.findall(text)) == 1, "front-end block"
+
+
+def stage16a_text(rel):
+    """The committed Cert.lean of the Stage 16a commit (before the front-end block)."""
+    p = subprocess.run(["git", "show", f"{STAGE16A}:{rel}"], cwd=ROOT, capture_output=True)
+    assert p.returncode == 0, p.stderr.decode("utf-8", "replace")
+    return p.stdout.decode("utf-8")  # the blob's bytes, no line-ending translation
 
 
 def secs(ms):
@@ -175,9 +207,14 @@ def check_report(d, cert):
     assert ", ".join(cert["axioms"]) in res7
     assert f"G = {cert['hardware_perturbation']['G']} " in rows["8. QIR Export"]["resources"]
     assert rows[STAGES[0]]["verification"] == "declared trust boundary"
-    assert "shared by both sides of the comparison" in rows[STAGES[0]]["note"]
-    assert rows[STAGES[1]]["verification"] == "exhaustively validated"
+    assert "typed-term printer" in rows[STAGES[0]]["note"]
+    # Stage 16b: row 1b is the theorem `front_end` of Cert.lean, kernel-checked
+    assert rows[STAGES[1]]["verification"] == "kernel-checked"
+    assert cert["trust_boundary"]["front_end"] == PROVED
     assert cert["trust_boundary"]["front_end"] in rows[STAGES[1]]["note"]
+    assert "net_ok : toNetwork prog = .ok net" in rows[STAGES[1]]["note"], rows[STAGES[1]]
+    assert "front_end" in rows[STAGES[1]]["note"] and "toNetwork_pred" in rows[STAGES[1]]["note"]
+    assert f"2^{cert['instance']['n']} = {2 ** cert['instance']['n']} inputs" in rows[STAGES[1]]["resources"]
     assert [r["verification"] for r in rep["rows"][4:8]] == ["kernel-checked"] * 4
     assert rows["8. QIR Export"]["verification"] == "declared trust boundary"
     assert md.count("\n| ") == 10 + len(hw_rows) and all(st in md for st in STAGES), \
@@ -209,7 +246,7 @@ def masked(text):
     return out
 
 
-def check_hardware(d, cert, plain, last_two, fits, version="1.6.0"):
+def check_hardware(d, cert, plain, last_two, fits, version="1.8.0"):
     """The `hardware` object of a --profile run, recomputed; the rest equals `plain`."""
     prof = json.loads(read(PROFILE))
     h = cert["hardware"]
@@ -369,7 +406,9 @@ def main():
         assert cert["spec"]["delta"] == "7/128", cert["spec"]
         assert cert["axioms"] == STANDARD, cert["axioms"]
         assert cert["theorem"] == THEOREM
-        assert cert["trust_boundary"]["front_end"] == validated(8), cert["trust_boundary"]
+        assert cert["trust_boundary"]["front_end"] == PROVED, cert["trust_boundary"]
+        assert cert["uncompute"] == "mbu", cert.get("uncompute")
+        check_front_end(text, 8, NAME)
         assert cert["solution_count"] == {"value": 32, "status": "kernel_decided"}, cert
         assert status_line(cert) == "certified"
         assert text.count("theorem hM_count : (Finset.univ.filter fun x => Network.pred net 8 x "
@@ -379,9 +418,9 @@ def main():
         assert text.count("nAnc_eq hM_count\n") == 1 and "native_decide" not in text
         print("ok:   Cert.lean: hM_count by Network.countSat_eq_card and decide +kernel; "
               "theorem cert without hypothesis; solution_count kernel_decided")
-        print("ok:   JSON valid (schema v1.6.0); grade (15, 134, 72, 7), delta 7/128, "
-              "axioms exactly propext, Classical.choice, Quot.sound; front end validated "
-              "on 2^8 inputs")
+        print("ok:   JSON valid (schema v1.8.0, uncompute mbu); grade (15, 134, 72, 7), delta 7/128, "
+              "axioms exactly propext, Classical.choice, Quot.sound; front end: the proved wording, "
+              "Cert.lean states prog / prog_scoped / net_ok / front_end (Stage 16b)")
         print("ok:   circuit hash = SHA3 of the IR literal of Cert.lean (hashlib); "
               ".qasm / .qir re-parse to that literal; proof hash recomputed")
         cert2, _ = check_dir(runs[1], validator)
@@ -398,9 +437,9 @@ def main():
         print("ok:   committed examples/certs/grover_pred_037 agrees (JSON modulo machine fields)")
         assert masked(read(os.path.join(runs[0], "certificate.json"))) == \
             masked(read(os.path.join(EXAMPLE, "certificate.json"))), "certificate.json bytes"
-        assert cert["schema_version"] == "1.6.0" and "hardware" not in cert
+        assert cert["schema_version"] == "1.8.0" and "hardware" not in cert
         print("ok:   without --profile: certificate.json byte-identical to the committed one "
-              "outside reference_configuration (schema_version 1.6.0, no hardware)")
+              "outside reference_configuration (schema_version 1.8.0, no hardware)")
 
         # --profile illustrative_sc (Stage 11b; renamed from ibm_kyiv in Stage 14a)
         out = os.path.join(tmp, "prof")
@@ -435,7 +474,8 @@ def main():
         assert ac["instance"] == {"n": 6, "M": 30, "r": 1}, ac["instance"]
         assert ac["spec"]["delta"] == "833/2048", ac["spec"]
         assert ac["grade"] == {"w": 16, "d": 121, "t": 60, "a": 10}, ac["grade"]
-        assert ac["trust_boundary"]["front_end"] == validated(6)
+        assert ac["trust_boundary"]["front_end"] == PROVED and ac["uncompute"] == "mbu"
+        check_front_end(atext, 6, alu)
         assert "sorry" not in atext and ".xor " in atext
         exa = os.path.join(ROOT, "examples", "certs", alu)
         ea, _ = check_dir(exa, validator)
@@ -459,8 +499,8 @@ def main():
               "833/2048 + 345*1/100 = 39493/10240 (vacuous: G*p_bar = 3.45 >= 1)")
         print(f"ok:   second predicate {alu} (M = 30 from the SyReC semantics, and decided by the "
               f"kernel): `{last}` (exit 0; "
-              "r = 1, delta 833/2048, grade (16, 121, 60, 10), front end validated on 2^6 "
-              "inputs); committed examples/certs/simple_alu_x0_1 agrees")
+              "r = 1, delta 833/2048, grade (16, 121, 60, 10), the proved front-end wording, "
+              "front_end at n = 6); committed examples/certs/simple_alu_x0_1 agrees")
         for d, c in ((EXAMPLE, ex), (exa, ea)):
             check_report(d, c)
         print("ok:   committed run reports (both examples): 9 rows of Table 8.5.2 (1a / 1b), "
@@ -477,7 +517,9 @@ def main():
         out_p, so_p = runs_few["plain"]
         assert so_p.rstrip("\n").split("\n")[-1] == "certified", so_p
         fc, ftext = check_dir(out_p, validator)
-        assert fc["schema_version"] == "1.6.0" and fc["diffusion_shape"] == "few:log", fc
+        check_front_end(ftext, 8, NAME)
+        assert fc["schema_version"] == "1.8.0" and fc["diffusion_shape"] == "few:log", fc
+        assert fc["uncompute"] == "mbu" and fc["trust_boundary"]["front_end"] == PROVED, fc
         assert fc["solution_count"] == {"value": 32, "status": "kernel_decided"}, fc
         assert "hardware" not in fc
         assert fc["status"] == "certified" and fc["obligations"] == [] and fc["axioms"] == STANDARD
@@ -512,7 +554,7 @@ def main():
         assert exf["reference_configuration"]["kernel_check"]["runs"] == 5
         check_report(EXAMPLE_FEW, exf)
         print("ok:   --shape few:log: `certified` (exit 0); "
-              "schema v1.6.0, diffusion_shape few:log, grade (10, 172, 96, 2), delta 7/128, "
+              "schema v1.8.0, diffusion_shape few:log, grade (10, 172, 96, 2), delta 7/128, "
               "axioms exactly the standard three; grover_certificate_few_all, no fewCheck")
         print("ok:   --shape few:log --profile illustrative_sc: fits all budgets (d = 172 <= 200), "
               "delta_hw = 7/128 + 380*1/100 = 2467/640 (vacuous); hardware recomputed; "
@@ -530,7 +572,9 @@ def main():
         out_p, so_p = runs_coh["plain"]
         assert so_p.rstrip("\n").split("\n")[-1] == "certified", so_p
         cc, ctext = check_dir(out_p, validator)
-        assert cc["schema_version"] == "1.7.0" and cc["uncompute"] == "coherent", cc
+        check_front_end(ctext, 8, NAME)
+        assert cc["schema_version"] == "1.8.0" and cc["uncompute"] == "coherent", cc
+        assert cc["trust_boundary"]["front_end"] == PROVED, cc
         assert "diffusion_shape" not in cc and "hardware" not in cc
         assert cc["solution_count"] == {"value": 32, "status": "kernel_decided"}, cc
         assert cc["status"] == "certified" and cc["obligations"] == [] and cc["axioms"] == STANDARD
@@ -552,8 +596,7 @@ def main():
             assert bad_frag not in ctext, bad_frag
         out_k, so_k = runs_coh["prof"]
         ck, _ = check_dir(out_k, validator)
-        line = check_hardware(out_k, ck, cc, so_k.rstrip("\n").split("\n")[-2:], fits=True,
-                              version="1.7.0")
+        line = check_hardware(out_k, ck, cc, so_k.rstrip("\n").split("\n")[-2:], fits=True)
         g_coh = cc["hardware_perturbation"]["G"]
         dhw_coh = Fraction(7, 128) + Fraction(g_coh, 100)
         assert line == ("hardware profile illustrative_sc: fits all budgets; "
@@ -587,7 +630,7 @@ def main():
         assert not os.path.exists(out), "a certificate was written for few:log + coherent"
         rc, so, se = certify(args.cqr, src, os.path.join(tmp, "bogus"), "--uncompute", "bogus")
         assert rc == 2 and not os.path.exists(os.path.join(tmp, "bogus")), (rc, so, se)
-        print("ok:   --uncompute coherent: `certified` (exit 0); schema v1.7.0, uncompute coherent, "
+        print("ok:   --uncompute coherent: `certified` (exit 0); schema v1.8.0, uncompute coherent, "
               "grade (15, 200, 144, 7), 0 measurements, 0 classical bits, delta 7/128, axioms exactly "
               "the standard three; grover_certificate_coherent, OracleCertCoh, no DiffusionCert")
         print(f"ok:   --uncompute coherent --profile illustrative_sc: fits all budgets with d = 200 = "
@@ -596,6 +639,17 @@ def main():
               "examples/certs/grover_pred_037_coh agrees (bytes, JSON, run report)")
         print("ok:   --uncompute mbu = the Phase 1 certificate byte for byte; few:log + coherent -> "
               "unsupported_combination (exit 1, nothing written); --uncompute bogus -> usage (exit 2)")
+
+        # Stage 16b: outside the front-end block, the four committed Cert.lean files are the
+        # Stage 16a files byte for byte (cert, net, emitted and every other declaration unchanged)
+        for dname in ("grover_pred_037", "simple_alu_x0_1", "grover_pred_037_few",
+                      "grover_pred_037_coh"):
+            new = read(os.path.join(ROOT, "examples", "certs", dname, "Cert.lean"))
+            old = stage16a_text(f"examples/certs/{dname}/Cert.lean")
+            assert RE_FRONT_END.sub("", new) == old, \
+                f"{dname}: Cert.lean differs from the Stage 16a file outside the front-end block"
+        print("ok:   the four committed Cert.lean files = the Stage 16a files (git 52ad73b) + the "
+              "front-end block (prog, prog_scoped, net_ok, front_end); byte-identical elsewhere")
 
         # XOR predicate: certified since Stage 9a (Lemma 6.3.2 for XOR, `lemma_6_3_2_xor`)
         out = os.path.join(tmp, "xor")
@@ -607,6 +661,7 @@ def main():
         assert xc["solution_count"] == {"value": 4, "status": "kernel_decided"}, xc
         assert xc["status"] == "certified" and xc["obligations"] == []
         assert xc["axioms"] == STANDARD, xc["axioms"]
+        check_front_end(xtext, xc["instance"]["n"], "xor_pred")
         assert "sorry" not in xtext and ".xor " in xtext
         print(f"ok:   XOR predicate xor_pred: `{last}` (exit 0; axioms exactly propext, "
               "Classical.choice, Quot.sound; no obligations)")
@@ -626,6 +681,7 @@ def main():
         assert ic["status"] == "certified" and ic["obligations"] == []
         assert ic["axioms"] == STANDARD, ic["axioms"]
         assert ic["spec"]["delta"] == "7/128" and "r = 2." in itext, (ic["spec"], itext[:400])
+        check_front_end(itext, ic["instance"]["n"], "if_pred")
         assert "sorry" not in itext and ".xor " in itext
         print(f"ok:   if predicate if_pred (M = 8 by brute force): `{last}` (exit 0; r = 2, "
               "delta 7/128; axioms exactly propext, Classical.choice, Quot.sound)")
@@ -744,6 +800,7 @@ def main():
         assert c11["hypotheses"][0] == "solution_count = 512 (hM_card, supplied, not decided)"
         assert c11["status"] == "certified" and c11["axioms"] == STANDARD and c11["obligations"] == []
         assert "(hM_card :" in t11 and "hM_count" not in t11 and "Network.pred net 11 " in t11
+        check_front_end(t11, 11, "tiny11")
         assert dt < 60, f"(f') took {dt:.0f} s (budget 60 s)"
         print(f"ok:   (f') n = 11 without --count-limit (default 10): `{last}`, Cert.lean with "
               f"hM_card, solution_count.status hypothesis (exit 0, {dt:.0f} s)")

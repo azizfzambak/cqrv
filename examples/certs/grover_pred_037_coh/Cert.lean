@@ -22,6 +22,26 @@ def net : Network := ⟨8, #[
     .and 0 3, .and 8 7],
   [9]⟩
 
+/-- The typed term of the request (report §7.2.2; Stage 16b): the output of the surface checker as
+a Lean literal (`TypedProgram.renderLean`, an unverified printer; `net_ok` ties it to `net`). -/
+def prog : DSL.TypedProgram :=
+  { name := "grover_pred_037", params := [("x", (.vec 8))], ret := .bool,
+    body := (.letE (σ := .bool) "b0" (.idx (n := 8) (.var "x" (.vec 8)) (.lit ⟨0, by decide⟩)) (.letE (σ := .bool) "b3" (.idx (n := 8) (.var "x" (.vec 8)) (.lit ⟨3, by decide⟩)) (.letE (σ := .bool) "b7" (.idx (n := 8) (.var "x" (.vec 8)) (.lit ⟨7, by decide⟩)) (.and (.and (.var "b0" .bool) (.var "b3" .bool)) (.var "b7" .bool))))) }
+
+/-- Report §7.2 (Stage 16a) — `prog` is scoped: the hypothesis of the front-end theorems. -/
+theorem prog_scoped : prog.scoped = true := by decide
+
+/-- The front-end link (Stage 16b): the kernel re-runs the translation `toNetwork` on `prog` and
+compares with `net`. -/
+theorem net_ok : toNetwork prog = .ok net := except_ok_of_check _ _ (by decide +kernel)
+
+/-- Report §7.2–7.4, §5.3.3 (Stage 16b) — the front end at this instance: the reference evaluator on
+`prog` agrees with the predicate of `net` on every input (`toNetwork_pred`, Stage 16a). -/
+theorem front_end : ∀ x : Fin 8 → Bool, DSL.evalProgram prog x = Network.pred net 8 x :=
+  fun x => (toNetwork_pred prog net net_ok prog_scoped x).symm
+
+#print axioms front_end
+
 /-- The emitted circuit (IR, §6.1.4): QIR / OpenQASM 3 and `circuit_hash` are of this literal. -/
 def emitted : Circuit := ⟨8, [
     .h (.data 0), .h (.data 1), .h (.data 2), .h (.data 3), .h (.data 4),

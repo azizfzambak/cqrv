@@ -63,9 +63,11 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   (exit 0) only if the kernel check and the audit pass; otherwise `certificate with tracked
   obligations: <list>` (exit 3). Kernel-check failure: message, exit 1, no JSON. `--bench k`:
   `k + 1` kernel checks, the median of the last `k` is recorded (scripts/bench_kernel.sh).
-  Stage 9b: before writing anything, the front end is validated exhaustively for `n ≤ 16`
-  (`validateFrontEnd`; a disagreement is a `front_end_mismatch` diagnostic, exit 1, nothing
-  written) and `trust_boundary.front_end` says so. `--report` also writes `run_report.md` and
+  Stage 16b: `Cert.lean` states the front end at the instance (`prog`, the typed-term literal;
+  `prog_scoped`; `net_ok : toNetwork prog = .ok net`; `front_end` from `toNetwork_pred`, all
+  kernel-checked) and `trust_boundary.front_end` says so (schema 1.8.0, `uncompute` explicit);
+  the Stage 9b exhaustive validation (`validateFrontEnd`, `front_end_mismatch`) is no longer run
+  by `certify` (`cqr check --truth-table` keeps it). `--report` also writes `run_report.md` and
   `run_report.json` (Table 8.5.2, measured values; `CQRV.Certify.RunReport`).
   Stage 11b: `--profile <name|path>` (`profiles/<name>.json`, or a path) checks the measured
   grade against the declared budget and computes `δ_hw = δ + G·p̄` (report §3.3.2–3.3.3);
@@ -479,8 +481,10 @@ same circuit) and, with `--report`, `run_report.md` / `run_report.json` → stat
 `Network.countSat` (a mismatch is `solution_count_mismatch`, nothing written) and decided by the
 kernel in `Cert.lean` (`hM_count`); the status line is then `certified` without condition.
 `--uncompute coherent` (Stage 15b, PHASE2_SPEC.md §A.0.1): the oracle and the tree diffusion with
-the adjoint uncompute, certified by `grover_certificate_coherent` (`renderCertCoherent`; schema
-1.7.0 with `uncompute`); `mbu` (default) is the Phase 1 output byte for byte. -/
+the adjoint uncompute, certified by `grover_certificate_coherent` (`renderCertCoherent`); `mbu`
+(default) is the Phase 1 template. Stage 16b: every `Cert.lean` adds `prog`, `prog_scoped`,
+`net_ok`, `front_end` (`CertRequest.progBlock`), every JSON writes `uncompute` (schema 1.8.0) and
+the proved `trust_boundary.front_end`; the Stage 9b validation is no longer run. -/
 def runCertify (path : String) (solutions iters : Option Nat) (out : Option String)
     (bench : Option Nat) (report : Bool) (profile : Option String)
     (diff : CertDiffusion := .tree) (countLimit : Nat := defaultCountLimit)
@@ -503,12 +507,8 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
     let some M := gi.M
       | IO.eprintln "cqr certify: the certificate needs the solution count M (--solutions M)"
         return 2
-    -- front-end validation (Stage 9b, decision 1): before anything is written
-    let fe := validateFrontEnd tp gi.net gi.n
-    let some feText := fe.trustText
-      | match fe.diagnostic? tp.name entryPos with
-        | some d => IO.println d.toJson.compress; return 1
-        | none => return 1
+    -- the front end (Stage 16b): a theorem of Cert.lean (`front_end`), declared as such
+    let feText := frontEndProvedText
     -- the solution count (Stage 14a): for n ≤ --count-limit, counted here and decided by the
     -- kernel in Cert.lean (`hM_count`); a mismatch with the supplied / extracted M writes nothing
     let count : CountStatus ←
@@ -532,7 +532,7 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
       | some arg => match ← loadProfile arg with
         | .ok ph => pure (some ph)
         | .error e => IO.eprintln s!"cqr certify: {e}"; return 2
-    let q := CertRequest.ofInstance tp.name src gi M count
+    let q := CertRequest.ofInstance tp src gi M count
     let text := renderCert q
     let dir := (out.getD s!"certs/{tp.name}").dropEndWhile (fun c => c == '/' || c == '\\')
     let file (n : String) : String := s!"{dir}/{n}"
@@ -588,7 +588,7 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
         { name := tp.name, source := path, predicateHash := cert.predicateHash, sig,
           pattern := gi.entry.name, subst, sides, net := gi.net, oracle := gi.oracle,
           diffusion := dif, circuit := gi.circuit, n := gi.n, M, r := gi.r, delta := q.delta,
-          frontEnd := fe, theoremName := q.theoremName, certPath, timing,
+          theoremName := q.theoremName, certPath, timing,
           axioms := last.axioms, statusLine, certified := status == .certified,
           hardware := hw, diffusionShape := diff, count, uncompute := mode }
       IO.FS.writeFile (file "run_report.md") rd.toMarkdown

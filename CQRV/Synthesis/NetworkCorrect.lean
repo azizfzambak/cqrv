@@ -53,6 +53,11 @@ namespace CQRV.Synthesis
 
 open CQRV.DSL ToNetwork
 
+-- Stage 16b: equality of networks is decidable (nodes and outputs are lists of decidable
+-- things), so a certificate proves `net_ok : toNetwork prog = .ok net` by `except_ok_of_check`
+-- of a `decide +kernel`, as `emitted_ok` does for circuits.
+deriving instance DecidableEq for Network
+
 /-! ## Values -/
 
 /-- Report §7.1.4 (Stage 16a) — a value has the shape of its type. `Nat m` carries no bound: both

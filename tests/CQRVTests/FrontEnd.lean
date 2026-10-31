@@ -111,6 +111,49 @@ theorem grover_net_WF : groverN.WF := toNetwork_WF groverProg groverN groverN_ok
   | .error _ => false
 #guard groverN.nInputs == 8 && groverN.andCount == 2
 
+/-! ## The typed-term printer (Stage 16b, `TypedProgram.renderLean`) -/
+
+/-- The literal `cqr certify` writes as `prog` for `grover_pred_037`. -/
+def groverLit : String :=
+  "{ name := \"grover_pred_037\", params := [(\"x\", (.vec 8))], ret := .bool,\n    \
+    body := (.letE (σ := .bool) \"b0\" (.idx (n := 8) (.var \"x\" (.vec 8)) (.lit ⟨0, by decide⟩)) \
+    (.letE (σ := .bool) \"b3\" (.idx (n := 8) (.var \"x\" (.vec 8)) (.lit ⟨3, by decide⟩)) \
+    (.letE (σ := .bool) \"b7\" (.idx (n := 8) (.var \"x\" (.vec 8)) (.lit ⟨7, by decide⟩)) \
+    (.and (.and (.var \"b0\" .bool) (.var \"b3\" .bool)) (.var \"b7\" .bool))))) }"
+#guard groverProg.renderLean == groverLit
+-- the parsed and checked source prints the same literal as the hand-written term
+#guard ((parse groverSrc >>= check).map TypedProgram.renderLean).toOption == some groverLit
+
+/-- Every constructor once: `for` with `idx` by its loop variable, `let`, `if`, `or`, `not`,
+`and`, `idx` by a literal, `lit`, `loop`, a `Nat` parameter and result. -/
+def allProg : TypedProgram :=
+  { name := "all", params := [("x", .vec 4), ("k", .nat 3)], ret := .nat 3,
+    body := .letE "p" (.forE "i" 4 "acc" (.lit false)
+        (.xor (.var "acc" .bool) (.idx (.var "x" (.vec 4)) (.loopVar "i" 4 (by decide)))))
+      (.ite (.or (.not (.var "p" .bool))
+          (.and (.idx (.var "x" (.vec 4)) (.lit ⟨1, by decide⟩)) (.lit true)))
+        (.loopE "a" (.var "k" (.nat 3)) (.lit false) (.var "a" (.nat 3)))
+        (.var "k" (.nat 3))) }
+
+def allLitText : String :=
+  "{ name := \"all\", params := [(\"x\", (.vec 4)), (\"k\", (.nat 3))], ret := (.nat 3),\n    \
+    body := (.letE (σ := .bool) \"p\" (.forE (σ := .bool) \"i\" 4 \"acc\" (.lit false) \
+    (.xor (.var \"acc\" .bool) (.idx (n := 4) (.var \"x\" (.vec 4)) (.loopVar \"i\" 4 (by decide))))) \
+    (.ite (.or (.not (.var \"p\" .bool)) (.and (.idx (n := 4) (.var \"x\" (.vec 4)) \
+    (.lit ⟨1, by decide⟩)) (.lit true))) (.loopE (σ := (.nat 3)) \"a\" (.var \"k\" (.nat 3)) \
+    (.lit false) (.var \"a\" (.nat 3))) (.var \"k\" (.nat 3)))) }"
+#guard allProg.renderLean == allLitText
+#guard allProg.scoped
+
+/-- `allLitText`, pasted back as Lean: it elaborates (explicit implicits, `by decide` for the
+bounds) and prints the same literal. -/
+def allLit : TypedProgram :=
+  { name := "all", params := [("x", (.vec 4)), ("k", (.nat 3))], ret := (.nat 3),
+    body := (.letE (σ := .bool) "p" (.forE (σ := .bool) "i" 4 "acc" (.lit false) (.xor (.var "acc" .bool) (.idx (n := 4) (.var "x" (.vec 4)) (.loopVar "i" 4 (by decide))))) (.ite (.or (.not (.var "p" .bool)) (.and (.idx (n := 4) (.var "x" (.vec 4)) (.lit ⟨1, by decide⟩)) (.lit true))) (.loopE (σ := (.nat 3)) "a" (.var "k" (.nat 3)) (.lit false) (.var "a" (.nat 3))) (.var "k" (.nat 3)))) }
+#guard allLit.renderLean == allLitText
+-- strings are quoted: a name with a quote or a backslash survives
+#guard (TExpr.var "a\"b\\c" .bool).renderLean == "(.var \"a\\\"b\\\\c\" .bool)"
+
 /-! ## Axioms -/
 
 /-- info: 'CQRV.Synthesis.toNetwork_succeeds' depends on axioms: [propext, Classical.choice, Quot.sound] -/

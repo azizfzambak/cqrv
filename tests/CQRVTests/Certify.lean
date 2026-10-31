@@ -65,7 +65,12 @@ def sample : Except String Certificate := certificateOf groverSrc cfg
 #guard match sample with
   | .ok c => c.hypotheses.head? == some "solution_count = 32 (hM_card, supplied, not decided)" &&
       (c.toJson.compress.splitOn "\"solution_count\":{\"status\":\"hypothesis\",\"value\":32}").length == 2 &&
-      (c.toJson.compress.splitOn "\"schema_version\":\"1.6.0\"").length == 2
+      (c.toJson.compress.splitOn "\"schema_version\":\"1.8.0\"").length == 2
+  | .error _ => false
+-- Stage 16b: the sample declares the proved front end
+#guard match sample with
+  | .ok c => c.frontEnd == frontEndProvedText &&
+      (c.toJson.compress.splitOn ("\"front_end\":" ++ frontEndProvedText.quote)).length == 2
   | .error _ => false
 -- Stage 8a review: G counts every noisy operation, terminal measurements included
 #guard match sample with
@@ -133,7 +138,7 @@ def groverReq : Option CertRequest :=
   match parse groverSrc >>= check with
   | .ok tp =>
     match groverInstance tp (extract tp) none with
-    | .ok gi => some (CertRequest.ofInstance tp.name groverSrc gi 32)
+    | .ok gi => some (CertRequest.ofInstance tp groverSrc gi 32)
     | .error _ => none
   | .error _ => none
 
@@ -151,6 +156,19 @@ def xorNet : Network := ⟨2, #[.input 0, .input 1, .xor 0 1], [2]⟩
 -- Stage 12a: the generated diffusion certificate is the balanced tree
 #guard (groverCert.splitOn "  net := treeNet 8").length == 2
 #guard (groverCert.splitOn "theorem emitted_ok : groverCircuit net 8 2 = .ok emitted").length == 2
+-- Stage 16b: the front-end declarations between `net` and `emitted` (every template below too)
+def progBlockFrags : List String :=
+  ["  [9]⟩\n\n/-- The typed term of the request",
+   "def prog : DSL.TypedProgram :=\n  { name := \"grover_pred_037\", params := [(\"x\", (.vec 8))], \
+    ret := .bool,\n    body := (.letE (σ := .bool) \"b0\" (.idx (n := 8) (.var \"x\" (.vec 8)) \
+    (.lit ⟨0, by decide⟩))",
+   "theorem prog_scoped : prog.scoped = true := by decide\n",
+   "theorem net_ok : toNetwork prog = .ok net := except_ok_of_check _ _ (by decide +kernel)\n",
+   "theorem front_end : ∀ x : Fin 8 → Bool, DSL.evalProgram prog x = Network.pred net 8 x :=\n  \
+    fun x => (toNetwork_pred prog net net_ok prog_scoped x).symm\n",
+   "#print axioms front_end\n\n/-- The emitted circuit"]
+#guard progBlockFrags.all fun f => (groverCert.splitOn f).length == 2
+#guard (groverCert.splitOn "def prog").length == 2
 -- Stage 9a: an XOR network gets the same proved certificate as an AND/NOT/OR network (oracle
 -- certificate, no `sorry`, no `xorFree` side condition)
 #guard groverReq.all fun q => ((renderCert { q with net := xorNet }).splitOn "sorry").length == 1
@@ -176,7 +194,7 @@ def groverReqFew : Option CertRequest :=
   match parse groverSrc >>= check with
   | .ok tp =>
     match groverInstance tp (extract tp) none .fewLog with
-    | .ok gi => some (CertRequest.ofInstance tp.name groverSrc gi 32)
+    | .ok gi => some (CertRequest.ofInstance tp groverSrc gi 32)
     | .error _ => none
   | .error _ => none
 
@@ -184,6 +202,7 @@ def groverCertFew : String := (groverReqFew.map renderCert).getD ""
 
 #guard groverReqFew.map (fun q => (q.grade, q.nAnc, q.diffusion)) ==
   some (⟨10, 172, 96, 2⟩, 2, .fewLog)
+#guard progBlockFrags.all fun f => (groverCertFew.splitOn f).length == 2
 #guard (groverCertFew.splitOn "native_decide").length == 1
 #guard (groverCertFew.splitOn "sorry").length == 1
 -- Stage 13a′: no per-instance classical check; `grover_certificate_few_all`
@@ -205,7 +224,7 @@ def groverReqCoh : Option CertRequest :=
   match parse groverSrc >>= check with
   | .ok tp =>
     match groverInstance tp (extract tp) none .tree .coherent with
-    | .ok gi => some (CertRequest.ofInstance tp.name groverSrc gi 32)
+    | .ok gi => some (CertRequest.ofInstance tp groverSrc gi 32)
     | .error _ => none
   | .error _ => none
 
@@ -215,6 +234,7 @@ def groverCertCoh : String := (groverReqCoh.map renderCert).getD ""
 #guard groverReqCoh.map (fun q => (q.grade, q.nAnc, q.diffusion, q.uncompute)) ==
   some (⟨15, 200, 144, 7⟩, 7, .tree, .coherent)
 #guard groverReqCoh.map (·.circuit.nBits) == some 0
+#guard progBlockFrags.all fun f => (groverCertCoh.splitOn f).length == 2
 #guard (groverCertCoh.splitOn
   "theorem emitted_ok : groverCircuit net 8 2 none .tree .coherent = .ok emitted").length == 2
 #guard (groverCertCoh.splitOn "def oracle : OracleCertCoh 8 where").length == 2
@@ -245,14 +265,14 @@ def groverCertCoh : String := (groverReqCoh.map renderCert).getD ""
     | .error (.diagnostic d) => d.stage == .synthesis && d.code == .unsupportedCombination
     | _ => false
   | .error _ => false
--- the JSON: `uncompute` and schema 1.7.0 iff coherent; the mbu envelope keeps 1.6.0
+-- the JSON (Stage 16b, schema 1.8.0): `uncompute` written in every certificate, one version
 #guard match sample with
   | .ok c =>
     let cc : Certificate := { c with uncompute := .coherent }
-    (c.toJson.compress.splitOn "\"uncompute\"").length == 1 &&
-      (c.toJson.compress.splitOn "\"schema_version\":\"1.6.0\"").length == 2 &&
+    (c.toJson.compress.splitOn "\"uncompute\":\"mbu\"").length == 2 &&
+      (c.toJson.compress.splitOn "\"schema_version\":\"1.8.0\"").length == 2 &&
       (cc.toJson.compress.splitOn "\"uncompute\":\"coherent\"").length == 2 &&
-      (cc.toJson.compress.splitOn "\"schema_version\":\"1.7.0\"").length == 2
+      (cc.toJson.compress.splitOn "\"schema_version\":\"1.8.0\"").length == 2
   | .error _ => false
 #guard (groverCertFew.splitOn "nAnc_eq\n    hM_card\n").length == 2
 -- Stage 14a, few:log with the kernel-decided count

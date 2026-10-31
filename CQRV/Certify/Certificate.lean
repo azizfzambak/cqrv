@@ -36,8 +36,13 @@ reviewer decisions 2 and 3).
   the tree certificates stay byte-identical. v1.6.0 (Stage 14a, DECISIONS.md 2026-10-29) adds
   the required object `solution_count` `{value, status}` (`CountStatus`: `kernel_decided` when
   `Cert.lean` proves `hM_count` by `Network.countSat_eq_card` and `decide +kernel`, `hypothesis`
-  when `cert` keeps `hM_card`); every certificate now says "1.6.0", and `hardware` /
-  `diffusion_shape` are optional under it.
+  when `cert` keeps `hM_card`); every certificate then said "1.6.0", and `hardware` /
+  `diffusion_shape` are optional under it. v1.7.0 (Stage 15b) added `uncompute` to coherent
+  certificates only. **v1.8.0 (Stage 16b, DECISIONS.md 2026-10-31; the retirement of the
+  omission convention decided 2026-10-30, Stage 15b review)** writes `uncompute` in every
+  certificate, keeps `solution_count` required, and makes
+  `trust_boundary.front_end` the proved wording (`frontEndProvedText`: `toNetwork_pred`,
+  kernel-checked `net_ok` and `front_end` in `Cert.lean`); every certificate says "1.8.0".
 -/
 
 @[expose] public section
@@ -236,7 +241,7 @@ structure Certificate where
   theoremName : Option String
   /-- Stage 8b: the tracked obligations (`status = withObligations`) -/
   obligations : List String
-  /-- Stage 9b: the declared front-end boundary (`FrontEndCheck.trustText`) -/
+  /-- Stage 9b: the declared front-end boundary; since Stage 16b always `frontEndProvedText` -/
   frontEnd : String
   /-- Stage 11b: the check against a declared hardware profile (`--profile`) -/
   hardware : Option HardwareCheck := none
@@ -244,26 +249,21 @@ structure Certificate where
   diffusion : CertDiffusion := .tree
   /-- Stage 14a: how `M` was obtained (`solution_count.status`) -/
   count : CountStatus := .hypothesis
-  /-- Stage 15b: the uncomputation mode (`uncompute`, written only when it is `coherent`) -/
+  /-- Stage 15b: the uncomputation mode (`uncompute`; written in every certificate since schema
+  1.8.0, Stage 16b) -/
   uncompute : UncomputeMode := .mbu
   deriving Repr
 
-/-- The schema version written to `schema_version` (semver): "1.6.0" for every certificate
-since Stage 14a (the object `solution_count` is required; `hardware`, Stage 11b, and
-`diffusion_shape`, Stage 12d, are optional under it). Before Stage 14a the version depended on
-the optional objects present (1.3.0 / 1.4.0 / 1.5.0) to keep older certificates byte-identical;
-Stage 14a regenerates all three committed certificates, so one version suffices. -/
-def schemaVersion : String := "1.6.0"
-
-/-- The schema version of a certificate in uncomputation mode `coherent` (Stage 15b,
-PHASE2_SPEC.md §A.0.1): "1.7.0" adds the field `uncompute`, present iff the version is "1.7.0"
-(omitted means `mbu`, as `diffusion_shape` omitted means `tree`), so every MBU certificate keeps
-"1.6.0" byte for byte. -/
-def schemaVersionCoherent : String := "1.7.0"
-
-/-- The schema version a certificate is written with. -/
-def Certificate.schemaVersion (c : Certificate) : String :=
-  if c.uncompute == .coherent then schemaVersionCoherent else Certify.schemaVersion
+/-- The schema version written to `schema_version` (semver): "1.8.0" for every certificate
+since Stage 16b — `trust_boundary.front_end` is the proved wording (`frontEndProvedText`),
+`uncompute` is written in every certificate (the Stage 15b convention "omitted means `mbu`" of
+1.7.0 is retired; DECISIONS.md 2026-10-31, Stage 16b, the retirement decided 2026-10-30 in the
+Stage 15b review) and the object `solution_count` is required;
+`hardware` (Stage 11b) and `diffusion_shape` (Stage 12d) are optional under it. History: 1.6.0
+Stage 14a (`solution_count`), 1.7.0 Stage 15b (`uncompute` on coherent certificates only); before
+Stage 14a the version depended on the optional objects present (1.3.0 / 1.4.0 / 1.5.0). Each of
+these stages regenerated every committed certificate, so one version suffices. -/
+def schemaVersion : String := "1.8.0"
 
 /-- The trust-boundary note of the `hardware` object (§5.3.1). -/
 def hardwareNote : String :=
@@ -289,7 +289,7 @@ def Certificate.toJson (c : Certificate) : Json :=
   let ratStr (q : Rat) : Json := Json.str (toString q)
   let optStr : Option String → Json := fun | some s => str s | none => Json.null
   Json.mkObj <|
-    [("schema_version", str c.schemaVersion),
+    [("schema_version", str Certify.schemaVersion),
      ("pattern", str c.pattern),
      ("instance", Json.mkObj [("n", c.n), ("M", c.M), ("r", c.r)]),
      ("solution_count", Json.mkObj [("value", c.M), ("status", str c.count.name)]),
@@ -327,7 +327,7 @@ def Certificate.toJson (c : Certificate) : Json :=
      ("status", str c.status.name)] ++
     (c.hardware.map fun h => [("hardware", hardwareJson h)]).getD [] ++
     (if c.diffusion != .tree then [("diffusion_shape", str c.diffusion.name)] else []) ++
-    (if c.uncompute == .coherent then [("uncompute", str c.uncompute.toString)] else [])
+    [("uncompute", str c.uncompute.toString)]
 
 /-- Report §6.2.4, §6.3.2 — the restoration conjunct as stated in the certificate. -/
 def restorationText : String := "AncRestore: all ancillae |0…0⟩ on density operators"
@@ -336,7 +336,7 @@ def restorationText : String := "AncRestore: all ancillae |0…0⟩ on density o
 signature, match, circuit, grade, `r`, `n`, `M`, exact `δ`). Checks that the data agree: the
 signature's arity and solution count are `n` and `M`, the circuit has `n` data qubits, and the
 grade is the circuit's measured grade (DECISIONS.md, Stage 5b review). `frontEnd` is the
-declared front-end boundary (`FrontEndCheck.trustText` of the Stage 9b validation). `count`
+declared front-end boundary (`frontEndProvedText` since Stage 16b). `count`
 (Stage 14a) says whether `M` is decided by the kernel (`hM_count`) or a hypothesis (`hM_card`);
 only in the second case is it listed under `hypotheses`. -/
 def Certificate.build (src : String) (sig : SigmaIn) (entry : LibEntry) (facts : List Discharged)
@@ -422,8 +422,8 @@ def groverInstance (tp : TypedProgram) (sig : SigmaIn) (iters : Option Nat)
                                circuit := C, diffusion := diff, uncompute := mode }
 
 /-- Report §8.4.2 — the Stage 8a certificate of a source text (no kernel check, no audit):
-front end, ℰ, match, synthesis at `r` (default `r⋆`), exact `δ`, and (Stage 9b) the front-end
-validation, whose mismatch is an error. -/
+front end, ℰ, match, synthesis at `r` (default `r⋆`), exact `δ`; the front-end boundary is the
+Stage 16b wording (`frontEndProvedText`; the Stage 9b validation is no longer run). -/
 def certificateOf (src : String) (cfg : RefConfig) (iters : Option Nat := none) :
     Except String Certificate := do
   let tp ← (parse src >>= check).mapError (·.message)
@@ -432,11 +432,8 @@ def certificateOf (src : String) (cfg : RefConfig) (iters : Option Nat := none) 
     | .diagnostic d => d.message
     | .usage m => m
   let some M := gi.M | throw "the certificate needs the solution count M"
-  let fe := validateFrontEnd tp gi.net gi.n
-  let some feText := fe.trustText
-    | throw ((fe.diagnostic? tp.name ⟨1, 1⟩).map (·.message) |>.getD "front-end validation")
   Certificate.build src sig gi.entry gi.facts gi.circuit gi.circuit.grade gi.r gi.n M
-    (groverDelta gi.r gi.n M) cfg feText
+    (groverDelta gi.r gi.n M) cfg frontEndProvedText
 
 end CQRV.Certify
 

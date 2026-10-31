@@ -22,6 +22,26 @@ def net : Network := ⟨6, #[
     .xor 29 31],
   [32]⟩
 
+/-- The typed term of the request (report §7.2.2; Stage 16b): the output of the surface checker as
+a Lean literal (`TypedProgram.renderLean`, an unverified printer; `net_ok` ties it to `net`). -/
+def prog : DSL.TypedProgram :=
+  { name := "simple_alu_x0_1", params := [("x", (.vec 6))], ret := .bool,
+    body := (.letE (σ := .bool) "op0" (.idx (n := 6) (.var "x" (.vec 6)) (.lit ⟨0, by decide⟩)) (.letE (σ := .bool) "op1" (.idx (n := 6) (.var "x" (.vec 6)) (.lit ⟨1, by decide⟩)) (.letE (σ := .bool) "a0" (.idx (n := 6) (.var "x" (.vec 6)) (.lit ⟨2, by decide⟩)) (.letE (σ := .bool) "a1" (.idx (n := 6) (.var "x" (.vec 6)) (.lit ⟨3, by decide⟩)) (.letE (σ := .bool) "b0" (.idx (n := 6) (.var "x" (.vec 6)) (.lit ⟨4, by decide⟩)) (.letE (σ := .bool) "b1" (.idx (n := 6) (.var "x" (.vec 6)) (.lit ⟨5, by decide⟩)) (.ite (.and (.not (.var "op1" .bool)) (.not (.var "op0" .bool))) (.xor (.xor (.var "a1" .bool) (.var "b1" .bool)) (.and (.var "a0" .bool) (.var "b0" .bool))) (.ite (.and (.not (.var "op1" .bool)) (.var "op0" .bool)) (.xor (.xor (.var "a1" .bool) (.var "b1" .bool)) (.and (.not (.var "a0" .bool)) (.var "b0" .bool))) (.ite (.and (.var "op1" .bool) (.not (.var "op0" .bool))) (.xor (.and (.var "a1" .bool) (.var "b0" .bool)) (.and (.var "a0" .bool) (.var "b1" .bool))) (.xor (.var "a1" .bool) (.var "b1" .bool))))))))))) }
+
+/-- Report §7.2 (Stage 16a) — `prog` is scoped: the hypothesis of the front-end theorems. -/
+theorem prog_scoped : prog.scoped = true := by decide
+
+/-- The front-end link (Stage 16b): the kernel re-runs the translation `toNetwork` on `prog` and
+compares with `net`. -/
+theorem net_ok : toNetwork prog = .ok net := except_ok_of_check _ _ (by decide +kernel)
+
+/-- Report §7.2–7.4, §5.3.3 (Stage 16b) — the front end at this instance: the reference evaluator on
+`prog` agrees with the predicate of `net` on every input (`toNetwork_pred`, Stage 16a). -/
+theorem front_end : ∀ x : Fin 6 → Bool, DSL.evalProgram prog x = Network.pred net 6 x :=
+  fun x => (toNetwork_pred prog net net_ok prog_scoped x).symm
+
+#print axioms front_end
+
 /-- The emitted circuit (IR, §6.1.4): QIR / OpenQASM 3 and `circuit_hash` are of this literal. -/
 def emitted : Circuit := ⟨6, [
     .h (.data 0), .h (.data 1), .h (.data 2), .h (.data 3), .h (.data 4),
