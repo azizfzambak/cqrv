@@ -39,7 +39,14 @@
 #                                front_end between net and emitted and is byte-identical to the
 #                                Stage 16a file (git 52ad73b) outside that block; schema v1.8.0
 #                                with uncompute explicit and the proved front_end wording; run
-#                                report row 1b kernel-checked
+#                                report row 1b kernel-checked;
+#                                Stage 17b: schema v1.9.0 with grade_ext {two_qubit, t_depth,
+#                                rot, meas, ff} = the emitted literal's counts and the G counts,
+#                                gradeExt_eq right after grade_eq in every Cert.lean (the
+#                                committed files = the 16b files, git 7f46857, + that theorem),
+#                                the committed .qir / .qasm = the 16b files; measured grade_ext
+#                                (126, 39, 0, 18, 36) / (137, 28, 0, 15, 30) /
+#                                (106, 77, 0, 8, 16) / (216, 74, 0, 0, 0)
 #   tests/diff/profile_schema.py profiles/*.json against docs/profile.schema.json;
 #                                illustrative_sc = report Table 3.5 / §3.3.3 (renamed from
 #                                ibm_kyiv in Stage 14a, no alias); mutated profiles rejected by

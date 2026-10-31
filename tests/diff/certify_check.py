@@ -93,6 +93,18 @@ Runs the built `cqr` from the project root and checks
     "1.8.0" with uncompute "mbu" / "coherent" and the proved front_end wording; run report row 1b
     is kernel-checked and names net_ok / front_end, row 1a names the typed-term printer; `cqr
     certify` no longer runs the exhaustive validation (cqr check --truth-table keeps it).
+  * Stage 17b (PHASE2_SPEC.md §A.1): every certificate.json says schema_version "1.9.0" and
+    carries grade_ext {two_qubit, t_depth, rot, meas, ff}; for every certificate checked here
+    meas = counts.mid_circuit_measurements, ff = counts.classically_controlled, two_qubit = the
+    count of cnot / cz / cp (through `if`) over the emitted literal of Cert.lean, rot = 0,
+    t_depth ≤ grade.d and t_depth ≤ grade.t, and Cert.lean states exactly `theorem gradeExt_eq :
+    Synthesis.gradeExt emitted = ⟨two_qubit, t_depth, rot, meas, ff⟩ := by decide +kernel` (with
+    its doc-comment) right after grade_eq; the four committed Cert.lean files are the Stage 16b
+    files (git 7f46857) plus exactly that theorem (and the Stage 16a files plus the front-end
+    block and that theorem); the committed .qir / .qasm files are byte-identical to 16b (no
+    phase gate in a synthesized circuit, so no `rz`); the measured values: grover_pred_037
+    (126, 39, 0, 18, 36), simple_alu_x0_1 (137, 28, 0, 15, 30), grover_pred_037_few
+    (106, 77, 0, 8, 16), grover_pred_037_coh (216, 74, 0, 0, 0); run report row 4 prints them.
 
 Usage: python -I tests/diff/certify_check.py --cqr <path to cqr>   (after `lake build`)
 """
@@ -136,7 +148,46 @@ PROVED = ("DSL typed term → network: proved (toNetwork_pred; kernel-checked ne
           "Cert.lean); parser, surface checker and the typed-term printer unverified; "
           "predicate_hash binds the source")
 STAGE16A = "52ad73b"  # the Stage 16a commit: its Cert.lean files have no front-end block
+STAGE16B = "7f46857"  # the Stage 16b commit: its Cert.lean files have no gradeExt_eq
 RE_FRONT_END = re.compile(r"/-- The typed term of the request.*?#print axioms front_end\n\n", re.S)
+# Stage 17b: the theorem gradeExt_eq with its doc-comment, between grade_eq and nAnc_eq
+RE_GRADE_EXT = re.compile(
+    r"\n/-- PHASE2_SPEC\.md §A\.1 \(Stage 17b\) — the second resource record of the emitted circuit, "
+    r"measured by\nthe same scheduler as `grade_eq`: two-qubit gates, T-depth, rotation gates, "
+    r"measurements and\nfeed-forward gates \(`grade_ext` in certificate\.json; `cert` does not take "
+    r"it\)\. -/\ntheorem gradeExt_eq : Synthesis\.gradeExt emitted = "
+    r"⟨(\d+), (\d+), (\d+), (\d+), (\d+)⟩ := by decide \+kernel\n")
+GRADE_EXT_KEYS = ("two_qubit", "t_depth", "rot", "meas", "ff")
+# the measured second records of the four committed certificates (Stage 17a, DECISIONS.md)
+GRADE_EXT = {"grover_pred_037": (126, 39, 0, 18, 36), "simple_alu_x0_1": (137, 28, 0, 15, 30),
+             "grover_pred_037_few": (106, 77, 0, 8, 16), "grover_pred_037_coh": (216, 74, 0, 0, 0)}
+
+
+def check_grade_ext(cert, text, circ):
+    """Stage 17b: grade_ext of certificate.json against the emitted literal, the counts and the
+    grade, and the theorem gradeExt_eq of Cert.lean (exactly once, right after grade_eq)."""
+    ge = cert["grade_ext"]
+    assert list(ge) == sorted(GRADE_EXT_KEYS), ge
+    counts = cert["hardware_perturbation"]["counts"]
+    assert ge["meas"] == counts["mid_circuit_measurements"], (ge, counts)
+    assert ge["ff"] == counts["classically_controlled"], (ge, counts)
+    assert ge["two_qubit"] == sum(1 for g in circ["gates"] if g["op"] in ("cnot", "cz", "cp")), ge
+    assert ge["rot"] == 0, ge
+    assert ge["t_depth"] <= cert["grade"]["d"] and ge["t_depth"] <= cert["grade"]["t"], (ge, cert["grade"])
+    m = RE_GRADE_EXT.findall(text)
+    assert len(m) == 1 and text.count("gradeExt_eq") == 1, "gradeExt_eq"
+    assert tuple(int(x) for x in m[0]) == tuple(ge[k] for k in GRADE_EXT_KEYS), (m, ge)
+    g = cert["grade"]
+    assert text.count(f"⟨{g['w']}, {g['d']}, {g['t']}, {g['a']}⟩ := by decide +kernel\n\n"
+                      "/-- PHASE2_SPEC.md §A.1 (Stage 17b)") == 1, "gradeExt_eq must follow grade_eq"
+    return tuple(ge[k] for k in GRADE_EXT_KEYS)
+
+
+def stage_text(commit, rel):
+    """The committed Cert.lean of an earlier commit (the blob's bytes)."""
+    p = subprocess.run(["git", "show", f"{commit}:{rel}"], cwd=ROOT, capture_output=True)
+    assert p.returncode == 0, p.stderr.decode("utf-8", "replace")
+    return p.stdout.decode("utf-8")
 
 
 def check_front_end(text, n, name):
@@ -156,9 +207,7 @@ def check_front_end(text, n, name):
 
 def stage16a_text(rel):
     """The committed Cert.lean of the Stage 16a commit (before the front-end block)."""
-    p = subprocess.run(["git", "show", f"{STAGE16A}:{rel}"], cwd=ROOT, capture_output=True)
-    assert p.returncode == 0, p.stderr.decode("utf-8", "replace")
-    return p.stdout.decode("utf-8")  # the blob's bytes, no line-ending translation
+    return stage_text(STAGE16A, rel)  # the blob's bytes, no line-ending translation
 
 
 def secs(ms):
@@ -200,6 +249,13 @@ def check_report(d, cert):
     g = cert["grade"]
     assert f"({g['w']}, {g['d']}, {g['t']}, {g['a']})" in rows["4. QPLP Instant."]["resources"]
     assert f"δ = {cert['spec']['delta']} exact" in rows["4. QPLP Instant."]["resources"]
+    # Stage 17b: row 4 prints the second record; the rotation note only when rot > 0 (never here)
+    ge = cert["grade_ext"]
+    assert (f"ext: 2Q {ge['two_qubit']}, T-depth {ge['t_depth']}, rot {ge['rot']}, meas {ge['meas']}, "
+            f"ff {ge['ff']} (measured)") in rows["4. QPLP Instant."]["resources"], rows["4. QPLP Instant."]
+    assert "gradeExt_eq" in rows["4. QPLP Instant."]["note"]
+    assert "synthesis precision" not in rows["4. QPLP Instant."]["note"], "rot = 0: no rotation note"
+    assert "rz(θ) = e^(−iθ/2)·p(θ)" in rows["8. QIR Export"]["note"], rows["8. QIR Export"]
     kc = cert["reference_configuration"]["kernel_check"]
     res7 = rows["7. Certificate Gen"]["resources"]
     assert f"kernel {secs(kc['kernel_ms'])}" in res7 and f"wall {secs(kc['wall_ms'])}" in res7, \
@@ -246,7 +302,7 @@ def masked(text):
     return out
 
 
-def check_hardware(d, cert, plain, last_two, fits, version="1.8.0"):
+def check_hardware(d, cert, plain, last_two, fits, version="1.9.0"):
     """The `hardware` object of a --profile run, recomputed; the rest equals `plain`."""
     prof = json.loads(read(PROFILE))
     h = cert["hardware"]
@@ -328,13 +384,19 @@ def parse_gate(s, n_data):
         g = parse_gate(m.group(2), n_data)
         g["if"] = int(m.group(1))
         return g
-    m = re.fullmatch(r"\.(\w+)((?: \(\.(?:data|anc) \d+\))+)(?: (\d+))?", s)
+    # Stage 17b: `.p a k (q)` / `.cp a k (c) (t)` carry the integer angle data before the qubits
+    m = re.fullmatch(r"\.(\w+)((?: (?:-?\d+|\(-\d+\)))*)((?: \(\.(?:data|anc) \d+\))+)(?: (\d+))?", s)
     if not m:
         raise ValueError(f"bad gate literal: {s}")
-    qs = [int(i) if k == "data" else n_data + int(i) for k, i in RE_Q.findall(m.group(2))]
+    qs = [int(i) if k == "data" else n_data + int(i) for k, i in RE_Q.findall(m.group(3))]
     g = {"op": m.group(1), "q": qs}
-    if m.group(3) is not None:
-        g["c"] = int(m.group(3))
+    args = [int(x.strip("()")) for x in m.group(2).split()]
+    if (len(args) == 2) != (g["op"] in ("p", "cp")) or len(args) not in (0, 2):
+        raise ValueError(f"bad gate literal: {s}")
+    if args:
+        g["a"], g["k"] = args
+    if m.group(4) is not None:
+        g["c"] = int(m.group(4))
     return g
 
 
@@ -371,9 +433,13 @@ def check_dir(d, validator):
     assert cert["hashes"]["proof"] == proof_hash(text), "proof hash"
     name = cert["theorem"].split(".")[-2]
     for fmt, mod in (("qasm", reparse_qasm), ("qir", reparse_qir)):
-        parsed, terminal = mod.parse(read(os.path.join(d, f"{name}.{fmt}")))
+        emitted = read(os.path.join(d, f"{name}.{fmt}"))
+        parsed, terminal = mod.parse(emitted)
         assert parsed == circ, f"{fmt} re-parse differs from the IR literal of Cert.lean"
         assert len(terminal) == circ["n_data"], f"{fmt} terminal measurement"
+        assert "rz" not in emitted, f"{fmt}: a synthesized circuit has no phase gate"
+    assert cert["schema_version"] == "1.9.0", cert["schema_version"]
+    check_grade_ext(cert, text, circ)
     return cert, text
 
 
@@ -418,11 +484,15 @@ def main():
         assert text.count("nAnc_eq hM_count\n") == 1 and "native_decide" not in text
         print("ok:   Cert.lean: hM_count by Network.countSat_eq_card and decide +kernel; "
               "theorem cert without hypothesis; solution_count kernel_decided")
-        print("ok:   JSON valid (schema v1.8.0, uncompute mbu); grade (15, 134, 72, 7), delta 7/128, "
+        print("ok:   JSON valid (schema v1.9.0, uncompute mbu); grade (15, 134, 72, 7), delta 7/128, "
               "axioms exactly propext, Classical.choice, Quot.sound; front end: the proved wording, "
               "Cert.lean states prog / prog_scoped / net_ok / front_end (Stage 16b)")
         print("ok:   circuit hash = SHA3 of the IR literal of Cert.lean (hashlib); "
               ".qasm / .qir re-parse to that literal; proof hash recomputed")
+        assert check_grade_ext(cert, text, emitted_circuit(text)) == GRADE_EXT[NAME], cert["grade_ext"]
+        print("ok:   grade_ext (2Q 126, T-depth 39, rot 0, meas 18, ff 36) = the emitted literal's "
+              "counts, meas / ff = the G counts, T-depth <= d and t; Cert.lean states gradeExt_eq "
+              "right after grade_eq (Stage 17b)")
         cert2, _ = check_dir(runs[1], validator)
         for f in ("Cert.lean", f"{NAME}.qir", f"{NAME}.qasm"):
             assert read(os.path.join(runs[0], f), "rb") == read(os.path.join(runs[1], f), "rb"), f
@@ -437,9 +507,9 @@ def main():
         print("ok:   committed examples/certs/grover_pred_037 agrees (JSON modulo machine fields)")
         assert masked(read(os.path.join(runs[0], "certificate.json"))) == \
             masked(read(os.path.join(EXAMPLE, "certificate.json"))), "certificate.json bytes"
-        assert cert["schema_version"] == "1.8.0" and "hardware" not in cert
+        assert cert["schema_version"] == "1.9.0" and "hardware" not in cert
         print("ok:   without --profile: certificate.json byte-identical to the committed one "
-              "outside reference_configuration (schema_version 1.8.0, no hardware)")
+              "outside reference_configuration (schema_version 1.9.0, no hardware)")
 
         # --profile illustrative_sc (Stage 11b; renamed from ibm_kyiv in Stage 14a)
         out = os.path.join(tmp, "prof")
@@ -474,6 +544,7 @@ def main():
         assert ac["instance"] == {"n": 6, "M": 30, "r": 1}, ac["instance"]
         assert ac["spec"]["delta"] == "833/2048", ac["spec"]
         assert ac["grade"] == {"w": 16, "d": 121, "t": 60, "a": 10}, ac["grade"]
+        assert tuple(ac["grade_ext"][k] for k in GRADE_EXT_KEYS) == GRADE_EXT[alu], ac["grade_ext"]
         assert ac["trust_boundary"]["front_end"] == PROVED and ac["uncompute"] == "mbu"
         check_front_end(atext, 6, alu)
         assert "sorry" not in atext and ".xor " in atext
@@ -518,7 +589,8 @@ def main():
         assert so_p.rstrip("\n").split("\n")[-1] == "certified", so_p
         fc, ftext = check_dir(out_p, validator)
         check_front_end(ftext, 8, NAME)
-        assert fc["schema_version"] == "1.8.0" and fc["diffusion_shape"] == "few:log", fc
+        assert fc["schema_version"] == "1.9.0" and fc["diffusion_shape"] == "few:log", fc
+        assert tuple(fc["grade_ext"][k] for k in GRADE_EXT_KEYS) == GRADE_EXT["grover_pred_037_few"], fc
         assert fc["uncompute"] == "mbu" and fc["trust_boundary"]["front_end"] == PROVED, fc
         assert fc["solution_count"] == {"value": 32, "status": "kernel_decided"}, fc
         assert "hardware" not in fc
@@ -554,7 +626,8 @@ def main():
         assert exf["reference_configuration"]["kernel_check"]["runs"] == 5
         check_report(EXAMPLE_FEW, exf)
         print("ok:   --shape few:log: `certified` (exit 0); "
-              "schema v1.8.0, diffusion_shape few:log, grade (10, 172, 96, 2), delta 7/128, "
+              "schema v1.9.0, diffusion_shape few:log, grade (10, 172, 96, 2), grade_ext "
+              "(106, 77, 0, 8, 16), delta 7/128, "
               "axioms exactly the standard three; grover_certificate_few_all, no fewCheck")
         print("ok:   --shape few:log --profile illustrative_sc: fits all budgets (d = 172 <= 200), "
               "delta_hw = 7/128 + 380*1/100 = 2467/640 (vacuous); hardware recomputed; "
@@ -573,7 +646,8 @@ def main():
         assert so_p.rstrip("\n").split("\n")[-1] == "certified", so_p
         cc, ctext = check_dir(out_p, validator)
         check_front_end(ctext, 8, NAME)
-        assert cc["schema_version"] == "1.8.0" and cc["uncompute"] == "coherent", cc
+        assert cc["schema_version"] == "1.9.0" and cc["uncompute"] == "coherent", cc
+        assert tuple(cc["grade_ext"][k] for k in GRADE_EXT_KEYS) == GRADE_EXT["grover_pred_037_coh"], cc
         assert cc["trust_boundary"]["front_end"] == PROVED, cc
         assert "diffusion_shape" not in cc and "hardware" not in cc
         assert cc["solution_count"] == {"value": 32, "status": "kernel_decided"}, cc
@@ -630,8 +704,9 @@ def main():
         assert not os.path.exists(out), "a certificate was written for few:log + coherent"
         rc, so, se = certify(args.cqr, src, os.path.join(tmp, "bogus"), "--uncompute", "bogus")
         assert rc == 2 and not os.path.exists(os.path.join(tmp, "bogus")), (rc, so, se)
-        print("ok:   --uncompute coherent: `certified` (exit 0); schema v1.8.0, uncompute coherent, "
-              "grade (15, 200, 144, 7), 0 measurements, 0 classical bits, delta 7/128, axioms exactly "
+        print("ok:   --uncompute coherent: `certified` (exit 0); schema v1.9.0, uncompute coherent, "
+              "grade (15, 200, 144, 7), grade_ext (216, 74, 0, 0, 0), 0 measurements, 0 classical "
+              "bits, delta 7/128, axioms exactly "
               "the standard three; grover_certificate_coherent, OracleCertCoh, no DiffusionCert")
         print(f"ok:   --uncompute coherent --profile illustrative_sc: fits all budgets with d = 200 = "
               f"200 (equality), delta_hw = 7/128 + {g_coh}*1/100 = {rat(dhw_coh)} (vacuous); hardware "
@@ -640,16 +715,27 @@ def main():
         print("ok:   --uncompute mbu = the Phase 1 certificate byte for byte; few:log + coherent -> "
               "unsupported_combination (exit 1, nothing written); --uncompute bogus -> usage (exit 2)")
 
-        # Stage 16b: outside the front-end block, the four committed Cert.lean files are the
-        # Stage 16a files byte for byte (cert, net, emitted and every other declaration unchanged)
-        for dname in ("grover_pred_037", "simple_alu_x0_1", "grover_pred_037_few",
-                      "grover_pred_037_coh"):
-            new = read(os.path.join(ROOT, "examples", "certs", dname, "Cert.lean"))
-            old = stage16a_text(f"examples/certs/{dname}/Cert.lean")
-            assert RE_FRONT_END.sub("", new) == old, \
-                f"{dname}: Cert.lean differs from the Stage 16a file outside the front-end block"
-        print("ok:   the four committed Cert.lean files = the Stage 16a files (git 52ad73b) + the "
-              "front-end block (prog, prog_scoped, net_ok, front_end); byte-identical elsewhere")
+        # Stage 17b: the four committed Cert.lean files are the Stage 16b files plus exactly the
+        # theorem gradeExt_eq (and its doc-comment) after grade_eq; Stage 16b: outside the front-end
+        # block and that theorem they are the Stage 16a files byte for byte (cert, net, emitted and
+        # every other declaration unchanged); the .qir / .qasm files are the 16b files byte for byte
+        for dname, src_name in (("grover_pred_037", NAME), ("simple_alu_x0_1", alu),
+                                ("grover_pred_037_few", NAME), ("grover_pred_037_coh", NAME)):
+            rel = f"examples/certs/{dname}/Cert.lean"
+            new = read(os.path.join(ROOT, rel))
+            assert len(RE_GRADE_EXT.findall(new)) == 1, f"{dname}: gradeExt_eq"
+            assert RE_GRADE_EXT.sub("", new) == stage_text(STAGE16B, rel), \
+                f"{dname}: Cert.lean differs from the Stage 16b file outside gradeExt_eq"
+            assert RE_FRONT_END.sub("", RE_GRADE_EXT.sub("", new)) == stage16a_text(rel), \
+                f"{dname}: Cert.lean differs from the Stage 16a file outside the two blocks"
+            for ext in ("qir", "qasm"):
+                relf = f"examples/certs/{dname}/{src_name}.{ext}"
+                assert read(os.path.join(ROOT, relf), "rb") == \
+                    subprocess.run(["git", "show", f"{STAGE16B}:{relf}"], cwd=ROOT,
+                                   capture_output=True, check=True).stdout, f"{relf} differs from 16b"
+        print("ok:   the four committed Cert.lean files = the Stage 16b files (git 7f46857) + "
+              "gradeExt_eq after grade_eq (= the Stage 16a files + the front-end block + gradeExt_eq); "
+              "the committed .qir / .qasm files = the 16b files byte for byte")
 
         # XOR predicate: certified since Stage 9a (Lemma 6.3.2 for XOR, `lemma_6_3_2_xor`)
         out = os.path.join(tmp, "xor")

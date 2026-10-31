@@ -83,19 +83,6 @@ def WF (C : Circuit) : Prop := C.wf = true
 
 instance (C : Circuit) : Decidable C.WF := inferInstanceAs (Decidable (C.wf = true))
 
-/-- PHASE2_SPEC.md §A.1 (Stage 17a) — every **top-level** `cp a k c t` replaced by the standard
-five-gate decomposition `p a (k+1) c; p a (k+1) t; cnot c t; p (-a) (k+1) t; cnot c t`
-(θ = 2πa/2^k, so θ/2 is the turn fraction `a / 2^(k+1)`); every other gate is kept, **including**
-`ifBit _ (cp …)`, which is left undecomposed (the QIR emitter of Stage 17b refuses it with a
-diagnostic: the Adaptive-Profile branch would need the five gates). `decomposeCp_unitary` is its
-correctness, `decomposeCp_wf` its well-formedness. -/
-def decomposeCp : List Gate → List Gate
-  | [] => []
-  | .cp m k c tg :: gs =>
-    .p m (k + 1) c :: .p m (k + 1) tg :: .cnot c tg :: .p (-m) (k + 1) tg :: .cnot c tg ::
-      decomposeCp gs
-  | g :: gs => g :: decomposeCp gs
-
 theorem flatMap_writes_decomposeCp (gs : List Gate) :
     (decomposeCp gs).flatMap Gate.writes = gs.flatMap Gate.writes := by
   induction gs with

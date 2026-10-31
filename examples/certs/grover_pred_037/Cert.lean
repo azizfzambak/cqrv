@@ -136,6 +136,11 @@ theorem delta_eq : ((groverDelta 2 8 32 : ℚ) : ℝ) = (7 / 128 : ℝ) := by
 
 theorem grade_eq : Synthesis.grade emitted = ⟨15, 134, 72, 7⟩ := by decide +kernel
 
+/-- PHASE2_SPEC.md §A.1 (Stage 17b) — the second resource record of the emitted circuit, measured by
+the same scheduler as `grade_eq`: two-qubit gates, T-depth, rotation gates, measurements and
+feed-forward gates (`grade_ext` in certificate.json; `cert` does not take it). -/
+theorem gradeExt_eq : Synthesis.gradeExt emitted = ⟨126, 39, 0, 18, 36⟩ := by decide +kernel
+
 theorem nAnc_eq : emitted.nAnc = 7 := by decide +kernel
 
 /-- The synthesized oracle of `net`. -/

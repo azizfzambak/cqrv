@@ -21,7 +21,10 @@ in Stages 9b–16a). With `--profile` (Stage 11b, decision 2 of
 the tasks) a last row "Hardware profile" reports the check against the declared profile, with
 its own status `checked against declared profile (not a proof about hardware)`; without it the
 report is unchanged. Stage 14a: the header and the stage-2 note say whether `M` is decided by
-the kernel (`hM_count`) or the hypothesis `hM_card` (`RunData.count`).
+the kernel (`hM_count`) or the hypothesis `hM_card` (`RunData.count`). Stage 17b (PHASE2_SPEC.md
+§A.1, §A.8.2): row 4 also prints the second record `GradeExt` (`ext: 2Q, T-depth, rot, meas, ff`,
+measured, `gradeExt_eq`), its note adds the rotation sentence only when `rot > 0`, and row 8's
+note says that QIR `p` is `rz` up to a global phase.
 -/
 
 @[expose] public section
@@ -96,6 +99,17 @@ structure RunData where
 /-- `(w, d, t, a)` -/
 def gradeText (g : Grade) : String := s!"(w, d, t, a) = ({g.w}, {g.d}, {g.t}, {g.a})"
 
+/-- PHASE2_SPEC.md §A.1 (Stage 17b) — the second record in row 4. -/
+def gradeExtText (e : GradeExt) : String :=
+  s!"ext: 2Q {e.twoQ}, T-depth {e.tDepth}, rot {e.rot}, meas {e.meas}, ff {e.ff}"
+
+/-- PHASE2_SPEC.md §A.8.2 (amended 2026-10-31) — the rotation note, only when `rot > 0`. -/
+def rotNote (e : GradeExt) : String :=
+  if e.rot > 0 then
+    "; Clifford+T cost of the rotation gates depends on the synthesis precision (PHASE2_SPEC §C), \
+      not folded into t"
+  else ""
+
 /-- Report §8.2 (Stage 14a) — the trust-boundary clause for `M` in the stage-2 note. -/
 def countNote (n : Nat) : CountStatus → String
   | .hypothesis => "M is the hypothesis hM_card, never decided"
@@ -167,9 +181,11 @@ def RunData.rows (d : RunData) : List ReportRow :=
       input := s!"QPLP {d.pattern} + σ, r = {d.r}, uncompute = {d.uncompute}",
       output := s!"Concrete circuit H^⊗{d.n} · (U_s U_P)^{d.r} (`emitted` in Cert.lean)",
       verification := .kernelChecked,
-      resources := s!"grade {gradeText d.circuit.grade} (measured); δ = {d.delta} exact",
-      note := "emitted_ok (hash link: synthesizer output = IR literal), grade_eq, nAnc_eq, \
-        delta_eq by `decide +kernel` in Cert.lean; δ = 1 − sin²((2r+1)θ) via sin_sq_odd_mul" },
+      resources := s!"grade {gradeText d.circuit.grade} (measured); δ = {d.delta} exact; \
+        {gradeExtText d.circuit.gradeExt} (measured)",
+      note := s!"emitted_ok (hash link: synthesizer output = IR literal), grade_eq, gradeExt_eq, \
+        nAnc_eq, delta_eq by `decide +kernel` in Cert.lean; δ = 1 − sin²((2r+1)θ) via \
+        sin_sq_odd_mul{rotNote d.circuit.gradeExt}" },
     { stage := "5. Oracle Synthesis",
       input := s!"Boolean network ({d.net.nodes.size} nodes, {andNodes} AND)",
       output := match d.uncompute with
@@ -214,7 +230,10 @@ def RunData.rows (d : RunData) : List ReportRow :=
         {G.midCircuitMeasurements} mid-circuit measurements, {G.classicallyControlled} \
         classically controlled, {G.terminalMeasurements} terminal measurements)",
       note := "emitter unverified; translation-validated by re-parse in tests/diff \
-        (check_emit.sh, certify_check.py), not in this run; trust_boundary.emitted = QIR text" } ]
+        (check_emit.sh, certify_check.py), not in this run; trust_boundary.emitted = QIR text; \
+        a phase gate p is emitted to QIR as rz with a hex-float angle, rz(θ) = e^(−iθ/2)·p(θ): a \
+        global phase per gate (per branch under ifBit), irrelevant to every statement of the \
+        certificate; a top-level cp is its five-gate decomposition (decomposeCp_unitary_wf)" } ]
 
 /-- Report §3.3.2–3.3.3 — the row "Hardware profile" (Stage 11b): per-component check and
 `δ_hw`, from the run's grade, `δ` and `G`. -/

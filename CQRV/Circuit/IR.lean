@@ -243,6 +243,21 @@ def validate (c : Circuit) : Except String Unit := do
     if let .measure _ k := g then bits := k :: bits
   if !live.isEmpty then throw s!"ancillae {live.reverse} are never freed"
 
+/-- PHASE2_SPEC.md §A.1 (Stage 17a; moved here from `CQRV.Circuit.Semantics` in Stage 17b, so
+that the QIR emitter, which does not import the semantics, can use it) — every **top-level** `cp a k c t` replaced by the standard
+five-gate decomposition `p a (k+1) c; p a (k+1) t; cnot c t; p (-a) (k+1) t; cnot c t`
+(θ = 2πa/2^k, so θ/2 is the turn fraction `a / 2^(k+1)`); every other gate is kept, **including**
+`ifBit _ (cp …)`, which is left undecomposed (the QIR emitter of Stage 17b refuses it with a
+diagnostic: the Adaptive-Profile branch would need the five gates). `decomposeCp_unitary` /
+`decomposeCp_unitary_wf` are its correctness, `decomposeCp_wf` its well-formedness
+(`CQRV.Circuit.Semantics`, `CQRV.Circuit.OracleCorrect`). -/
+def decomposeCp : List Gate → List Gate
+  | [] => []
+  | .cp m k c tg :: gs =>
+    .p m (k + 1) c :: .p m (k + 1) tg :: .cnot c tg :: .p (-m) (k + 1) tg :: .cnot c tg ::
+      decomposeCp gs
+  | g :: gs => g :: decomposeCp gs
+
 /-- Flat index of a qubit in the JSON export: `x[i] ↦ i`, `anc[i] ↦ nData + i`. -/
 def qIndex (c : Circuit) : Qubit → Nat
   | .data i => i

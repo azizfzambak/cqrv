@@ -1,4 +1,5 @@
 import CQRV.Certify.Basic
+import CQRV.Emit.Basic
 
 /-!
 # Test helper for the Stage 8a / 8b checks (report §8.4.2, §9.5.1, §9.5.3)
@@ -17,6 +18,12 @@ Run with `lake env lean --run scripts/CertifyTool.lean <command>` (after `lake b
   audit passes, 3 if one fails (the offending axioms are printed), 1 if Lean fails or a line is
   missing. Used by `scripts/print_axioms.sh` (blocking; `cert` and `front_end` of every committed
   certificate) and by the injected-`sorry` test of `scripts/check_certify.sh`.
+* `emit-sample <json|qasm|qir> [--decompose-cp] [--if-cp]` (Stage 17b, PHASE2_SPEC.md §A.1): the
+  sample circuit `CQRV.Emit.sampleCircuit` (every gate constructor, the phase gates included) as
+  IR JSON (through `Circuit.decomposeCp` with `--decompose-cp`), OpenQASM 3 or QIR; `--if-cp`
+  takes `sampleCircuitIfCp` instead (one `ifBit` over `cp 1 1`): `qir --if-cp` prints the
+  diagnostic JSON `unsupported_in_qir` and exits 1. The test path for gates no synthesized circuit
+  contains (`tests/diff/emit_diff.py`).
 -/
 
 open CQRV.Certify
@@ -69,6 +76,27 @@ def main (args : List String) : IO UInt32 := do
       else
         IO.println s!"axiom audit: {file}: FAILED ({", ".intercalate bad})"
         return 3
+  | "emit-sample" :: fmt :: flags =>
+    if !flags.all (fun f => f == "--decompose-cp" || f == "--if-cp") then
+      IO.eprintln "usage: CertifyTool emit-sample <json|qasm|qir> [--decompose-cp] [--if-cp]"
+      return 2
+    let ifCp := flags.contains "--if-cp"
+    let C := if ifCp then CQRV.Emit.sampleCircuitIfCp else CQRV.Emit.sampleCircuit
+    let name := if ifCp then "sample_if_cp" else "sample"
+    match fmt with
+    | "json" =>
+      let C' : CQRV.Circuit :=
+        if flags.contains "--decompose-cp" then ⟨C.nData, CQRV.Circuit.decomposeCp C.gates⟩ else C
+      IO.println C'.toJson.compress
+      return 0
+    | "qasm" => IO.print (CQRV.Emit.emitQASM name C); return 0
+    | "qir" =>
+      match CQRV.Emit.emitQIR name C with
+      | .ok text => IO.print text; return 0
+      | .error d => IO.println d.toJson.compress; return 1
+    | _ =>
+      IO.eprintln "usage: CertifyTool emit-sample <json|qasm|qir> [--decompose-cp] [--if-cp]"
+      return 2
   | _ => IO.eprintln "usage: CertifyTool (sha3 | sample <file.cqr> | audit <Cert.lean> <theorem> \
-      [<theorem> …])"
+      [<theorem> …] | emit-sample <json|qasm|qir> [--decompose-cp] [--if-cp])"
          return 2

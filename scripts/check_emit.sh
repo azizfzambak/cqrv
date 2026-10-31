@@ -7,7 +7,13 @@
 #                              the re-parsed QASM oracle is simulated in every branch;
 #                              LLVM parses and verifies the QIR via llvmlite (mandatory);
 #                              llvm-as assembles it as a second check (skipped with a message
-#                              when absent, mandatory with REQUIRE_LLVM_AS=1, as in CI)
+#                              when absent, mandatory with REQUIRE_LLVM_AS=1, as in CI);
+#                              Stage 17b (PHASE2_SPEC.md §A.1): the sample circuit of
+#                              `scripts/CertifyTool.lean emit-sample` (every gate constructor,
+#                              p / cp included) — QASM re-parses exactly (p(2*pi*a/N)), QIR
+#                              re-parses to the IR after decomposeCp (rz with hex-float angles
+#                              to 1e-12, the rz declaration once, LLVM verifies), the negative
+#                              --if-cp case (QIR refused: unsupported_in_qir, exit 1)
 #
 # Usage (after `lake build`):  scripts/check_emit.sh
 #   PYTHON=.venv/Scripts/python.exe scripts/check_emit.sh   # local Windows venv

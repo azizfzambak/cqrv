@@ -18,11 +18,28 @@ For examples/grover_pred_037.cqr:
      assembles it when it is on PATH (CI, where --require-llvm-as makes it mandatory too),
      otherwise that second check is skipped with a message.
 
+Stage 17b (PHASE2_SPEC.md §A.1), the sample circuit `CQRV.Emit.sampleCircuit` (every gate
+constructor, the exact phase gates `p` / `cp` included, which no synthesized circuit contains;
+`scripts/CertifyTool.lean emit-sample`):
+  6. its OpenQASM 3 text re-parses exactly to its IR JSON (`p(2*pi*a/N)` with the evaluated
+     power, `(-a)` for a negative numerator, `cp` under `if` as well), also without the
+     alloc/free annotations; a changed denominator is caught (negative control);
+  7. its QIR text re-parses to the IR after `Circuit.decomposeCp` (`emit-sample json
+     --decompose-cp`): a top-level `cp` is the five calls rz, rz, cnot, rz, cnot, `p a k` is `rz`
+     with the hex-float angle 2πa/2^k matched to 1e-12·(1 + |angle|) on the same qubits, the `rz`
+     declaration present exactly once; LLVM verifies it (llvmlite, and llvm-as as above);
+  8. the negative case `--if-cp` (one `ifBit` over `cp 1 1`): the QASM text re-parses to its IR
+     (QASM is unaffected), the QIR emitter exits 1 with the diagnostic `unsupported_in_qir`
+     (stage `emit`) and prints no module;
+  9. the Grover texts carry no `rz` and no `rz` declaration (the committed .qir files are
+     byte-identical to Stage 16b; certify_check.py asserts it).
+
 Usage: python -I tests/diff/emit_diff.py --cqr <path to cqr> [--seed S] [--require-llvm-as]
 """
 
 import argparse
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -37,6 +54,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import reparse_qasm  # noqa: E402
 import reparse_qir  # noqa: E402
 import statevector as sv  # noqa: E402
+from lean_tool import certify_tool, certify_tool_run  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = os.path.join(ROOT, "examples", "grover_pred_037.cqr")
@@ -50,12 +68,26 @@ def run(cqr, args):
     return p.stdout
 
 
+ANGLE_TOL = 1e-12
+
+
+def gate_equal(g, w):
+    """Re-parsed gate `g` = Lean gate `w`; a QIR `rz` (op p with `angle`) matches a Lean `p a k`
+    on the same qubits (and `if`) when |angle − 2πa/2^k| ≤ 1e-12·(1 + |angle|) (Stage 17b)."""
+    if "angle" in g:
+        if w.get("op") != "p" or g["q"] != w["q"] or g.get("if") != w.get("if"):
+            return False
+        want = 2 * math.pi * w["a"] / 2 ** w["k"]
+        return abs(g["angle"] - want) <= ANGLE_TOL * (1 + abs(g["angle"]))
+    return g == w
+
+
 def first_difference(got, want):
     for key in ("n_data", "n_anc"):
         if got[key] != want[key]:
             return f"{key}: re-parsed {got[key]}, Lean {want[key]}"
     for k, (g, w) in enumerate(zip(got["gates"], want["gates"])):
-        if g != w:
+        if not gate_equal(g, w):
             return f"gate {k}: re-parsed {g}, Lean {w}"
     if len(got["gates"]) != len(want["gates"]):
         return f"gate count: re-parsed {len(got['gates'])}, Lean {len(want['gates'])}"
@@ -138,6 +170,58 @@ def grover_pred(x):
     return bool((x >> 7) & 1 and (x >> 4) & 1 and x & 1)
 
 
+def check_sample(require_llvm_as):
+    """Stage 17b: the sample circuit through both emitters (items 6–8 of the module doc)."""
+    ir = json.loads(certify_tool(["emit-sample", "json"]))
+    ops = [g["op"] for g in ir["gates"]]
+    for op in ("h", "s", "sdg", "t", "tdg", "x", "z", "cnot", "cz", "p", "cp", "measure", "alloc",
+               "free"):
+        assert op in ops, f"sample circuit lacks {op}"
+    assert any(g["op"] == "p" and "if" in g for g in ir["gates"]), "sample: no if over p"
+    assert not any(g["op"] == "cp" and "if" in g for g in ir["gates"]), "sample: if over cp"
+    assert {(g["a"], g["k"]) for g in ir["gates"] if g["op"] == "p"} >= {(1, 3), (-3, 5), (2, 4), (0, 5)}
+    assert {(g["a"], g["k"]) for g in ir["gates"] if g["op"] == "cp"} == {(1, 1), (1, 2), (-1, 3)}
+    # QASM: exact round trip, with and without the annotations
+    qasm = certify_tool(["emit-sample", "qasm"])
+    for frag in ("p(2*pi*(-3)/32) x[1];", "cp(2*pi*1/2) x[0], x[1];", "if (c[0]) { p(2*pi*1/4) x[1]; }"):
+        assert frag in qasm, frag
+    check_roundtrip("sample circuit", "qasm", qasm, ir)
+    bad = qasm.replace("p(2*pi*1/8) x[0];", "p(2*pi*1/16) x[0];", 1)
+    try:
+        check_roundtrip("negative control (sample)", "qasm", bad, ir)
+    except AssertionError as e:
+        print(f"ok:   negative control (sample, k of a p gate) rejected ({str(e).split(' — ')[-1]})")
+    else:
+        raise AssertionError("negative control: a changed phase denominator was not detected")
+    # QIR: against the IR after decomposeCp, angles to 1e-12; rz declared once; LLVM verifies
+    dec = json.loads(certify_tool(["emit-sample", "json", "--decompose-cp"]))
+    n_cp = sum(1 for g in ir["gates"] if g["op"] == "cp")
+    assert n_cp == 3 and len(dec["gates"]) == len(ir["gates"]) + 4 * n_cp, "decomposeCp size"
+    assert not any(g["op"] == "cp" for g in dec["gates"]), "a top-level cp survived decomposeCp"
+    qir = certify_tool(["emit-sample", "qir"])
+    got = check_roundtrip("sample circuit (decomposeCp)", "qir", qir, dec)
+    n_rz = sum(1 for g in got["gates"] if "angle" in g)
+    assert n_rz == sum(1 for g in dec["gates"] if g["op"] == "p") == 4 + 3 * n_cp + 2, n_rz
+    assert qir.count("declare void @__quantum__qis__rz__body(double, ptr)\n") == 1, "rz declaration"
+    assert '"required_num_qubits"="4"' in qir, "sample: 3 data + 1 ancilla"
+    llvm_verify("sample circuit", qir)
+    llvm_as("sample circuit", qir, require_llvm_as)
+    print(f"ok:   sample circuit [qir] {n_rz} rz calls with hex-float angles = the Lean p gates "
+          f"after decomposeCp (3 cp -> 15 calls), angles within {ANGLE_TOL:g}, rz declared once")
+    # the negative case: ifBit over cp — QASM fine, QIR refused with the diagnostic
+    ir_if = json.loads(certify_tool(["emit-sample", "json", "--if-cp"]))
+    assert any(g["op"] == "cp" and g.get("if") == 0 for g in ir_if["gates"]), "if-cp sample"
+    check_roundtrip("sample circuit (--if-cp)", "qasm", certify_tool(["emit-sample", "qasm", "--if-cp"]), ir_if)
+    p = certify_tool_run(["emit-sample", "qir", "--if-cp"])
+    assert p.returncode == 1, (p.returncode, p.stdout, p.stderr)
+    d = json.loads(p.stdout.strip().split("\n")[-1])
+    assert d["code"] == "unsupported_in_qir" and d["stage"] == "emit", d
+    assert "classically controlled cp has no QIR form" in d["message"], d
+    assert "define i64" not in p.stdout, "a QIR module was printed with the diagnostic"
+    print(f"ok:   sample circuit with an ifBit over cp: QASM re-parses; QIR refused (exit 1, "
+          f"{d['stage']} / {d['code']}: {d['message']})")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cqr", required=True)
@@ -157,6 +241,7 @@ def main():
         for fmt in ("qir", "qasm"):
             text = run(args.cqr, ["emit", SRC, "--format", fmt, *extra])
             got = check_roundtrip(label, fmt, text, lean)
+            assert "rz" not in text, f"{label} [{fmt}]: a synthesized circuit has no phase gate"
             if fmt == "qir":
                 if "oracle" not in label:
                     check_qir_shape(label, text)
@@ -184,6 +269,8 @@ def main():
         print("ok:   negative control rejected by LLVM (undefined block `measurements`)")
     else:
         raise AssertionError("negative control: LLVM accepted a module with an undefined block")
+    # Stage 17b: the sample circuit (p / cp) through both emitters, and the negative --if-cp case
+    check_sample(args.require_llvm_as)
     print("emit_diff: all checks passed")
 
 

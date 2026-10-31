@@ -23,7 +23,9 @@ hypothesis (the ground solution count `--solutions`, §4.1.4) contradicts the ex
 pattern (§4.2.4, Algorithm 2; JSON name `match`). `synthesis`: the oracle synthesizer cannot
 build the Boolean network or the circuit (§6.1.2; JSON name `synthesize`). `validation`: the
 exhaustive front-end validation found an input on which the DSL evaluator and the network
-disagree (§5.3.3; Stage 9b, decision 1; JSON name `validate`). -/
+disagree (§5.3.3; Stage 9b, decision 1; JSON name `validate`). `emit`: the QIR emitter has no
+form for a gate (PHASE2_SPEC.md §A.1, Stage 17b: a classically controlled `cp`; JSON name
+`emit`). -/
 inductive Stage where
   | parse
   | surface
@@ -31,10 +33,11 @@ inductive Stage where
   | matching
   | synthesis
   | validation
+  | emit
   deriving Repr, DecidableEq, Inhabited
 
 /-- Report §4.2.2–4.2.3, §4.2.4, §6.1.2, §5.3.3 — diagnostic codes of the front end, the
-matcher, the synthesizer and the front-end validation. -/
+matcher, the synthesizer, the front-end validation and (Stage 17b) the QIR emitter. -/
 inductive Code where
   | syntaxError
   | typeError
@@ -49,6 +52,7 @@ inductive Code where
   | infeasibleBudget
   | frontEndMismatch
   | unsupportedCombination
+  | unsupportedInQir
   deriving Repr, DecidableEq, Inhabited
 
 /-- Report §4.2.3 — JSON name of a stage. -/
@@ -59,6 +63,7 @@ def Stage.name : Stage → String
   | .matching => "match"
   | .synthesis => "synthesize"
   | .validation => "validate"
+  | .emit => "emit"
 
 /-- Report §4.2.3 — JSON name of a diagnostic code. -/
 def Code.name : Code → String
@@ -75,6 +80,7 @@ def Code.name : Code → String
   | .infeasibleBudget => "infeasible_budget"
   | .frontEndMismatch => "front_end_mismatch"
   | .unsupportedCombination => "unsupported_combination"
+  | .unsupportedInQir => "unsupported_in_qir"
 
 /-- Report §4.2.2–4.2.3 — a front-end diagnostic; `line`/`col` are 1-based. -/
 structure Diagnostic where

@@ -4,7 +4,9 @@ Report §6.1.4, §6.2.2, §6.2.4, §9.5.1. Pure states on at most MAX_QUBITS qub
 the most significant bit of the basis index. Stage 5 adds the executor for the CQRV gate-level
 IR as exported by `cqr synthesize --json` (flat format: data qubits 0..n_data, ancillae after):
 
-  * gates H, S, S†, T, T†, X, Z, CNOT, CZ;
+  * gates H, S, S†, T, T†, X, Z, CNOT, CZ, and (Stage 17b, PHASE2_SPEC.md §A.1) the exact phase
+    gates `{"op":"p","q":[i],"a":a,"k":k}` = diag(1, e^{2πi·a/2^k}) and `"cp"` (that phase where
+    both qubits read 1), `cmath`-exact;
   * `measure q -> c` in the computational basis: **both outcomes are enumerated** (a branch
     tree); branches of probability < PROB_EPS are dropped;
   * `if c: g` applies the Clifford gate g in the branches where bit c is 1;
@@ -29,6 +31,19 @@ SDG = np.diag([1, -1j])
 T = np.diag([1, np.exp(1j * np.pi / 4)])
 TDG = np.diag([1, np.exp(-1j * np.pi / 4)])
 ONE_QUBIT = {"h": H, "x": X, "z": Z, "s": S, "sdg": SDG, "t": T, "tdg": TDG}
+
+
+def phase(a, k):
+    """e^{2πi·a/2^k} (Stage 17b): the exact phase of `p a k` / `cp a k`."""
+    return np.exp(2j * np.pi * a / 2 ** k)
+
+
+def decompose_cp(a, k, c, t):
+    """The five-gate decomposition of `cp a k c t` (PHASE2_SPEC.md §A.1, `Circuit.decomposeCp`):
+    p a (k+1) c; p a (k+1) t; cnot c t; p (-a) (k+1) t; cnot c t."""
+    return [{"op": "p", "q": [c], "a": a, "k": k + 1}, {"op": "p", "q": [t], "a": a, "k": k + 1},
+            {"op": "cnot", "q": [c, t]}, {"op": "p", "q": [t], "a": -a, "k": k + 1},
+            {"op": "cnot", "q": [c, t]}]
 
 
 class StateVector:
@@ -82,6 +97,23 @@ class StateVector:
         self.amp = psi.reshape(-1)
         return self
 
+    def p(self, a, k, q):
+        """Stage 17b: `p a k` = diag(1, e^{2πi·a/2^k}) on qubit q."""
+        self._apply_1q(np.diag([1, phase(a, k)]), q)
+        return self
+
+    def cp(self, a, k, c, t):
+        """Stage 17b: `cp a k` — the phase e^{2πi·a/2^k} where both c and t read 1."""
+        if c == t:
+            raise ValueError("CP qubits must differ")
+        psi = self.amp.reshape((2,) * self.n).copy()
+        idx = [slice(None)] * self.n
+        idx[c] = 1
+        idx[t] = 1
+        psi[tuple(idx)] *= phase(a, k)
+        self.amp = psi.reshape(-1)
+        return self
+
     def prob_one(self, q):
         """Squared norm of the q = 1 part (the state is not renormalized)."""
         psi = self.amp.reshape((2,) * self.n)
@@ -108,6 +140,10 @@ def apply_unitary(sv, g):
         sv.cnot(q[0], q[1])
     elif op == "cz":
         sv.cz(q[0], q[1])
+    elif op == "p":
+        sv.p(g["a"], g["k"], q[0])
+    elif op == "cp":
+        sv.cp(g["a"], g["k"], q[0], q[1])
     else:
         raise ValueError(f"not a unitary gate: {g}")
 
@@ -339,9 +375,47 @@ def selftest():
         raise AssertionError("wrong oracle accepted")
     except AssertionError as e:
         assert "branch" in str(e), e
+    # Stage 17b (PHASE2_SPEC.md §A.1): the exact phase gates on random states — `p 1 1` = Z,
+    # `p 1 2` = S, `p (-1) 2` = S†, `p 1 3` = T, `p (-1) 3` = T†, `p 2 4` = T, `cp 1 1` = CZ
+    for (a, k), name in (((1, 1), "z"), ((1, 2), "s"), ((-1, 2), "sdg"), ((1, 3), "t"),
+                         ((-1, 3), "tdg"), ((2, 4), "t")):
+        for q in range(3):
+            sv1, sv2 = StateVector(3), StateVector(3)
+            sv1.amp = sv2.amp = _random_state(3, rng)
+            sv1.p(a, k, q)
+            sv2.gate1(name, q)
+            assert np.allclose(sv1.amp, sv2.amp), f"p {a} {k} != {name} on qubit {q}"
+    for c, t in ((0, 1), (1, 0), (0, 2), (2, 1)):
+        sv1, sv2 = StateVector(3), StateVector(3)
+        sv1.amp = sv2.amp = _random_state(3, rng)
+        sv1.cp(1, 1, c, t)
+        sv2.cz(c, t)
+        assert np.allclose(sv1.amp, sv2.amp), f"cp 1 1 != cz on ({c}, {t})"
+    # `p a k` is diagonal with the exact phase; `cp` is symmetric in its operands
+    sv = StateVector(2).x(1).p(-3, 5, 1)
+    assert np.isclose(sv.amp[0b01], np.exp(-2j * np.pi * 3 / 32)), "p (-3) 5 phase"
+    sv1, sv2 = StateVector(3), StateVector(3)
+    sv1.amp = sv2.amp = _random_state(3, rng)
+    assert np.allclose(sv1.cp(-1, 3, 0, 2).amp, sv2.cp(-1, 3, 2, 0).amp), "cp symmetric"
+    # a circuit with cp gives the same state as its five-gate decomposition, every branch
+    circ = {"n_data": 2, "n_anc": 1, "gates": [
+        {"op": "alloc", "q": [2]}, {"op": "h", "q": [2]}, {"op": "cp", "q": [0, 1], "a": 1, "k": 2},
+        {"op": "cp", "q": [2, 0], "a": -3, "k": 5}, {"op": "measure", "q": [2], "c": 0},
+        {"op": "cp", "q": [0, 1], "a": 1, "k": 1, "if": 0}, {"op": "x", "q": [2], "if": 0},
+        {"op": "free", "q": [2]}]}
+    dec = {**circ, "gates": [g2 for g in circ["gates"] for g2 in
+                             (decompose_cp(g["a"], g["k"], *g["q"])
+                              if g["op"] == "cp" and "if" not in g else [g])]}
+    assert sum(1 for g in dec["gates"] if g["op"] == "p") == 6
+    psi = _random_state(2, rng)
+    b1, b2 = run_ir(circ, psi), run_ir(dec, psi)
+    assert len(b1) == len(b2) == 2
+    for (bits1, s1), (bits2, s2) in zip(b1, b2):
+        assert bits1 == bits2 and np.allclose(s1.amp, s2.amp), f"decomposeCp differs in {bits1}"
     print("statevector selftest: OK (H*H = I, X, Bell, CNOT both directions, phase gates, CZ, "
           f"n <= {MAX_QUBITS}; TempLogicalAND exact; compute+Z+MBU = CZ in every branch; "
-          "MBU without reset caught; wrong phase caught)")
+          "MBU without reset caught; wrong phase caught; p/cp = Z, S, S†, T, T†, CZ on random "
+          "states, cp = its five-gate decomposition in every branch)")
 
 
 if __name__ == "__main__":

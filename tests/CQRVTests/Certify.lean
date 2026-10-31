@@ -22,6 +22,12 @@ negative tests are `tests/diff/certify_check.py` (driver `scripts/check_certify.
 Stage 14a (report §8.2): `Network.countSat` on the corpus, its agreement with the `Finset`
 cardinality decided by the kernel on the committed network literal, and the shape of a
 certificate whose solution count is kernel-decided (`hM_count`, `cert` without hypothesis).
+
+Stage 17b (PHASE2_SPEC.md §A.1): schema 1.9.0 with `grade_ext`; `gradeExt_eq` right after
+`grade_eq` in every template; the sample circuit `Emit.sampleCircuit` (every gate constructor)
+and its OpenQASM 3 / QIR texts (`p(2*pi*a/N)`, `rz` with a hex-float angle, the five-gate `cp`,
+the `rz` declaration only when used); `sampleCircuitIfCp` refused by the QIR emitter
+(`unsupported_in_qir`); the Grover QIR / QASM texts unchanged (no `rz`).
 -/
 
 namespace CQRV.Tests.Certify
@@ -65,7 +71,13 @@ def sample : Except String Certificate := certificateOf groverSrc cfg
 #guard match sample with
   | .ok c => c.hypotheses.head? == some "solution_count = 32 (hM_card, supplied, not decided)" &&
       (c.toJson.compress.splitOn "\"solution_count\":{\"status\":\"hypothesis\",\"value\":32}").length == 2 &&
-      (c.toJson.compress.splitOn "\"schema_version\":\"1.8.0\"").length == 2
+      (c.toJson.compress.splitOn "\"schema_version\":\"1.9.0\"").length == 2
+  | .error _ => false
+-- Stage 17b: the second record, measured from the circuit, as `grade_ext` (keys sorted)
+#guard match sample with
+  | .ok c => c.gradeExt == ⟨126, 39, 0, 18, 36⟩ &&
+      (c.toJson.compress.splitOn
+        "\"grade_ext\":{\"ff\":36,\"meas\":18,\"rot\":0,\"t_depth\":39,\"two_qubit\":126}").length == 2
   | .error _ => false
 -- Stage 16b: the sample declares the proved front end
 #guard match sample with
@@ -86,7 +98,7 @@ def groverC : Circuit :=
   | .ok C => C
   | .error _ => default
 
-def qir : String := emitQIR "grover_pred_037" groverC
+def qir : String := (emitQIR "grover_pred_037" groverC).toOption.getD ""
 
 #guard (qir.splitOn "\"qir_profiles\"=\"adaptive_profile\"").length == 2
 #guard (qir.splitOn "\"required_num_qubits\"=\"15\"").length == 2
@@ -100,6 +112,67 @@ def terminalBlock : String :=
 #guard (List.range 8).all fun i =>
   (terminalBlock.splitOn s!"mz__body(ptr inttoptr (i64 {i} to ptr)").length == 2
 #guard (emitQASM "grover_pred_037" groverC).endsWith "out = measure x;\n"
+-- Stage 17b: no phase gate in a synthesized circuit, so no `rz` and no `rz` declaration
+#guard (qir.splitOn "rz").length == 1
+#guard (qir.splitOn "declare void @__quantum__qis__cz__body(ptr, ptr)\ndeclare void @__quantum__qis__mz__body").length == 2
+
+/-! ## Stage 17b — the sample circuit and the phase gates in both emitters (PHASE2_SPEC.md §A.1) -/
+
+#guard sampleCircuit.validate.toOption.isSome
+#guard sampleCircuitIfCp.validate.toOption.isSome
+#guard sampleCircuit.nData == 3 && sampleCircuit.nAnc == 1 && sampleCircuit.nBits == 1
+-- every constructor at least once; the measured record: 2Q = 6, rot = 3 (`p (-3) 5`, `cp 1 2`,
+-- `cp (-1) 3`; `p 2 4` is a T-power, `cp 1 1` and `p 0 5` are Clifford), meas = 1, ff = 4
+#guard sampleCircuit.gates.countP Gate.isTwoQubit == 6
+#guard sampleCircuit.gradeExt.rot == 3 && sampleCircuit.gradeExt.meas == 1 &&
+  sampleCircuit.gradeExt.ff == 4
+#guard (["alloc", "h", "s", "sdg", "t", "tdg", "x", "z", "cnot", "cz", "p", "cp", "measure", "free"]
+  : List String).all fun op =>
+    sampleCircuit.gates.any fun g => (sampleCircuit.gateJson g).getObjValAs? String "op" == .ok op
+#guard sampleCircuit.gates.any fun g => match g with | .ifBit _ (.p ..) => true | _ => false
+#guard !sampleCircuit.gates.any fun g => match g with | .ifBit _ (.cp ..) => true | _ => false
+#guard sampleCircuitIfCp.gates.any fun g => match g with | .ifBit _ (.cp 1 1 _ _) => true | _ => false
+
+def sampleQasm : String := emitQASM "sample" sampleCircuit
+
+#guard (sampleQasm.splitOn "p(2*pi*1/8) x[0];\n").length == 2
+#guard (sampleQasm.splitOn "p(2*pi*(-3)/32) x[1];\n").length == 2
+#guard (sampleQasm.splitOn "p(2*pi*2/16) x[2];\n").length == 2
+#guard (sampleQasm.splitOn "p(2*pi*0/32) anc[0];\n").length == 2
+#guard (sampleQasm.splitOn "cp(2*pi*1/2) x[0], x[1];\n").length == 2
+#guard (sampleQasm.splitOn "cp(2*pi*(-1)/8) x[2], anc[0];\n").length == 2
+#guard (sampleQasm.splitOn "if (c[0]) { p(2*pi*1/2) x[0]; }\n").length == 2
+#guard (sampleQasm.splitOn "if (c[0]) { p(2*pi*1/4) x[1]; }\n").length == 2
+#guard ((emitQASM "s" sampleCircuitIfCp).splitOn "if (c[0]) { cp(2*pi*1/2) x[1], x[2]; }\n").length == 2
+#guard (sampleQasm.splitOn "unsupported").length == 1
+
+def sampleQir : String := (emitQIR "sample" sampleCircuit).toOption.getD ""
+
+-- the hex-float angles: π/4 for `p 1 3` and `p 2 4`, −3π/16 for `p (-3) 5`, 0 for `p 0 5`
+#guard qirAngle 1 3 == "0x3FE921FB54442D18"
+#guard qirAngle 2 4 == "0x3FE921FB54442D18"
+#guard qirAngle 0 5 == "0x0000000000000000"
+#guard qirAngle (-3) 5 == "0xBFE2D97C7F3321D2"
+#guard qirAngle 1 1 == "0x400921FB54442D18"
+#guard (sampleQir.splitOn "  call void @__quantum__qis__rz__body(double 0x3FE921FB54442D18, ptr inttoptr (i64 0 to ptr))\n").length == 2
+#guard (sampleQir.splitOn "declare void @__quantum__qis__rz__body(double, ptr)\n").length == 2
+-- `cp 1 1 x0 x1` is the five calls rz(π/2) x0; rz(π/2) x1; cnot; rz(−π/2) x1; cnot
+#guard (sampleQir.splitOn ("  call void @__quantum__qis__rz__body(double 0x3FF921FB54442D18, ptr inttoptr (i64 0 to ptr))\n" ++
+  "  call void @__quantum__qis__rz__body(double 0x3FF921FB54442D18, ptr inttoptr (i64 1 to ptr))\n" ++
+  "  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 1 to ptr))\n" ++
+  "  call void @__quantum__qis__rz__body(double 0xBFF921FB54442D18, ptr inttoptr (i64 1 to ptr))\n" ++
+  "  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 1 to ptr))\n")).length == 2
+#guard (sampleQir.splitOn "unsupported").length == 1
+#guard (sampleQir.splitOn "\"required_num_qubits\"=\"4\"").length == 2
+-- a classically controlled cp: refused with the diagnostic, nothing emitted
+#guard match emitQIR "s" sampleCircuitIfCp with
+  | .error d => d.stage == .emit && d.code == .unsupportedInQir &&
+      d.message.startsWith "classically controlled cp has no QIR form in this emitter" &&
+      (d.toJson.compress.splitOn "\"code\":\"unsupported_in_qir\"").length == 2 &&
+      (d.toJson.compress.splitOn "\"stage\":\"emit\"").length == 2
+  | .ok _ => false
+#guard findIfCp sampleCircuit.gates == none
+#guard (findIfCp sampleCircuitIfCp.gates).map (·.1) == some (sampleCircuit.gates.length - 1)
 
 /-! ## Axiom audit (Stage 8b, decision 3) -/
 
@@ -156,6 +229,13 @@ def xorNet : Network := ⟨2, #[.input 0, .input 1, .xor 0 1], [2]⟩
 -- Stage 12a: the generated diffusion certificate is the balanced tree
 #guard (groverCert.splitOn "  net := treeNet 8").length == 2
 #guard (groverCert.splitOn "theorem emitted_ok : groverCircuit net 8 2 = .ok emitted").length == 2
+-- Stage 17b: `gradeExt_eq` right after `grade_eq`, every template (the few / coherent ones below)
+def gradeExtFrag (e : GradeExt) : String :=
+  s!"theorem gradeExt_eq : Synthesis.gradeExt emitted = ⟨{e.twoQ}, {e.tDepth}, {e.rot}, {e.meas}, {e.ff}⟩ := by decide +kernel\n\ntheorem nAnc_eq"
+#guard groverReq.map (·.gradeExt) == some ⟨126, 39, 0, 18, 36⟩
+#guard (groverCert.splitOn "⟨15, 134, 72, 7⟩ := by decide +kernel\n\n/-- PHASE2_SPEC.md §A.1 (Stage 17b)").length == 2
+#guard (groverCert.splitOn (gradeExtFrag ⟨126, 39, 0, 18, 36⟩)).length == 2
+#guard (groverCert.splitOn "gradeExt_eq").length == 2
 -- Stage 16b: the front-end declarations between `net` and `emitted` (every template below too)
 def progBlockFrags : List String :=
   ["  [9]⟩\n\n/-- The typed term of the request",
@@ -202,6 +282,8 @@ def groverCertFew : String := (groverReqFew.map renderCert).getD ""
 
 #guard groverReqFew.map (fun q => (q.grade, q.nAnc, q.diffusion)) ==
   some (⟨10, 172, 96, 2⟩, 2, .fewLog)
+#guard groverReqFew.map (·.gradeExt) == some ⟨106, 77, 0, 8, 16⟩
+#guard (groverCertFew.splitOn (gradeExtFrag ⟨106, 77, 0, 8, 16⟩)).length == 2
 #guard progBlockFrags.all fun f => (groverCertFew.splitOn f).length == 2
 #guard (groverCertFew.splitOn "native_decide").length == 1
 #guard (groverCertFew.splitOn "sorry").length == 1
@@ -234,6 +316,8 @@ def groverCertCoh : String := (groverReqCoh.map renderCert).getD ""
 #guard groverReqCoh.map (fun q => (q.grade, q.nAnc, q.diffusion, q.uncompute)) ==
   some (⟨15, 200, 144, 7⟩, 7, .tree, .coherent)
 #guard groverReqCoh.map (·.circuit.nBits) == some 0
+#guard groverReqCoh.map (·.gradeExt) == some ⟨216, 74, 0, 0, 0⟩
+#guard (groverCertCoh.splitOn (gradeExtFrag ⟨216, 74, 0, 0, 0⟩)).length == 2
 #guard progBlockFrags.all fun f => (groverCertCoh.splitOn f).length == 2
 #guard (groverCertCoh.splitOn
   "theorem emitted_ok : groverCircuit net 8 2 none .tree .coherent = .ok emitted").length == 2
@@ -265,14 +349,15 @@ def groverCertCoh : String := (groverReqCoh.map renderCert).getD ""
     | .error (.diagnostic d) => d.stage == .synthesis && d.code == .unsupportedCombination
     | _ => false
   | .error _ => false
--- the JSON (Stage 16b, schema 1.8.0): `uncompute` written in every certificate, one version
+-- the JSON (Stage 16b, schema 1.8.0; 1.9.0 since Stage 17b): `uncompute` written in every
+-- certificate, one version
 #guard match sample with
   | .ok c =>
     let cc : Certificate := { c with uncompute := .coherent }
     (c.toJson.compress.splitOn "\"uncompute\":\"mbu\"").length == 2 &&
-      (c.toJson.compress.splitOn "\"schema_version\":\"1.8.0\"").length == 2 &&
+      (c.toJson.compress.splitOn "\"schema_version\":\"1.9.0\"").length == 2 &&
       (cc.toJson.compress.splitOn "\"uncompute\":\"coherent\"").length == 2 &&
-      (cc.toJson.compress.splitOn "\"schema_version\":\"1.8.0\"").length == 2
+      (cc.toJson.compress.splitOn "\"schema_version\":\"1.9.0\"").length == 2
   | .error _ => false
 #guard (groverCertFew.splitOn "nAnc_eq\n    hM_card\n").length == 2
 -- Stage 14a, few:log with the kernel-decided count

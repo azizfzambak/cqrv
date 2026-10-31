@@ -371,6 +371,11 @@ example (c t : Qubit) : gateU 2 0 (.cp 1 1 c t) = gateU 2 0 (.cz c t) := gateU_c
 #print axioms gateU_mem_unitaryGroup
 
 #print axioms decomposeCp_gate
+
+-- Stage 17b (Stage 17a review, decision 4): the circuit-level corollary the QIR emitter cites
+/-- info: 'CQRV.decomposeCp_unitary_wf' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms decomposeCp_unitary_wf
 #print axioms Circuit.decomposeCp_wf
 #print axioms gateU_adjoint
 #print axioms phaseOf_add_self

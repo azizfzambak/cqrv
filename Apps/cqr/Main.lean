@@ -53,6 +53,11 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   terminal measurement of the data register. `--oracle` emits the phase oracle alone (for the
   differential test of the re-parsed program). Failures: diagnostic JSON, exit 1; no `r` and no
   M: message, exit 2. The emitters are unverified (§5.3); `tests/diff/` re-parses their output.
+  Stage 17b (PHASE2_SPEC.md §A.1): the phase gates `p a k` / `cp a k` are `p(2*pi*a/2^k)` /
+  `cp(…)` in OpenQASM 3 (the power evaluated) and, in QIR, `rz` with a hex-float angle and the
+  five-gate `decomposeCp`; a `cp` under `ifBit` has no QIR form: diagnostic `unsupported_in_qir`
+  (stage `emit`), exit 1, nothing written (no synthesized circuit contains these gates; the
+  sample circuit of `scripts/CertifyTool.lean emit-sample` exercises them).
 * `cqr certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k]` — report §5.1.3,
   §8.4.1, §8.4.4, §9.5.1 (Stage 8b): match (must be Grover; otherwise the Table 4 hint, exit 1),
   synthesize, write `<dir>/Cert.lean` (default `certs/<name>/`; the specialization of the Grover
@@ -68,7 +73,9 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   kernel-checked) and `trust_boundary.front_end` says so (schema 1.8.0, `uncompute` explicit);
   the Stage 9b exhaustive validation (`validateFrontEnd`, `front_end_mismatch`) is no longer run
   by `certify` (`cqr check --truth-table` keeps it). `--report` also writes `run_report.md` and
-  `run_report.json` (Table 8.5.2, measured values; `CQRV.Certify.RunReport`).
+  `run_report.json` (Table 8.5.2, measured values; `CQRV.Certify.RunReport`). Stage 17b: every
+  `Cert.lean` states `gradeExt_eq` (the second record `GradeExt`, right after `grade_eq`) and
+  `certificate.json` records it as `grade_ext` (schema 1.9.0); the run report prints it in row 4.
   Stage 11b: `--profile <name|path>` (`profiles/<name>.json`, or a path) checks the measured
   grade against the declared budget and computes `δ_hw = δ + G·p̄` (report §3.3.2–3.3.3);
   `certificate.json` gets the object `hardware` (schema v1.4.0), the run report a row
@@ -409,8 +416,12 @@ def runEmit (path : String) (fmt : EmitFormat) (iters solutions : Option Nat) (o
     | .error (.usage msg) => IO.eprintln s!"cqr emit: {msg}"; return 2
     | .ok gi =>
       let (name, C) := if oracle then (s!"{tp.name}_oracle", gi.oracle) else (tp.name, gi.circuit)
-      IO.print (match fmt with | .qir => emitQIR name C | .qasm => emitQASM name C)
-      return 0
+      match fmt with
+      | .qasm => IO.print (emitQASM name C); return 0
+      | .qir =>
+        match emitQIR name C with
+        | .ok text => IO.print text; return 0
+        | .error d => IO.println d.toJson.compress; return 1
 
 /-- Parse `[--solutions M] [--iterations r] [--out dir] [--bench k] [--report]
 [--profile name|path] [--count-limit k]` in any order. -/
@@ -534,6 +545,10 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
         | .error e => IO.eprintln s!"cqr certify: {e}"; return 2
     let q := CertRequest.ofInstance tp src gi M count
     let text := renderCert q
+    -- the QIR text (Stage 17b: `emitQIR` can refuse a circuit; nothing is written then)
+    let qirText ← match emitQIR tp.name gi.circuit with
+      | .ok t => pure t
+      | .error d => IO.println d.toJson.compress; return 1
     let dir := (out.getD s!"certs/{tp.name}").dropEndWhile (fun c => c == '/' || c == '\\')
     let file (n : String) : String := s!"{dir}/{n}"
     IO.FS.createDirAll dir.toString
@@ -572,7 +587,7 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
       status, theoremName := some q.theoremName, obligations, hardware := hw, diffusion := diff }
     -- compact, keys sorted (canonical, as `circuit_hash` and `CertifyTool sample`)
     IO.FS.writeFile (file "certificate.json") (cert.toJson.compress ++ "\n")
-    IO.FS.writeFile (file s!"{tp.name}.qir") (emitQIR tp.name gi.circuit)
+    IO.FS.writeFile (file s!"{tp.name}.qir") qirText
     IO.FS.writeFile (file s!"{tp.name}.qasm") (emitQASM tp.name gi.circuit)
     let statusLine := match status, count with
       | .certified, .kernelDecided => "certified"

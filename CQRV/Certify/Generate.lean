@@ -20,7 +20,9 @@ The generated file imports `CQRV` and contains
 * the oracle certificate (`synthesizeOracle net = .ok …`, `WF`) and the diffusion
   certificate of the MCZ on `n` qubits, every side condition by `decide +kernel`;
 * `delta_eq`, `grade_eq`, `nAnc_eq` (kernel evaluation of `groverDelta`, `Synthesis.grade`,
-  `Circuit.nAnc`);
+  `Circuit.nAnc`) and, since Stage 17b (PHASE2_SPEC.md §A.1), `gradeExt_eq` right after
+  `grade_eq` (kernel evaluation of `Synthesis.gradeExt`: the second record `GradeExt`, written to
+  the JSON as `grade_ext`; `cert` does not take it);
 * `theorem cert (hM_card : …)`: `grover_certificate` at these data — `hM_card` is a hypothesis
   of the theorem (§5.2.4), or, since Stage 14a (`CertRequest.count = .kernelDecided`, `cqr
   certify --count-limit k` with `n ≤ k`), `theorem hM_count : (Finset.univ.filter …).card = M`
@@ -128,6 +130,8 @@ structure CertRequest where
   circuit : Circuit
   delta : Rat
   grade : Grade
+  /-- Stage 17b: the measured second record (`gradeExt_eq`) -/
+  gradeExt : GradeExt
   nAnc : Nat
   predicateHash : String
   /-- Stage 12d: the diffusion (`.tree` unless `--shape few:log`) -/
@@ -141,7 +145,8 @@ structure CertRequest where
 def CertRequest.ofInstance (tp : DSL.TypedProgram) (src : String) (gi : GroverInstance) (M : Nat)
     (count : CountStatus := .hypothesis) : CertRequest :=
   { name := tp.name, prog := tp, net := gi.net, n := gi.n, M, r := gi.r, circuit := gi.circuit,
-    delta := groverDelta gi.r gi.n M, grade := gi.circuit.grade, nAnc := gi.circuit.nAnc,
+    delta := groverDelta gi.r gi.n M, grade := gi.circuit.grade,
+    gradeExt := Synthesis.gradeExt gi.circuit, nAnc := gi.circuit.nAnc,
     predicateHash := CQRV.Certify.predicateHash src, diffusion := gi.diffusion, count,
     uncompute := gi.uncompute }
 
@@ -185,6 +190,18 @@ theorem hM_count : (Finset.univ.filter fun x => Network.pred net {q.n} x = true)
   rw [← Network.countSat_eq_card]
   decide +kernel
 
+"
+
+/-- PHASE2_SPEC.md §A.1 (Stage 17b) — the theorem `gradeExt_eq`, placed right after `grade_eq` in
+every template (the only addition to the Stage 16b text): the second record of the emitted
+circuit by `decide +kernel`. -/
+def CertRequest.gradeExtTheorem (q : CertRequest) : String :=
+  let e := q.gradeExt
+  s!"
+/-- PHASE2_SPEC.md §A.1 (Stage 17b) — the second resource record of the emitted circuit, measured by
+the same scheduler as `grade_eq`: two-qubit gates, T-depth, rotation gates, measurements and
+feed-forward gates (`grade_ext` in certificate.json; `cert` does not take it). -/
+theorem gradeExt_eq : Synthesis.gradeExt emitted = ⟨{e.twoQ}, {e.tDepth}, {e.rot}, {e.meas}, {e.ff}⟩ := by decide +kernel
 "
 
 /-- The statement of `cert`: with the hypothesis `hM_card`, or (Stage 14a) without any
@@ -261,7 +278,7 @@ theorem delta_eq : ((groverDelta {q.r} {n} {q.M} : ℚ) : ℝ) = {realLit q.delt
   norm_num
 
 theorem grade_eq : Synthesis.grade emitted = ⟨{g.w}, {g.d}, {g.t}, {g.a}⟩ := by decide +kernel
-
+{q.gradeExtTheorem}
 theorem nAnc_eq : emitted.nAnc = {q.nAnc} := by decide +kernel
 
 /-- The synthesized oracle of `net`. -/
@@ -347,7 +364,7 @@ theorem delta_eq : ((groverDelta {q.r} {q.n} {q.M} : ℚ) : ℝ) = {realLit q.de
   norm_num
 
 theorem grade_eq : Synthesis.grade emitted = ⟨{g.w}, {g.d}, {g.t}, {g.a}⟩ := by decide +kernel
-
+{q.gradeExtTheorem}
 theorem nAnc_eq : emitted.nAnc = {q.nAnc} := by decide +kernel
 
 /-- The synthesized oracle of `net` in mode `coherent`. -/
@@ -409,7 +426,7 @@ theorem delta_eq : ((groverDelta {q.r} {q.n} {q.M} : ℚ) : ℝ) = {realLit q.de
   norm_num
 
 theorem grade_eq : Synthesis.grade emitted = ⟨{g.w}, {g.d}, {g.t}, {g.a}⟩ := by decide +kernel
-
+{q.gradeExtTheorem}
 theorem nAnc_eq : emitted.nAnc = {q.nAnc} := by decide +kernel
 "
   let body := s!"

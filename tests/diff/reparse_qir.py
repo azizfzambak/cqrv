@@ -6,16 +6,23 @@ Reads the LLVM IR text back into the IR JSON format of `cqr synthesize --json`
 static shape on the way: Adaptive Profile attributes, module flags, static qubit/result
 addresses, `read_result` + `br i1` into a block with exactly one gate, one `measurements:`
 block, the `output:` record. Any line it does not understand is an error, never skipped.
+Stage 17b (PHASE2_SPEC.md §A.1): `__quantum__qis__rz__body(double <hex float>, ptr q)` gives
+`{"op":"p","q":[i],"angle": float}` (the hex-float literal `0x…` decoded with `struct`); the
+emitter writes `rz` for `p a k` with angle 2πa/2^k and a top-level `cp` as its five-gate
+decomposition, so `emit_diff.py` compares such a re-parse against the Lean IR after
+`Circuit.decomposeCp`, with the angles to 1e-12.
 
 Usage as a module: `parse(text) -> (circuit_dict, terminal)` with `terminal` the list of
 `(qubit, result)` pairs of the `measurements:` block.
 """
 
 import re
+import struct
 
 GATES = {"h": "h", "s": "s", "s__adj": "sdg", "t": "t", "t__adj": "tdg", "x": "x", "z": "z",
          "cnot": "cnot", "cz": "cz"}
 PTR = r"ptr (?:inttoptr \(i64 (\d+) to ptr\)|null)"
+RE_HEX_FLOAT = re.compile(r"^double 0x([0-9A-Fa-f]{16})$")
 RE_GATE = re.compile(r"^  call void @__quantum__qis__(\w+?)__body\((.*)\)$")
 RE_ARG = re.compile(r"^" + PTR + r"$")
 RE_READ = re.compile(r"^  %(c\d+) = call i1 @__quantum__qis__read_result__body\((.*)\)$")
@@ -51,10 +58,18 @@ def _args(s):
 
 
 def _gate(line):
-    """A unitary QIS call -> (op, qubits), or None."""
+    """A unitary QIS call -> (op, qubits) or, for `rz` (Stage 17b), (op, qubits, angle); None
+    otherwise."""
     m = RE_GATE.match(line)
     if not m or m.group(1) == "mz":
         return None
+    if m.group(1) == "rz":
+        parts = m.group(2).split(", ")
+        mh = RE_HEX_FLOAT.match(parts[0]) if len(parts) == 2 else None
+        if not mh:
+            raise ParseError(f"rz needs one hex-float double and one qubit: {line!r}")
+        (angle,) = struct.unpack(">d", bytes.fromhex(mh.group(1)))
+        return "p", _args(parts[1]), angle
     if m.group(1) not in GATES:
         raise ParseError(f"unknown QIS callee: {line!r}")
     op = GATES[m.group(1)]
@@ -62,6 +77,13 @@ def _gate(line):
     if len(q) != (2 if op in ("cnot", "cz") else 1):
         raise ParseError(f"wrong arity: {line!r}")
     return op, q
+
+
+def _gate_dict(g):
+    d = {"op": g[0], "q": g[1]}
+    if len(g) == 3:
+        d["angle"] = g[2]
+    return d
 
 
 def parse(text):
@@ -95,7 +117,7 @@ def parse(text):
                 continue
             g = _gate(ln)
             if g:
-                gates.append({"op": g[0], "q": g[1]})
+                gates.append(_gate_dict(g))
                 i += 1
                 continue
             m = RE_GATE.match(ln)
@@ -122,7 +144,7 @@ def parse(text):
                     raise ParseError(f"block {then} must hold exactly one unitary gate")
                 if body[i + 4] != f"  br label %{cont}" or body[i + 5] != f"{cont}:":
                     raise ParseError(f"block {then} must branch to {cont}, which follows it")
-                gates.append({"op": g[0], "q": g[1], "if": r})
+                gates.append({**_gate_dict(g), "if": r})
                 block = cont
                 i += 6
                 continue

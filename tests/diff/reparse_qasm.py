@@ -6,7 +6,10 @@ Reads the program back into the IR JSON format of `cqr synthesize --json`
 `anc[i] -> n_data + i`) and the terminal measurement. Accepts exactly the subset the emitter
 writes (declarations `qubit[n] x; qubit[a] anc; bit[m] c; bit[n] out;`, stdgates names,
 `c[j] = measure q;`, `if (c[j]) { g; }`, `out = measure x;`, `// cqrv: alloc|free q`); any other
-line is an error.
+line is an error. Stage 17b (PHASE2_SPEC.md §A.1): `p(2*pi*a/N) q;` and `cp(2*pi*a/N) c, t;`
+with `a` an integer (in parentheses when negative) and `N` a power of two give
+`{"op":"p"|"cp", "q": …, "a": a, "k": log2 N}`, exactly the Lean IR JSON; an argument on any
+other gate, a missing argument on `p` / `cp`, or an `N` that is not a power of two is an error.
 
 Usage as a module: `parse(text) -> (circuit_dict, terminal)`; `terminal` is the list of
 `(qubit, out index)` pairs of `out = measure x;`.
@@ -15,10 +18,13 @@ Usage as a module: `parse(text) -> (circuit_dict, terminal)`; `terminal` is the 
 import re
 
 GATES = {"h": "h", "s": "s", "sdg": "sdg", "t": "t", "tdg": "tdg", "x": "x", "z": "z",
-         "cx": "cnot", "cz": "cz"}
+         "cx": "cnot", "cz": "cz", "p": "p", "cp": "cp"}
+TWO_QUBIT = ("cnot", "cz", "cp")
 QUBIT = r"(x|anc)\[(\d+)\]"
 RE_DECL = re.compile(r"^(qubit|bit)\[(\d+)\] (x|anc|c|out);$")
-RE_GATE = re.compile(r"^(\w+) " + QUBIT + r"(?:, " + QUBIT + r")?;$")
+# Stage 17b: the optional angle `(2*pi*a/N)` of `p` / `cp`, `a` an integer, `(-a)` when negative
+RE_GATE = re.compile(r"^(\w+)(?:\(2\*pi\*(-?\d+|\(-\d+\))/(\d+)\))? " + QUBIT +
+                     r"(?:, " + QUBIT + r")?;$")
 RE_MEASURE = re.compile(r"^c\[(\d+)\] = measure " + QUBIT + r";$")
 RE_IF = re.compile(r"^if \(c\[(\d+)\]\) \{ (.*) \}$")
 RE_ANNOT = re.compile(r"^// cqrv: (alloc|free) " + QUBIT + r"$")
@@ -59,12 +65,20 @@ def parse(text):
         if not m or m.group(1) not in GATES:
             return None
         op = GATES[m.group(1)]
-        q = [qubit(m.group(2), m.group(3))]
-        if m.group(4) is not None:
-            q.append(qubit(m.group(4), m.group(5)))
-        if len(q) != (2 if op in ("cnot", "cz") else 1):
+        q = [qubit(m.group(4), m.group(5))]
+        if m.group(6) is not None:
+            q.append(qubit(m.group(6), m.group(7)))
+        if len(q) != (2 if op in TWO_QUBIT else 1):
             raise ParseError(f"wrong arity: {s!r}")
-        return {"op": op, "q": q}
+        g = {"op": op, "q": q}
+        if (m.group(2) is not None) != (op in ("p", "cp")):
+            raise ParseError(f"angle argument on the wrong gate: {s!r}")
+        if m.group(2) is not None:
+            a, n = int(m.group(2).strip("()")), int(m.group(3))
+            if n < 1 or n & (n - 1):
+                raise ParseError(f"the denominator {n} is not a power of two: {s!r}")
+            g.update(a=a, k=n.bit_length() - 1)
+        return g
 
     gates, written, terminal = [], [], None
     for ln in lines[i:]:

@@ -11,7 +11,10 @@ circuit (DECISIONS.md 2026-10-24, Stage 8a reviewer decision 5):
 by their `stdgates.inc` names (`cx` for CNOT), `c[j] = measure q;`, `if (c[j]) { g }`, and the
 final `out = measure x;`. `alloc` / `free` are the structured comments `// cqrv: alloc q` /
 `// cqrv: free q` (OpenQASM 3 qubits are declared statically). Declarations of size 0 are
-omitted. Unverified; `tests/diff/reparse_qasm.py` translation-validates it.
+omitted. Stage 17b (PHASE2_SPEC.md §A.1): the exact phase gates are `p(2*pi*a/N) q;` and
+`cp(2*pi*a/N) c, t;` with `N = 2^k` **evaluated** to an integer (`^` is XOR in OpenQASM 3) and
+`a` an integer, in parentheses when negative (`p(2*pi*(-3)/32) x[0];`); both are `stdgates.inc`
+gates. Unverified; `tests/diff/reparse_qasm.py` translation-validates it.
 -/
 
 @[expose] public section
@@ -22,6 +25,9 @@ namespace CQRV.Emit
 def qasmQubit : Qubit → String
   | .data i => s!"x[{i}]"
   | .anc i => s!"anc[{i}]"
+
+/-- An integer angle numerator, in parentheses when negative (`(-3)`). -/
+def qasmInt (a : Int) : String := if a < 0 then s!"({a})" else s!"{a}"
 
 /-- One statement of a gate (without indentation). -/
 def qasmGate : Gate → String
@@ -38,10 +44,9 @@ def qasmGate : Gate → String
   | .ifBit c g => s!"if (c[{c}]) \{ {qasmGate g} }"
   | .alloc q => s!"// cqrv: alloc {qasmQubit q}"
   | .free q => s!"// cqrv: free {qasmQubit q}"
-  -- Stage 17a: the phase gates exist in the IR but no synthesized circuit contains them; their
-  -- OpenQASM 3 form (`p(2*pi*a/N)`, PHASE2_SPEC.md §A.1) is Stage 17b. Until then a comment.
-  | .p a k q => s!"// cqrv: unsupported before Stage 17b: {(Gate.p a k q).render}"
-  | .cp a k c t => s!"// cqrv: unsupported before Stage 17b: {(Gate.cp a k c t).render}"
+  -- Stage 17b (PHASE2_SPEC.md §A.1): the angle 2πa/2^k with the power evaluated
+  | .p a k q => s!"p(2*pi*{qasmInt a}/{2 ^ k}) {qasmQubit q};"
+  | .cp a k c t => s!"cp(2*pi*{qasmInt a}/{2 ^ k}) {qasmQubit c}, {qasmQubit t};"
 
 /-- Report §8.4.3 — the OpenQASM 3 program of a circuit, with the terminal measurement of the
 data register into `out`. -/

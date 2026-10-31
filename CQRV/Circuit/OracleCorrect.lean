@@ -745,6 +745,33 @@ theorem Circuit.WF.gatesOk {C : Circuit} (h : C.WF) : GatesOk C.nData C.nAnc C.g
   · rintro p t rfl
     simpa using hq.2
 
+/-- PHASE2_SPEC.md §A.1 (Stage 17b; Stage 17a review, decision 4) — `decomposeCp` preserves the
+unitary semantics of a well-formed circuit on its own register: `Gate.cpOk` holds for every gate
+(`qubitsOk` bounds the data indices and gives distinct operands; every ancilla index is below
+`nAnc`, `Circuit.anc_lt_nAnc`). The QIR emitter (`CQRV.Emit.QIR`) emits `decomposeCp C.gates`
+and cites this theorem. -/
+theorem decomposeCp_unitary_wf (C : Circuit) (h : C.WF) :
+    unitaryDenote C.nData C.nAnc (Circuit.decomposeCp C.gates) =
+      unitaryDenote C.nData C.nAnc C.gates := by
+  apply decomposeCp_unitary
+  intro g hg
+  unfold Circuit.WF Circuit.wf at h
+  rw [Bool.and_eq_true] at h
+  have hq := List.all_eq_true.mp h.1 g hg
+  cases g with
+  | cp m k c t =>
+    simp only [Gate.qubitsOk, Gate.qubits, List.all_cons, List.all_nil, Bool.and_true,
+      Bool.and_eq_true, bne_iff_ne] at hq
+    obtain ⟨⟨_, ht⟩, hct⟩ := hq
+    simp only [Gate.cpOk, Bool.and_eq_true, bne_iff_ne]
+    refine ⟨hct, ?_⟩
+    cases t with
+    | data i => simpa [Qubit.inRange] using ht
+    | anc i =>
+      have hi : i < C.nAnc := Circuit.anc_lt_nAnc hg (i := i) (by simp [Gate.qubits])
+      simp [Qubit.inRange, hi]
+  | _ => simp [Gate.cpOk]
+
 theorem cmpBlocks_length_le {rs : List AndRec} {j : ℕ} (h : GatesOk n a (cmpBlocks rs j)) :
     rs = [] ∨ j + rs.length ≤ a := by
   induction rs generalizing j with

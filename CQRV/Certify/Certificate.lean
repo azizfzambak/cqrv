@@ -42,7 +42,11 @@ reviewer decisions 2 and 3).
   omission convention decided 2026-10-30, Stage 15b review)** writes `uncompute` in every
   certificate, keeps `solution_count` required, and makes
   `trust_boundary.front_end` the proved wording (`frontEndProvedText`: `toNetwork_pred`,
-  kernel-checked `net_ok` and `front_end` in `Cert.lean`); every certificate says "1.8.0".
+  kernel-checked `net_ok` and `front_end` in `Cert.lean`); every certificate said "1.8.0".
+  **v1.9.0 (Stage 17b, PHASE2_SPEC.md §A.1)** adds the required object `grade_ext`
+  `{two_qubit, t_depth, rot, meas, ff}` — the second resource record `GradeExt`, measured by the
+  same scheduler as `grade` and stated in `Cert.lean` as `gradeExt_eq` (`decide +kernel`);
+  present iff the version is 1.9.0; every certificate says "1.9.0".
 -/
 
 @[expose] public section
@@ -225,6 +229,9 @@ structure Certificate where
   delta : Rat
   /-- the measured grade of the emitted circuit -/
   grade : Grade
+  /-- Stage 17b: the measured second record of the emitted circuit (`grade_ext`; `gradeExt_eq`
+  in `Cert.lean`) -/
+  gradeExt : GradeExt
   hypotheses : List String
   restoration : String
   predicateHash : String
@@ -254,16 +261,17 @@ structure Certificate where
   uncompute : UncomputeMode := .mbu
   deriving Repr
 
-/-- The schema version written to `schema_version` (semver): "1.8.0" for every certificate
-since Stage 16b — `trust_boundary.front_end` is the proved wording (`frontEndProvedText`),
-`uncompute` is written in every certificate (the Stage 15b convention "omitted means `mbu`" of
-1.7.0 is retired; DECISIONS.md 2026-10-31, Stage 16b, the retirement decided 2026-10-30 in the
-Stage 15b review) and the object `solution_count` is required;
-`hardware` (Stage 11b) and `diffusion_shape` (Stage 12d) are optional under it. History: 1.6.0
-Stage 14a (`solution_count`), 1.7.0 Stage 15b (`uncompute` on coherent certificates only); before
-Stage 14a the version depended on the optional objects present (1.3.0 / 1.4.0 / 1.5.0). Each of
-these stages regenerated every committed certificate, so one version suffices. -/
-def schemaVersion : String := "1.8.0"
+/-- The schema version written to `schema_version` (semver): "1.9.0" for every certificate
+since Stage 17b (PHASE2_SPEC.md §A.1) — the object `grade_ext` (`GradeExt`, `gradeExt_eq` in
+`Cert.lean`) is required, as are `solution_count` and `uncompute`, and
+`trust_boundary.front_end` is the proved wording (`frontEndProvedText`); `hardware` (Stage 11b)
+and `diffusion_shape` (Stage 12d) are optional under it. History: 1.8.0 Stage 16b (the proved
+front end, `uncompute` written in every certificate — the Stage 15b convention "omitted means
+`mbu`" retired; DECISIONS.md 2026-10-31), 1.7.0 Stage 15b (`uncompute` on coherent certificates
+only), 1.6.0 Stage 14a (`solution_count`); before Stage 14a the version depended on the optional
+objects present (1.3.0 / 1.4.0 / 1.5.0). Each of these stages regenerated every committed
+certificate, so one version suffices. -/
+def schemaVersion : String := "1.9.0"
 
 /-- The trust-boundary note of the `hardware` object (§5.3.1). -/
 def hardwareNote : String :=
@@ -297,6 +305,8 @@ def Certificate.toJson (c : Certificate) : Json :=
        ("success_probability", ratStr (1 - c.delta))]),
      ("grade", Json.mkObj [("w", c.grade.w), ("d", c.grade.d), ("t", c.grade.t),
        ("a", c.grade.a)]),
+     ("grade_ext", Json.mkObj [("two_qubit", c.gradeExt.twoQ), ("t_depth", c.gradeExt.tDepth),
+       ("rot", c.gradeExt.rot), ("meas", c.gradeExt.meas), ("ff", c.gradeExt.ff)]),
      ("hypotheses", Json.arr (c.hypotheses.map str).toArray),
      ("restoration", str c.restoration),
      ("hashes", Json.mkObj [("predicate", str c.predicateHash), ("circuit", str c.circuitHash),
@@ -335,7 +345,8 @@ def restorationText : String := "AncRestore: all ancillae |0…0⟩ on density o
 /-- Report §8.4.2 — the certificate of a matched Grover instance from (source text, extracted
 signature, match, circuit, grade, `r`, `n`, `M`, exact `δ`). Checks that the data agree: the
 signature's arity and solution count are `n` and `M`, the circuit has `n` data qubits, and the
-grade is the circuit's measured grade (DECISIONS.md, Stage 5b review). `frontEnd` is the
+grade is the circuit's measured grade (DECISIONS.md, Stage 5b review); `gradeExt` is measured
+here from the circuit (Stage 17b). `frontEnd` is the
 declared front-end boundary (`frontEndProvedText` since Stage 16b). `count`
 (Stage 14a) says whether `M` is decided by the kernel (`hM_count`) or a hypothesis (`hM_card`);
 only in the second case is it listed under `hypotheses`. -/
@@ -350,6 +361,7 @@ def Certificate.build (src : String) (sig : SigmaIn) (entry : LibEntry) (facts :
   let (hP, hC, G) := (Certify.predicateHash src, Certify.circuitHash C, Certify.gateCounts C)
   return {
     pattern := entry.name, n, M, r, epsilon := 0, delta := δ, grade := g
+    gradeExt := Synthesis.gradeExt C
     hypotheses :=
       (match count with
         | .hypothesis => [s!"solution_count = {M} (hM_card, supplied, not decided)"]
