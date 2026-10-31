@@ -85,11 +85,21 @@ for it in Stage 17: it is measured, not composed):
 ```
 structure GradeExt where
   twoQ   : Nat   -- cnot, cz, cp (also under ifBit)
-  tDepth : Nat   -- layers of the ASAP schedule that contain a t/tdg or a T-power p
+  tDepth : Nat   -- layers (k ≥ 1) of the decision-4 (ASAP) schedule that contain a t/tdg or a T-power p
   rot    : Nat   -- p/cp gates that are neither Clifford nor T-powers
   meas   : Nat   -- measure gates
   ff     : Nat   -- ifBit gates
 ```
+
+Stage 17a (b32b999, accepted 2026-10-31): `CQRV/Grades/Ext.lean`; `Circuit.gradeExt` reads the
+record off the same `schedule` as `grade` — `twoQ`, `rot`, `meas`, `ff` by `countP` over the
+gates (`Gate.isTwoQubit`, `isRotation`, `isMeasure`, `isIfBit`; `ifBit` looks inside), `tDepth`
+as the number of `k < depth` such that some gate placed in layer `k + 1` is a T-power (a `countP`
+over `List.range depth`, so depth × gates work for the kernel). Proved: `gradeExt_meas_eq_nBits`,
+`gradeExt_tDepth_le_depth`, `gradeExt_tDepth_le_tCount`. Reviewer decision 2026-10-31: if
+`gradeExt_eq` alone exceeds 30 s in the kernel for any certificate in 17b, the `tDepth` clause
+changes to the deduplicated list of T-layer indices (linear in the T-count) and the three
+theorems are re-proved; otherwise the definition stays.
 
 `Synthesis.gradeExt C : GradeExt`; every certificate states `theorem gradeExt_eq :
 Synthesis.gradeExt emitted = ⟨…⟩ := by decide +kernel` and records it as `grade_ext` `{two_qubit, t_depth, rot, meas, ff}` in the
@@ -110,17 +120,34 @@ project — per branch under `ifBit` too — and the run report says so); `cp` h
 emitted as the standard decomposition `p a (k+1) c; p a (k+1) t; cnot c t; p (-a) (k+1) t;
 cnot c t` (θ/2 = 2πa/2^(k+1)), so the QIR re-parse is validated against `Circuit.decomposeCp C`
 (top-level `cp` only; a `cp` under `ifBit` is refused by the QIR emitter with a diagnostic, the
-Adaptive-Profile branch would need the five gates), with `decomposeCp_unitary : unitaryDenote
-(decomposeCp gs) = unitaryDenote gs` proved once (this is the first entry of the decomposition
-table of §C.3). Gates no synthesized circuit contains are exercised through a fixed sample circuit
-(`CertifyTool emit-sample`, Stage 17b).
+Adaptive-Profile branch would need the five gates), with `decomposeCp_unitary (gs) (h : ∀ g ∈ gs,
+g.cpOk n a = true) : unitaryDenote n a (decomposeCp gs) = unitaryDenote n a gs` proved once in
+17a (this is the first entry of the decomposition table of §C.3). `Gate.cpOk n a`: every
+top-level `cp` has distinct operands and its target inside the register `Reg n × Reg a`. The
+hypothesis is necessary and was added at 17a (reviewer-accepted 2026-10-31): the semantics reads
+a qubit outside the register as 0, so on an out-of-range target the five gates reduce to
+`p a (k+1) c` while `cp` is the identity; the task text's `c ≠ t` alone was false, and its
+`isUnitary` hypothesis was unnecessary (`unitaryDenote` reads every gate through `gateU`). 17b adds
+the circuit-level form the QIR emitter cites, `decomposeCp_unitary_wf (C : Circuit) (h : C.WF) :
+unitaryDenote C.nData C.nAnc (decomposeCp C.gates) = unitaryDenote C.nData C.nAnc C.gates`
+(`cpOk` holds automatically: `qubitsOk` bounds the data indices and `nAnc` is one more than the
+largest ancilla index). Gates no synthesized circuit contains are exercised through a fixed sample
+circuit (`CertifyTool emit-sample`, Stage 17b).
 
 **Harness.** `tests/diff/statevector.py` learns `{"op":"p","q":[i],"a":a,"k":k}` and `"cp"`.
 
 **Stages.** 17a: IR, semantics, well-formedness, scheduler, `GradeExt`, `decomposeCp` (library;
-no emitter, CLI, certificate or Python change); 17b: emitters, re-parsers, harness, `gradeExt_eq`
-in every certificate, schema 1.9.0, the four certificates regenerated
-(docs/tasks/STAGE17_TASK.md, 2026-10-31).
+no emitter, CLI, certificate or Python change) — **done b32b999, accepted 2026-10-31**, all
+theorems proved, nothing tracked, `Grade` and every existing statement unchanged (checked by
+script), the measured `GradeExt` (twoQ, tDepth, rot, meas, ff) of the four committed circuits
+grover_pred_037 (126, 39, 0, 18, 36), simple_alu_x0_1 (137, 28, 0, 15, 30), grover_pred_037_few
+(106, 77, 0, 8, 16), grover_pred_037_coh (216, 74, 0, 0, 0); until 17b the OpenQASM emitter writes
+a `// cqrv: unsupported before Stage 17b` comment for `p` / `cp` and the QIR emitter its existing
+`; unsupported gate` comment (no synthesized circuit contains them). 17b: emitters, re-parsers,
+harness, `gradeExt_eq` in every certificate, schema 1.9.0, the four certificates regenerated, plus
+`decomposeCp_unitary_wf` (docs/tasks/STAGE17_TASK.md, 2026-10-31). The coherent certificate's
+`tDepth` 74 against the MBU 39 (the adjoint compute block repeats the T layers) is recorded in
+the 17b DECISIONS entry, not in the run report.
 
 ### A.2 QFT and approximate QFT (new; the Theorem 3.3b client)
 
