@@ -62,7 +62,11 @@ def qubitLit : Qubit → String
   | .data i => s!"(.data {i})"
   | .anc i => s!"(.anc {i})"
 
-/-- A gate as a Lean term of type `Gate`. -/
+/-- An integer as a Lean term, in parentheses when negative (`(-3)`). -/
+def intLit (a : Int) : String := if a < 0 then s!"({a})" else s!"{a}"
+
+/-- A gate as a Lean term of type `Gate` (Stage 17a: `p` / `cp` with their integer angle data; no
+synthesized circuit contains them). -/
 def gateLit : Gate → String
   | .h q => s!".h {qubitLit q}"
   | .s q => s!".s {qubitLit q}"
@@ -77,6 +81,8 @@ def gateLit : Gate → String
   | .ifBit c g => s!".ifBit {c} ({gateLit g})"
   | .alloc q => s!".alloc {qubitLit q}"
   | .free q => s!".free {qubitLit q}"
+  | .p a k q => s!".p {intLit a} {k} {qubitLit q}"
+  | .cp a k c t => s!".cp {intLit a} {k} {qubitLit c} {qubitLit t}"
 
 /-- Comma-separated items, `perLine` per line, continuation lines indented by `indent`. -/
 def joinWrapped (items : List String) (perLine : Nat) (indent : String) : String :=

@@ -395,4 +395,10 @@ info: 'CQRV.Certify.grover_certificate_few_all' depends on axioms: [propext, Cla
 #guard_msgs in
 #print axioms grover_certificate_few_all
 
+/-! ## Stage 17a — the gate literal of the phase gates (no synthesized circuit contains them) -/
+
+#guard gateLit (.p (-3) 5 (.data 0)) == ".p (-3) 5 (.data 0)" &&
+  gateLit (.cp 1 2 (.data 0) (.anc 1)) == ".cp 1 2 (.data 0) (.anc 1)" &&
+  gateLit (.ifBit 0 (.cp 1 1 (.data 0) (.data 1))) == ".ifBit 0 (.cp 1 1 (.data 0) (.data 1))"
+
 end CQRV.Tests.Certify

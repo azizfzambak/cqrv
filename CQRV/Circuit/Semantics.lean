@@ -23,6 +23,13 @@ semantics of the measurement-free fragment and density-matrix semantics into a P
   (`CPTPMap.of_kraus_CPTPMap`). `alloc` / `free` denote the identity: that ancillae come back as
   |0⟩ is what `AncRestore` proves (`CQRV.Circuit.Restoration`), not what the semantics assumes.
 * Well-formedness (decision 3): `Circuit.WF`.
+* Stage 17a (PHASE2_SPEC.md §A.1): the exact phase gates `p a k` (`phaseMat` with the phase
+  `phaseOf a k = exp(2πi·a/2^k)`) and `cp a k` (diagonal, as `cz`); unitarity and the adjoint
+  extend without new hypotheses; the identities `p 1 1 = z`, `p 1 2 = s`, `p (-1) 2 = sdg`,
+  `p 1 3 = t`, `p (-1) 3 = tdg`, `cp 1 1 = cz` as theorems about `gateU`; `Circuit.decomposeCp`
+  (the five-gate decomposition of a top-level `cp`) with `decomposeCp_gate`,
+  `decomposeCp_unitary`, `Circuit.decomposeCp_wf` — the first entry of the decomposition table
+  of PHASE2_SPEC.md §C.3, used by the QIR emitter of Stage 17b.
 -/
 
 @[expose] public section
@@ -49,7 +56,7 @@ two-qubit operands distinct (for `ifBit`, those of the controlled gate). -/
 def qubitsOk (nData : Nat) (g : Gate) : Bool :=
   g.qubits.all (fun q => match q with | .data i => decide (i < nData) | .anc _ => true) &&
   match (match g with | .ifBit _ inner => inner | other => other) with
-  | .cnot p q | .cz p q => p != q
+  | .cnot u v | .cz u v | .cp _ _ u v => u != v
   | _ => true
 
 end Gate
@@ -75,6 +82,68 @@ written by exactly one `measure` before any `ifBit` reads it. All semantic theor
 def WF (C : Circuit) : Prop := C.wf = true
 
 instance (C : Circuit) : Decidable C.WF := inferInstanceAs (Decidable (C.wf = true))
+
+/-- PHASE2_SPEC.md §A.1 (Stage 17a) — every **top-level** `cp a k c t` replaced by the standard
+five-gate decomposition `p a (k+1) c; p a (k+1) t; cnot c t; p (-a) (k+1) t; cnot c t`
+(θ = 2πa/2^k, so θ/2 is the turn fraction `a / 2^(k+1)`); every other gate is kept, **including**
+`ifBit _ (cp …)`, which is left undecomposed (the QIR emitter of Stage 17b refuses it with a
+diagnostic: the Adaptive-Profile branch would need the five gates). `decomposeCp_unitary` is its
+correctness, `decomposeCp_wf` its well-formedness. -/
+def decomposeCp : List Gate → List Gate
+  | [] => []
+  | .cp m k c tg :: gs =>
+    .p m (k + 1) c :: .p m (k + 1) tg :: .cnot c tg :: .p (-m) (k + 1) tg :: .cnot c tg ::
+      decomposeCp gs
+  | g :: gs => g :: decomposeCp gs
+
+theorem flatMap_writes_decomposeCp (gs : List Gate) :
+    (decomposeCp gs).flatMap Gate.writes = gs.flatMap Gate.writes := by
+  induction gs with
+  | nil => rfl
+  | cons g gs ih => cases g <;> simp [decomposeCp, List.flatMap_cons, Gate.writes, ih]
+
+theorem bitsOkFrom_decomposeCp (m : Nat) (W : List Nat) (gs : List Gate) :
+    bitsOkFrom m W (decomposeCp gs) = bitsOkFrom m W gs := by
+  induction gs generalizing W with
+  | nil => rfl
+  | cons g gs ih => cases g <;> simp [decomposeCp, bitsOkFrom, Gate.bitOk, Gate.writes, ih]
+
+theorem qubitsOk_decomposeCp {nD : Nat} {gs : List Gate} (h : ∀ g ∈ gs, g.qubitsOk nD = true) :
+    ∀ g ∈ decomposeCp gs, g.qubitsOk nD = true := by
+  induction gs with
+  | nil => simp [decomposeCp]
+  | cons g gs ih =>
+    have hg := h g List.mem_cons_self
+    have ih' := ih fun g' hg' => h g' (List.mem_cons_of_mem _ hg')
+    intro g' hg'
+    cases g with
+    | cp m k c tg =>
+      simp only [Gate.qubitsOk, Gate.qubits, List.all_cons, List.all_nil, Bool.and_true,
+        Bool.and_eq_true] at hg
+      obtain ⟨⟨hc, ht⟩, hct⟩ := hg
+      simp only [decomposeCp, List.mem_cons] at hg'
+      rcases hg' with rfl | rfl | rfl | rfl | rfl | hg'
+      · simp [Gate.qubitsOk, Gate.qubits, hc]
+      · simp [Gate.qubitsOk, Gate.qubits, ht]
+      · simp [Gate.qubitsOk, Gate.qubits, hc, ht, hct]
+      · simp [Gate.qubitsOk, Gate.qubits, ht]
+      · simp [Gate.qubitsOk, Gate.qubits, hc, ht, hct]
+      · exact ih' g' hg'
+    | _ =>
+      simp only [decomposeCp, List.mem_cons] at hg'
+      rcases hg' with rfl | hg'
+      · exact hg
+      · exact ih' g' hg'
+
+/-- PHASE2_SPEC.md §A.1 — `decomposeCp` preserves well-formedness (the QIR path of Stage 17b). -/
+theorem decomposeCp_wf {C : Circuit} (h : C.wf = true) :
+    (⟨C.nData, decomposeCp C.gates⟩ : Circuit).wf = true := by
+  simp only [wf, Bool.and_eq_true, List.all_eq_true] at h ⊢
+  refine ⟨qubitsOk_decomposeCp h.1, ?_⟩
+  have h2 := h.2
+  simp only [bitsOk, nBits, written] at h2 ⊢
+  rw [flatMap_writes_decomposeCp, bitsOkFrom_decomposeCp]
+  exact h2
 
 end Circuit
 
@@ -145,6 +214,14 @@ theorem flip_involutive (q : Qubit) : Function.Involutive (q.flip (n := n) (a :=
   · simp [flip, get_set_self q hq, set_set, set_get]
 
 end Qubit
+
+/-- PHASE2_SPEC.md §A.1 (Stage 17a) — the hypothesis of `decomposeCp_unitary` for one gate: a
+top-level `cp` has distinct operands and its target inside the register `Reg n × Reg a`
+(`Gate.qubitsOk` gives the first; the second holds for every qubit of a circuit on its own
+register). Every other gate passes. -/
+def Gate.cpOk (n a : ℕ) : Gate → Bool
+  | .cp _ _ c tg => c != tg && tg.inRange n a
+  | _ => true
 
 /-! ## Monomial matrices -/
 
@@ -304,6 +381,74 @@ theorem invSqrtTwo_sq : ((Real.sqrt 2 : ℝ) : ℂ)⁻¹ ^ 2 = 1 / 2 := by
   rw [inv_pow, ← Complex.ofReal_pow, Real.sq_sqrt (by norm_num)]
   norm_num
 
+/-! ## The exact phases `exp(2πi·a/2^k)` (PHASE2_SPEC.md §A.1, Stage 17a) -/
+
+/-- PHASE2_SPEC.md §A.1 — the phase of `p a k` and `cp a k`: `exp(2πi · a / 2^k)`, the fraction
+`a/2^k` of a full turn. -/
+def phaseOf (a : ℤ) (k : ℕ) : ℂ := Complex.exp (2 * Real.pi * Complex.I * a / 2 ^ k)
+
+/-- Unit modulus: `conj φ · φ = 1`. -/
+theorem star_phaseOf_mul (a : ℤ) (k : ℕ) : star (phaseOf a k) * phaseOf a k = 1 := by
+  rw [phaseOf, Complex.star_def, ← Complex.exp_conj, ← Complex.exp_add]
+  simp only [map_div₀, map_mul, Complex.conj_I, Complex.conj_ofReal, map_ofNat, map_pow,
+    map_intCast]
+  ring_nf
+  exact Complex.exp_zero
+
+theorem phaseOf_mul_star (a : ℤ) (k : ℕ) : phaseOf a k * star (phaseOf a k) = 1 := by
+  rw [mul_comm, star_phaseOf_mul]
+
+/-- `star_phaseOf_mul` in the `starRingEnd` form that `simp` produces. -/
+theorem conj_phaseOf_mul (a : ℤ) (k : ℕ) : (starRingEnd ℂ) (phaseOf a k) * phaseOf a k = 1 := by
+  rw [← Complex.star_def]
+  exact star_phaseOf_mul a k
+
+/-- The adjoint phase: `p (-a) k` is `p a k`†. -/
+theorem phaseOf_neg (a : ℤ) (k : ℕ) : phaseOf (-a) k = star (phaseOf a k) := by
+  rw [phaseOf, phaseOf, Complex.star_def, ← Complex.exp_conj]
+  simp only [map_div₀, map_mul, Complex.conj_I, Complex.conj_ofReal, map_ofNat, map_pow,
+    map_intCast]
+  congr 1
+  push_cast
+  ring
+
+/-- Half angles: `p a (k+1)` twice is `p a k` (the decomposition of `cp`). -/
+theorem phaseOf_add_self (a : ℤ) (k : ℕ) : phaseOf a (k + 1) * phaseOf a (k + 1) = phaseOf a k := by
+  rw [phaseOf, phaseOf, ← Complex.exp_add]
+  congr 1
+  rw [pow_succ]
+  field_simp
+  ring
+
+/-- `p 1 1` is `Z`: `exp(πi) = −1`. -/
+theorem phaseOf_one_one : phaseOf 1 1 = -1 := by
+  rw [phaseOf, ← Complex.exp_pi_mul_I]
+  congr 1
+  push_cast
+  ring
+
+/-- `p 1 2` is `S`: `exp(πi/2) = i`. -/
+theorem phaseOf_one_two : phaseOf 1 2 = Complex.I := by
+  have h : (2 * Real.pi * Complex.I * ((1 : ℤ) : ℂ) / 2 ^ 2) = Real.pi / 2 * Complex.I := by
+    push_cast
+    ring
+  rw [phaseOf, h, Complex.exp_pi_div_two_mul_I]
+
+/-- `p (-1) 2` is `S†`. -/
+theorem phaseOf_neg_one_two : phaseOf (-1) 2 = -Complex.I := by
+  rw [phaseOf_neg, phaseOf_one_two, Complex.star_def, Complex.conj_I]
+
+/-- `p 1 3` is `T`: `exp(πi/4) = ω`. -/
+theorem phaseOf_one_three : phaseOf 1 3 = ω := by
+  rw [phaseOf, ω]
+  congr 1
+  push_cast
+  ring
+
+/-- `p (-1) 3` is `T†`. -/
+theorem phaseOf_neg_one_three : phaseOf (-1) 3 = star ω := by
+  rw [phaseOf_neg, phaseOf_one_three]
+
 /-! ## Gate matrices and the unitary fragment -/
 
 section Gates
@@ -330,7 +475,9 @@ theorem cnotPerm_involutive {c t : Qubit} (hct : c ≠ t) :
 `H = (1/√2)(Z + X)`, `S = diag(1, i)`, `S† = diag(1, −i)`, `T = diag(1, ω)`,
 `T† = diag(1, ω̄)`, `X`, `Z`, `CNOT`, `CZ`. A gate on a qubit outside the register, and a
 two-qubit gate with a repeated operand, act as the identity (both excluded by `Circuit.WF`).
-`measure`, `ifBit`, `alloc`, `free` are `1` here; their semantics is `krausOps`. -/
+`measure`, `ifBit`, `alloc`, `free` are `1` here; their semantics is `krausOps`.
+PHASE2_SPEC.md §A.1 (Stage 17a): `p a k = diag(1, phaseOf a k)` on `q`; `cp a k` is diagonal
+with `phaseOf a k` on the states where both operands read 1 (as `cz` is with −1). -/
 def gateU : Gate → Matrix (Reg n × Reg a) (Reg n × Reg a) ℂ
   | .h q => if q.inRange n a then hMat q.get q.flip else 1
   | .s q => phaseMat n a q Complex.I
@@ -345,6 +492,8 @@ def gateU : Gate → Matrix (Reg n × Reg a) (Reg n × Reg a) ℂ
   | .ifBit _ _ => 1
   | .alloc _ => 1
   | .free _ => 1
+  | .p m k q => phaseMat n a q (phaseOf m k)
+  | .cp m k c t => monoMat id (fun s => if c.get s && t.get s then phaseOf m k else 1)
 
 theorem phaseMat_mem_unitaryGroup (q : Qubit) {p : ℂ} (hp : star p * p = 1) :
     phaseMat n a q p ∈ Matrix.unitaryGroup (Reg n × Reg a) ℂ :=
@@ -375,6 +524,11 @@ theorem gateU_mem_unitaryGroup (g : Gate) :
   | ifBit _ _ => exact one_mem _
   | alloc _ => exact one_mem _
   | free _ => exact one_mem _
+  | p m k q => exact phaseMat_mem_unitaryGroup n a q (star_phaseOf_mul m k)
+  | cp m k c t =>
+    exact monoMat_mem_unitaryGroup (fun _ => rfl) fun s => by
+      split_ifs
+      exacts [star_phaseOf_mul m k, by simp]
 
 /-- Report §9.1.1 — the unitary semantics of a gate list (first gate applied first). It is the
 intended semantics on the unitary fragment (`Gate.isUnitary`); there it agrees with every
@@ -397,6 +551,28 @@ theorem gateU_sdg (q : Qubit) : gateU n a (.sdg q) = phaseMat n a q (-Complex.I)
 theorem gateU_t (q : Qubit) : gateU n a (.t q) = phaseMat n a q ω := rfl
 theorem gateU_tdg (q : Qubit) : gateU n a (.tdg q) = phaseMat n a q (star ω) := rfl
 theorem gateU_z (q : Qubit) : gateU n a (.z q) = phaseMat n a q (-1) := rfl
+theorem gateU_p (m : ℤ) (k : ℕ) (q : Qubit) :
+    gateU n a (.p m k q) = phaseMat n a q (phaseOf m k) := rfl
+theorem gateU_cp (m : ℤ) (k : ℕ) (c t : Qubit) :
+    gateU n a (.cp m k c t) = monoMat id (fun s => if c.get s && t.get s then phaseOf m k else 1) :=
+  rfl
+
+/-! The identities of PHASE2_SPEC.md §A.1 (Stage 17a): the Clifford+T phase gates are `p` gates
+(`p a 1` is `z` only for odd `a`; `p 0 k` is the identity). -/
+
+theorem gateU_p_one_one (q : Qubit) : gateU n a (.p 1 1 q) = gateU n a (.z q) := by
+  rw [gateU_p, gateU_z, phaseOf_one_one]
+theorem gateU_p_one_two (q : Qubit) : gateU n a (.p 1 2 q) = gateU n a (.s q) := by
+  rw [gateU_p, gateU_s, phaseOf_one_two]
+theorem gateU_p_neg_one_two (q : Qubit) : gateU n a (.p (-1) 2 q) = gateU n a (.sdg q) := by
+  rw [gateU_p, gateU_sdg, phaseOf_neg_one_two]
+theorem gateU_p_one_three (q : Qubit) : gateU n a (.p 1 3 q) = gateU n a (.t q) := by
+  rw [gateU_p, gateU_t, phaseOf_one_three]
+theorem gateU_p_neg_one_three (q : Qubit) : gateU n a (.p (-1) 3 q) = gateU n a (.tdg q) := by
+  rw [gateU_p, gateU_tdg, phaseOf_neg_one_three]
+theorem gateU_cp_one_one (c t : Qubit) : gateU n a (.cp 1 1 c t) = gateU n a (.cz c t) := by
+  rw [gateU_cp, phaseOf_one_one]
+  rfl
 
 theorem unitaryDenote_cons_mulVec (g : Gate) (gs : List Gate) (v : Reg n × Reg a → ℂ) :
     unitaryDenote n a (g :: gs) *ᵥ v = unitaryDenote n a gs *ᵥ (gateU n a g *ᵥ v) := by
@@ -428,6 +604,16 @@ theorem gateU_cnot_mulVec {c t : Qubit} (hct : c ≠ t) (v : Reg n × Reg a → 
 theorem gateU_cz_mulVec (p q : Qubit) (v : Reg n × Reg a → ℂ) (i : Reg n × Reg a) :
     (gateU n a (.cz p q) *ᵥ v) i = (if p.get i && q.get i then -1 else 1) * v i := by
   rw [gateU, monoMat_mulVec (fun _ => rfl)]
+  rfl
+
+theorem gateU_p_mulVec (m : ℤ) (k : ℕ) (q : Qubit) (v : Reg n × Reg a → ℂ) (i : Reg n × Reg a) :
+    (gateU n a (.p m k q) *ᵥ v) i = (if q.get i then phaseOf m k else 1) * v i := by
+  rw [gateU_p, phaseMat_mulVec]
+
+theorem gateU_cp_mulVec (m : ℤ) (k : ℕ) (c t : Qubit) (v : Reg n × Reg a → ℂ)
+    (i : Reg n × Reg a) :
+    (gateU n a (.cp m k c t) *ᵥ v) i = (if c.get i && t.get i then phaseOf m k else 1) * v i := by
+  rw [gateU_cp, monoMat_mulVec (fun _ => rfl)]
   rfl
 
 end Gates
@@ -502,6 +688,14 @@ theorem gateU_adjoint (g : Gate) (hg : g.isUnitary = true) :
   | ifBit j g => simp [Gate.isUnitary] at hg
   | alloc q => simp [Gate.adjoint, gateU]
   | free q => simp [Gate.adjoint, gateU]
+  | p m k q => rw [Gate.adjoint, gateU_p, gateU_p, star_phaseMat, phaseOf_neg]
+  | cp m k c t =>
+    simp only [Gate.adjoint, gateU]
+    rw [star_monoMat (fun _ => rfl)]
+    congr 1
+    funext s
+    simp only [id]
+    split_ifs <;> simp [phaseOf_neg]
 
 /-- Report §9.1.1 — the unitary semantics of a concatenation (first gate applied first). -/
 theorem unitaryDenote_append (gs₁ gs₂ : List Gate) :
@@ -523,6 +717,57 @@ theorem unitaryDenote_adjoint (gs : List Gate) (h : ∀ g ∈ gs, g.isUnitary = 
     rw [gateU_adjoint n a g (h g List.mem_cons_self), star_mul]
 
 end Adjoint
+
+/-! ## The decomposition of `cp` (PHASE2_SPEC.md §A.1, §C.3; Stage 17a) -/
+
+section DecomposeCp
+
+variable (n a : ℕ)
+
+theorem get_cnotPerm_target {c t : Qubit} (ht : t.inRange n a = true) (s : Reg n × Reg a) :
+    t.get (cnotPerm n a c t s) = (c.get s ^^ t.get s) := by
+  unfold cnotPerm
+  cases c.get s
+  · simp
+  · simp [Qubit.get_flip_self t ht]
+
+/-- PHASE2_SPEC.md §A.1 — the five gates equal `cp a k c t` on the register, for distinct operands
+(`gateU (.cnot c c) = 1`) with the target inside the register (on a target outside it every `p`
+acts as the identity, so the two `p (±a) (k+1) t` would not cancel the `p a (k+1) c`). -/
+theorem decomposeCp_gate {c t : Qubit} (hct : c ≠ t) (ht : t.inRange n a = true) (m : ℤ)
+    (k : ℕ) :
+    unitaryDenote n a [.p m (k + 1) c, .p m (k + 1) t, .cnot c t, .p (-m) (k + 1) t, .cnot c t] =
+      gateU n a (.cp m k c t) := by
+  simp only [unitaryDenote, gateU, hct, ↓reduceIte, phaseMat, Matrix.one_mul, monoMat_mul]
+  congr 1
+  · funext s
+    simp [cnotPerm_involutive n a hct s]
+  · funext s
+    simp only [id, one_mul, mul_one, get_cnotPerm_target n a ht]
+    by_cases hc : c.get s = true <;> by_cases ht' : t.get s = true <;>
+      simp [hc, ht', phaseOf_neg, phaseOf_add_self, conj_phaseOf_mul]
+
+/-- PHASE2_SPEC.md §A.1 — `decomposeCp` preserves the unitary semantics when every top-level `cp`
+has distinct operands and its target in the register (`Gate.cpOk`). No unitarity hypothesis on
+the other gates is needed: `unitaryDenote` reads every gate through `gateU`. -/
+theorem decomposeCp_unitary (gs : List Gate) (h : ∀ g ∈ gs, g.cpOk n a = true) :
+    unitaryDenote n a (Circuit.decomposeCp gs) = unitaryDenote n a gs := by
+  induction gs with
+  | nil => rfl
+  | cons g gs ih =>
+    have ih' := ih fun g' hg' => h g' (List.mem_cons_of_mem _ hg')
+    cases g with
+    | cp m k c t =>
+      have hg := h _ List.mem_cons_self
+      simp only [Gate.cpOk, Bool.and_eq_true, bne_iff_ne] at hg
+      rw [show Circuit.decomposeCp (.cp m k c t :: gs) =
+          [.p m (k + 1) c, .p m (k + 1) t, .cnot c t, .p (-m) (k + 1) t, .cnot c t] ++
+            Circuit.decomposeCp gs from rfl,
+        unitaryDenote_append, ih', decomposeCp_gate n a hg.1 hg.2]
+      rfl
+    | _ => simp [Circuit.decomposeCp, unitaryDenote, ih']
+
+end DecomposeCp
 
 /-! ## Kraus semantics (decision 2) -/
 

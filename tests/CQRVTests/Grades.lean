@@ -1,3 +1,4 @@
+import CQRV.Grades.Ext
 import CQRV.Grades.Hardware
 import CQRV.Grades.Profile
 
@@ -148,5 +149,13 @@ example (r b : Grade) : r.fitsPartial (.ofGrade b) = fits r b := fitsPartial_ofG
 #print axioms seqComp_mono
 -- The monoid laws (add_assoc, zero_add, add_zero, add_comm) are fields of this instance.
 #print axioms CQRV.Grade.instAddCommMonoid
+
+/-! ## Stage 17a — `GradeExt` (PHASE2_SPEC.md §A.1): a record, measured, no algebra -/
+
+#guard (⟨1, 2, 3, 4, 5⟩ : GradeExt) == ⟨1, 2, 3, 4, 5⟩ &&
+  (⟨1, 2, 3, 4, 5⟩ : GradeExt) != ⟨1, 2, 3, 4, 0⟩
+#guard s!"{repr (⟨1, 2, 3, 4, 5⟩ : GradeExt)}" ==
+  "{ twoQ := 1, tDepth := 2, rot := 3, meas := 4, ff := 5 }"
+example : (⟨126, 39, 0, 18, 36⟩ : GradeExt).tDepth = 39 := rfl
 
 end CQRV.Tests.Grades

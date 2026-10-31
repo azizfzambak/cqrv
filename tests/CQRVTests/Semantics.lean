@@ -15,7 +15,9 @@ meta import CQRV.Synthesis.Basic
 synthesizer; `#print axioms` for every proved theorem of Stage 6a, 6b-1, 6b-2, 6b-3 and 9a
 (`lemma_6_3_2_xor`, `lemma_6_3_2` guarded by `#guard_msgs`); XOR / `if` networks; the Grover
 oracle as the shifted `Circuit.append` of its two pieces at the MBU cut; `mbu_branch_basis` on
-`|1,1,1⟩` in both branches.
+`|1,1,1⟩` in both branches. Stage 17a (PHASE2_SPEC.md §A.1): the phase gates `p` / `cp` — the
+classifiers, `tCount_eq_isTPower`, adjoint, `validate`, JSON, `Circuit.decomposeCp` with
+`decomposeCp_wf` and `decomposeCp_unitary` on a hand-built list, the `gateU` identities.
 -/
 
 namespace CQRV.Tests.Semantics
@@ -278,5 +280,99 @@ example : AncRestore 3 symOracle.nAnc symOracle (phaseOracle (symNet.pred 3)) :=
 /-- info: 'CQRV.lemma_6_3_2' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms lemma_6_3_2
+
+/-! ## Stage 17a — exact phase gates `p` / `cp` (PHASE2_SPEC.md §A.1) -/
+
+def q0 : Qubit := .data 0
+def q1 : Qubit := .data 1
+
+/-- `(isClifford, isTPower, isRotation)` of a gate. -/
+def cls (g : Gate) : Bool × Bool × Bool := (g.isClifford, g.isTPower, g.isRotation)
+
+-- `p a k`: Clifford iff 2^k ∣ 4a; T-power iff 2^k ∣ 8a and 2^k ∤ 4a (a divisibility condition, so
+-- `p 2 4` is classified as `p 1 3`); rotation otherwise. `p 0 5` is the identity (Clifford).
+#guard cls (.p 1 1 q0) == (true, false, false)
+#guard cls (.p 1 2 q0) == (true, false, false)
+#guard cls (.p 1 3 q0) == (false, true, false)
+#guard cls (.p (-1) 3 q0) == (false, true, false)
+#guard cls (.p 2 4 q0) == (false, true, false)
+#guard cls (.p 3 3 q0) == (false, true, false)
+#guard cls (.p 1 4 q0) == (false, false, true)
+#guard cls (.p 0 5 q0) == (true, false, false)
+#guard cls (.p (-3) 5 q0) == (false, false, true)
+-- `cp a k`: Clifford iff 2^k ∣ 2a, never a T-power, otherwise a rotation.
+#guard cls (.cp 1 1 q0 q1) == (true, false, false)
+#guard cls (.cp 1 2 q0 q1) == (false, false, true)
+#guard cls (.cp 2 2 q0 q1) == (true, false, false)
+#guard cls (.cp (-1) 3 q0 q1) == (false, false, true)
+-- `ifBit` looks inside for the classifiers (`isClifford` does not: the bit discipline is unchanged).
+#guard (Gate.ifBit 0 (.p 1 3 q0)).isTPower && (Gate.ifBit 0 (.p 1 4 q0)).isRotation &&
+  (Gate.ifBit 0 (.cp 1 1 q0 q1)).isTwoQubit && (Gate.ifBit 0 (.cz q0 q1)).isTwoQubit
+-- `tCount` is the indicator of `isTPower`: 1 for the T-powers, 0 for Clifford, rotations, `cp`.
+#guard [Gate.p 1 3 q0, .p 2 4 q0, .p 3 3 q0, .p (-1) 3 q0, .t q0, .tdg q0].map (·.tCount) ==
+  [1, 1, 1, 1, 1, 1]
+#guard [Gate.p 1 1 q0, .p 1 4 q0, .p 0 5 q0, .cp 1 2 q0 q1, .cp 1 1 q0 q1].map (·.tCount) ==
+  [0, 0, 0, 0, 0]
+example (g : Gate) : g.tCount = if g.isTPower then 1 else 0 := Gate.tCount_eq_isTPower g
+example : (Gate.p 2 4 q0).tCount = 1 := by decide
+-- Adjoint: `p (-a) k`, `cp (-a) k`; `adjointGates` reverses.
+#guard (Gate.p 3 5 q0).adjoint == .p (-3) 5 q0 && (Gate.cp (-1) 2 q0 q1).adjoint == .cp 1 2 q0 q1
+#guard adjointGates [.p 1 3 q0, .cp 1 2 q0 q1] == [.cp (-1) 2 q0 q1, .p (-1) 3 q0]
+-- `render`: the angle as the fraction `a/2^k` of a full turn.
+#guard (Gate.p 1 3 q0).render == "P(1/8) x[0]" &&
+  (Gate.cp (-3) 5 q0 q1).render == "CP(-3/32) x[0] x[1]"
+-- `Circuit.validate` / `wf`: `cp` on distinct qubits and `ifBit` over a Clifford `cp` / `p` pass;
+-- `cp q q` and `ifBit` over a non-Clifford `p` / `cp` are rejected.
+#guard (Circuit.mk 2 [.cp 1 2 q0 q1, .p 1 3 q1]).validate.isOk
+#guard (Circuit.mk 2 [.measure q0 0, .ifBit 0 (.cp 1 1 q0 q1), .ifBit 0 (.p 1 2 q1)]).validate.isOk
+#guard !(Circuit.mk 2 [.cp 1 2 q0 q0]).validate.isOk
+#guard !(Circuit.mk 2 [.measure q0 0, .ifBit 0 (.p 1 3 q1)]).validate.isOk
+#guard !(Circuit.mk 2 [.measure q0 0, .ifBit 0 (.cp 1 2 q0 q1)]).validate.isOk
+#guard (Circuit.mk 2 [.cp 1 2 q0 q1]).wf && !(Circuit.mk 2 [.cp 1 2 q0 q0]).wf
+#guard (Circuit.mk 2 [.measure q0 0, .ifBit 0 (.cp 1 1 q0 q1)]).wf &&
+  !(Circuit.mk 2 [.measure q0 0, .ifBit 0 (.cp 1 2 q0 q1)]).wf
+-- JSON export (`tests/diff/statevector.py` learns it in Stage 17b): `a` (possibly negative), `k`.
+#guard (Circuit.mk 2 [.p (-3) 5 q0, .cp 1 2 q0 q1, .ifBit 0 (.p 1 1 q1)]).toJson.compress ==
+  "{\"gates\":[{\"a\":-3,\"k\":5,\"op\":\"p\",\"q\":[0]},{\"a\":1,\"k\":2,\"op\":\"cp\",\"q\":[0,1]},\
+  {\"a\":1,\"if\":0,\"k\":1,\"op\":\"p\",\"q\":[1]}],\"n_anc\":0,\"n_data\":2}"
+
+/-! ### `Circuit.decomposeCp` (PHASE2_SPEC.md §A.1, §C.3) -/
+
+/-- A `cp` to decompose (θ/2 = 1/8 of a turn), a controlled `cp` to leave alone, a `cp` with a
+negative angle. -/
+def cpList : List Gate :=
+  [.h q0, .cp 1 2 q0 q1, .measure q1 0, .ifBit 0 (.cp 1 1 q0 q1), .cp (-3) 5 q1 q0]
+
+#guard Circuit.decomposeCp cpList ==
+  [.h q0, .p 1 3 q0, .p 1 3 q1, .cnot q0 q1, .p (-1) 3 q1, .cnot q0 q1,
+   .measure q1 0, .ifBit 0 (.cp 1 1 q0 q1),
+   .p (-3) 6 q1, .p (-3) 6 q0, .cnot q1 q0, .p 3 6 q0, .cnot q1 q0]
+#guard (Circuit.mk 2 cpList).wf && (Circuit.mk 2 (Circuit.decomposeCp cpList)).wf
+example : (⟨2, Circuit.decomposeCp cpList⟩ : Circuit).wf = true :=
+  Circuit.decomposeCp_wf (C := ⟨2, cpList⟩) (by decide)
+-- Every top-level `cp` of `cpList` has distinct operands and its target in `Reg 2 × Reg 0`, so the
+-- decomposition has the same unitary semantics.
+example : unitaryDenote 2 0 (Circuit.decomposeCp cpList) = unitaryDenote 2 0 cpList :=
+  decomposeCp_unitary 2 0 cpList (by decide)
+-- The identities as theorems about `gateU`, at the 2-qubit register.
+example (q : Qubit) : gateU 2 0 (.p 1 1 q) = gateU 2 0 (.z q) := gateU_p_one_one 2 0 q
+example (q : Qubit) : gateU 2 0 (.p 1 2 q) = gateU 2 0 (.s q) := gateU_p_one_two 2 0 q
+example (q : Qubit) : gateU 2 0 (.p (-1) 2 q) = gateU 2 0 (.sdg q) := gateU_p_neg_one_two 2 0 q
+example (q : Qubit) : gateU 2 0 (.p 1 3 q) = gateU 2 0 (.t q) := gateU_p_one_three 2 0 q
+example (q : Qubit) : gateU 2 0 (.p (-1) 3 q) = gateU 2 0 (.tdg q) := gateU_p_neg_one_three 2 0 q
+example (c t : Qubit) : gateU 2 0 (.cp 1 1 c t) = gateU 2 0 (.cz c t) := gateU_cp_one_one 2 0 c t
+
+/-- info: 'CQRV.decomposeCp_unitary' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms decomposeCp_unitary
+
+/-- info: 'CQRV.gateU_mem_unitaryGroup' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms gateU_mem_unitaryGroup
+
+#print axioms decomposeCp_gate
+#print axioms Circuit.decomposeCp_wf
+#print axioms gateU_adjoint
+#print axioms phaseOf_add_self
 
 end CQRV.Tests.Semantics

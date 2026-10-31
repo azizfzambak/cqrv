@@ -180,6 +180,10 @@ def synthesizeOracle (N : Network) (mode : UncomputeMode := .mbu) :
 (width, depth, T-count, peak ancilla) from the decision-4 scheduler. -/
 def grade (c : Circuit) : Grade := c.grade
 
+/-- PHASE2_SPEC.md §A.1 (Stage 17a) — the second record `GradeExt` of a circuit, from the same
+decision-4 schedule as `grade` (stated in every certificate as `gradeExt_eq` from Stage 17b). -/
+def gradeExt (c : Circuit) : GradeExt := c.gradeExt
+
 end CQRV.Synthesis
 
 end

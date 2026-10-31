@@ -294,4 +294,51 @@ def netOf (src : String) : Option Network := (parse src >>= check >>= toNetwork)
 #guard (Network.mk 2 #[.input 0, .input 1, .and 0 1] [2]).wf
 example : (Network.mk 2 #[.input 0, .input 1, .xor 0 1, .not 2] [3]).WF := by decide
 
+/-! ## Stage 17a — `GradeExt` from the decision-4 schedule (PHASE2_SPEC.md §A.1) -/
+
+/-- Hand-built. Layers: L1 `H x0` and `measure anc0`; L2 `T x0`; L3 `CNOT`; L4 `T x1`, `T† x0`;
+L5 `if c0: CZ`; L6 `P(1/16) x0`; L7 `CP(1/4)`; L8 `CP(1/2)`. Two-qubit gates: CNOT, CZ (under
+`ifBit`), two CP = 4; T-layers L2 and L4 = 2; rotations `P(1/16)`, `CP(1/4)` = 2 (`CP(1/2)` is
+Clifford); one measurement; one `ifBit`. Grade (3, 8, 3, 1). -/
+def extC : Circuit := ⟨2, [.alloc t, .h a, .t a, .cnot a b, .t b, .tdg a, .measure t 0,
+  .ifBit 0 (.cz a b), .p 1 4 a, .cp 1 2 a b, .cp 1 1 a b, .free t]⟩
+
+#guard extC.validate.isOk
+#guard extC.gradeExt == ⟨4, 2, 2, 1, 1⟩ && extC.grade == ⟨3, 8, 3, 1⟩
+#guard extC.layerDump == "L1: H x[0]; measure anc[0] → c0\nL2: T x[0]\nL3: CNOT x[0] x[1]\n\
+  L4: T x[1]; T† x[0]\nL5: if c0: CZ x[0] x[1]\nL6: P(1/16) x[0]\nL7: CP(1/4) x[0] x[1]\n\
+  L8: CP(1/2) x[0] x[1]"
+-- `TempLogicalAND` alone (§6.2.2 listing): 6 CNOT, T-depth 3 (its 4 T / T† sit in 3 layers), no
+-- measurement; with its MBU uncompute: the `if c0: CZ` is a seventh two-qubit gate, one
+-- measurement, two `ifBit`.
+#guard andOnly.gradeExt == ⟨6, 3, 0, 0, 0⟩
+#guard andPair.gradeExt == ⟨7, 3, 0, 1, 2⟩
+-- The running example (`grover_pred_037`, n = 8, r = 2), measured: MBU (15, 134, 72, 7) with
+-- 126 two-qubit gates, T-depth 39, no rotation, 18 measurements, 36 `ifBit`; coherent
+-- (15, 200, 144, 7) with 216, 74, 0, 0, 0; the oracle alone (10, 27, 8, 2) with 14, 5, 0, 2, 4.
+#guard ((typed groverSrc >>= toNetwork >>= (groverCircuit · 8 2)).map Circuit.gradeExt).toOption
+  == some ⟨126, 39, 0, 18, 36⟩
+#guard ((typed groverSrc >>= toNetwork >>= (groverCircuit · 8 2 none .tree .coherent)).map
+  Circuit.gradeExt).toOption == some ⟨216, 74, 0, 0, 0⟩
+#guard ((oracle groverSrc).map Circuit.gradeExt).toOption == some ⟨14, 5, 0, 2, 4⟩
+-- D₈ (tree): MBU 49, 7, 0, 7, 14; coherent 84, 22, 0, 0, 0. `mczFew 8 .logDepth` (10, 58, 40, 2):
+-- 39, 33, 0, 2, 4.
+#guard ((diffusion 8 none).map Circuit.gradeExt).toOption == some ⟨49, 7, 0, 7, 14⟩
+#guard ((diffusion 8 none .tree .coherent).map Circuit.gradeExt).toOption == some ⟨84, 22, 0, 0, 0⟩
+#guard ((CQRV.Synthesis.mczFew 8 .logDepth).map fun c => (c.gradeExt, c.grade)).toOption ==
+  some (⟨39, 33, 0, 2, 4⟩, ⟨10, 58, 40, 2⟩)
+-- `Synthesis.gradeExt` is `Circuit.gradeExt`; `meas = nBits`; `tDepth ≤ depth`, `tDepth ≤ tCount`.
+#guard ((typed groverSrc >>= toNetwork >>= (groverCircuit · 8 2)).map fun c =>
+  Synthesis.gradeExt c == c.gradeExt && c.gradeExt.meas == c.nBits &&
+  c.gradeExt.tDepth ≤ c.depth && c.gradeExt.tDepth ≤ c.tCount).toOption == some true
+example : extC.gradeExt.meas = extC.nBits := Circuit.gradeExt_meas_eq_nBits extC
+example : extC.gradeExt.tDepth ≤ extC.depth := Circuit.gradeExt_tDepth_le_depth extC
+example : extC.gradeExt.tDepth ≤ extC.tCount := Circuit.gradeExt_tDepth_le_tCount extC
+-- Stage 17a invariant: no synthesized circuit contains a phase gate (`rot = 0` everywhere).
+#guard [groverSrc, orSrc, chainSrc, ifSrc, callSrc, letSrc, forSrc].all fun s =>
+  match oracle s, oracleC s with
+  | .ok m, .ok c => m.gradeExt.rot == 0 && c.gradeExt.rot == 0 &&
+      (m.gates ++ c.gates).all fun g => match g with | .p .. | .cp .. => false | _ => true
+  | _, _ => false
+
 end CQRV.Tests.Synthesis

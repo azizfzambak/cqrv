@@ -38,6 +38,10 @@ def qasmGate : Gate → String
   | .ifBit c g => s!"if (c[{c}]) \{ {qasmGate g} }"
   | .alloc q => s!"// cqrv: alloc {qasmQubit q}"
   | .free q => s!"// cqrv: free {qasmQubit q}"
+  -- Stage 17a: the phase gates exist in the IR but no synthesized circuit contains them; their
+  -- OpenQASM 3 form (`p(2*pi*a/N)`, PHASE2_SPEC.md §A.1) is Stage 17b. Until then a comment.
+  | .p a k q => s!"// cqrv: unsupported before Stage 17b: {(Gate.p a k q).render}"
+  | .cp a k c t => s!"// cqrv: unsupported before Stage 17b: {(Gate.cp a k c t).render}"
 
 /-- Report §8.4.3 — the OpenQASM 3 program of a circuit, with the terminal measurement of the
 data register into `out`. -/
