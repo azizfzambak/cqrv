@@ -147,7 +147,19 @@ a `// cqrv: unsupported before Stage 17b` comment for `p` / `cp` and the QIR emi
 harness, `gradeExt_eq` in every certificate, schema 1.9.0, the four certificates regenerated, plus
 `decomposeCp_unitary_wf` (docs/tasks/STAGE17_TASK.md, 2026-10-31). The coherent certificate's
 `tDepth` 74 against the MBU 39 (the adjoint compute block repeats the T layers) is recorded in
-the 17b DECISIONS entry, not in the run report.
+the 17b DECISIONS entry, not in the run report. 17b **done 9fc909b, accepted 2026-10-31** (CI
+16 PASS): everything above as specified; `decomposeCp` lives in `CQRV/Circuit/IR.lean` since
+17b (the emitters do not import the semantics; its theorems stay in `Semantics.lean` and
+`OracleCorrect.lean`); `emitQIR : Except Diagnostic String`, diagnostic stage `emit`, code
+`unsupported_in_qir`; the `rz` declaration is written only when a `p` gate is emitted, so every
+committed `.qir` stayed byte-identical; π enters `qirAngle` as the double `0x400921FB54442D18`
+(the bits of `math.pi`), so the emitter and the re-parser compute the same `Float`. Kernel
+medians 16b → 17b: 14.40 → 18.10, 16.70 → 16.90, 12.60 → 15.40, 25.40 → 33.50 s; `gradeExt_eq`
+alone 9.26 / 7.03 / 7.95 / 17.5 s under the certificate's metric (cumulative kernel type checking
+as the run reports state it — the reviewer's reading of the 30 s rule, 2026-10-31; the
+profiler's per-declaration figure double-counts the `decide +kernel` evaluation and would show
+31.7 s for the coherent file), so the `tDepth` definition stays. The chunked `emitted` literal
+(the ~1953-instruction ceiling) is designed and tried at Stage 18 on the QFT / AQFT circuits.
 
 ### A.2 QFT and approximate QFT (new; the Theorem 3.3b client)
 
