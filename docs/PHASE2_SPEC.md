@@ -66,17 +66,21 @@ classified).
 
 Semantics: `gateU (.p a k q) = phaseMat n a q (exp (2πi a / 2^k))`, a monomial matrix, so
 `gateU_mem_unitaryGroup` extends without hypotheses; `cp` is diagonal with that entry on the
-states where both qubits read 1 (as `cz` is with −1). Identities, proved as `#guard`-level
-theorems: `p a 1 = z`, `p 1 2 = s`, `p (-1) 2 = sdg`, `p 1 3 = t`, `p (-1) 3 = tdg`,
-`cp a 1 = cz` (as matrices). Adjoint: `p (-a) k`, `cp (-a) k`.
+states where both qubits read 1 (as `cz` is with −1). Identities, proved as theorems about
+`gateU`: `p 1 1 = z`, `p 1 2 = s`, `p (-1) 2 = sdg`, `p 1 3 = t`, `p (-1) 3 = tdg`, `cp 1 1 = cz`
+(as matrices; amended 2026-10-31: `p a 1` is `z` only for odd `a`). Adjoint: `p (-a) k`,
+`cp (-a) k`.
 
 **Well-formedness.** `qubitsOk`: operands in range, `cp` operands distinct. `isClifford`:
 `p a k` iff `2^k ∣ 4a` (angle a multiple of π/2); `cp a k` iff `2^k ∣ 2a` (angle a multiple of
 π). `ifBit` may control a Clifford `p`/`cp` and nothing else (the bit discipline is unchanged).
 
-**Grade.** `Grade` is unchanged. `Gate.tCount` of `p a k` is 1 when `k = 3` and `a` is odd (a T
-or T† up to Clifford), else 0; `cp` contributes 0 to `t`. The non-Clifford phase gates that are
-not T-powers are counted in a second record, computed by the same scheduler:
+**Grade.** `Grade` is unchanged. `Gate.tCount` of `p a k` is 1 when the angle is an odd multiple
+of π/4, i.e. `2^k ∣ 8a` and not `2^k ∣ 4a` (amended 2026-10-31 from "`k = 3` and `a` odd", so that
+`p 2 4` is classified as `p 1 3` is; `Gate.isTPower`), else 0; `cp` contributes 0 to `t`. The
+non-Clifford phase gates that are not T-powers (`rot`; for `cp`: the non-Clifford ones,
+`Gate.isRotation`) are counted in a second record, computed by the same scheduler (no ⊕/⊗ algebra
+for it in Stage 17: it is measured, not composed):
 
 ```
 structure GradeExt where
@@ -88,20 +92,35 @@ structure GradeExt where
 ```
 
 `Synthesis.gradeExt C : GradeExt`; every certificate states `theorem gradeExt_eq :
-Synthesis.gradeExt emitted = ⟨…⟩ := by decide +kernel` and records it as `grade_ext` in the
-JSON (schema 1.9.0; 1.6.0 is Stage 14a's `solution_count`, 1.7.0 Stage 15b's `uncompute` on coherent certificates, 1.8.0 Stage 16b's proved front end with `uncompute` explicit in every certificate — renumbered 2026-10-30). The paper's "no two-qubit count, no T-depth" item is answered here; the
+Synthesis.gradeExt emitted = ⟨…⟩ := by decide +kernel` and records it as `grade_ext` `{two_qubit, t_depth, rot, meas, ff}` in the
+JSON (schema 1.9.0, required in every certificate, present iff the version is 1.9.0; the run report
+prints the five values in row 4 and, only when `rot > 0`, the note of §A.8.2 — reviewer decision
+2026-10-31; 1.6.0 is Stage 14a's `solution_count`, 1.7.0 Stage 15b's `uncompute` on coherent certificates, 1.8.0 Stage 16b's proved front end with `uncompute` explicit in every certificate — renumbered 2026-10-30). The paper's "no two-qubit count, no T-depth" item is answered here; the
 Clifford+T cost of `rot` gates is deliberately *not* folded into `t` (it depends on a synthesis
 precision that is a hardware matter, §C).
 
-**Emitters.** OpenQASM 3: `p(2*pi*a/2^k) q;` and `cp(2*pi*a/2^k) c, t;` (both in
-`stdgates.inc`); re-parse validation unchanged in kind. QIR: `p` as `__quantum__qis__rz__body`
-with the angle (the global phase e^{iθ/2} is irrelevant to every statement in this project, and the
-run report says so); `cp` has no intrinsic and is emitted as the standard decomposition
-`p(θ/2) c; p(θ/2) t; cnot c t; p(−θ/2) t; cnot c t`, so the QIR re-parse is validated against
-`Circuit.decomposeCp C`, with `decomposeCp_unitary : unitaryDenote (decomposeCp gs) =
-unitaryDenote gs` proved once (this is the first entry of the decomposition table of §C.3).
+**Emitters.** OpenQASM 3: `p(2*pi*a/N) q;` and `cp(2*pi*a/N) c, t;` with `N = 2^k` evaluated
+to an integer (`^` is XOR in OpenQASM 3; amended 2026-10-31) and `a` printed as an integer, in
+parentheses when negative (`p(2*pi*(-3)/32) x[0];`); both gates are in `stdgates.inc`; re-parse
+validation unchanged in kind, exact on `(a, k)`. QIR: `p` as `__quantum__qis__rz__body(double θ,
+ptr)` with θ = 2πa/2^k printed as an LLVM hex-float literal (`Float.toBits`; a decimal literal is
+rejected by `llvm-as` unless exactly representable), the re-parse comparing θ with 2πa/2^k to
+1e-12 (the global phase e^{−iθ/2} of `rz` against `p` is irrelevant to every statement in this
+project — per branch under `ifBit` too — and the run report says so); `cp` has no intrinsic and is
+emitted as the standard decomposition `p a (k+1) c; p a (k+1) t; cnot c t; p (-a) (k+1) t;
+cnot c t` (θ/2 = 2πa/2^(k+1)), so the QIR re-parse is validated against `Circuit.decomposeCp C`
+(top-level `cp` only; a `cp` under `ifBit` is refused by the QIR emitter with a diagnostic, the
+Adaptive-Profile branch would need the five gates), with `decomposeCp_unitary : unitaryDenote
+(decomposeCp gs) = unitaryDenote gs` proved once (this is the first entry of the decomposition
+table of §C.3). Gates no synthesized circuit contains are exercised through a fixed sample circuit
+(`CertifyTool emit-sample`, Stage 17b).
 
 **Harness.** `tests/diff/statevector.py` learns `{"op":"p","q":[i],"a":a,"k":k}` and `"cp"`.
+
+**Stages.** 17a: IR, semantics, well-formedness, scheduler, `GradeExt`, `decomposeCp` (library;
+no emitter, CLI, certificate or Python change); 17b: emitters, re-parsers, harness, `gradeExt_eq`
+in every certificate, schema 1.9.0, the four certificates regenerated
+(docs/tasks/STAGE17_TASK.md, 2026-10-31).
 
 ### A.2 QFT and approximate QFT (new; the Theorem 3.3b client)
 
@@ -274,7 +293,8 @@ M3 review decides; the obstacle is recorded either way.
    primary route; the tolerance-carrying specification is the fallback, used only if the Stage 20b
    implementer reports the induced metric as an obstacle.
 2. `rot` gates carry no T-estimate in the grade or the certificate. The run report prints the
-   rotation count and the note "Clifford+T cost depends on the synthesis precision (see §C)"; a
+   rotation count and, when it is positive, the note "Clifford+T cost depends on the synthesis
+   precision (see §C)" (amended 2026-10-31); a
    Ross–Selinger estimate, if ever given, is a hardware-profile matter.
 3. Precision of the committed counting certificate: `n = 8, M = 32`, `m = 4` (15 controlled
    iterates); the harness also runs `m = 6`. The exact `ε` at `m = 4` is
