@@ -12,12 +12,15 @@ The gate lists written out for `m = 3`, the measured grades of `qftCircuit m` fo
 of `aqftCircuit 6 kmax` for `kmax = 1..6` (`t = 0`, `tDepth = 0`, `rot = twoQ = m (m − 1) / 2`,
 `meas = ff = 0`, `d` as measured), the encodings on hand-written registers (qubit 0 the most
 significant bit, as the harness), `example` instances of the theorems of B2 / B3 at `m = 3`, and
-the axiom lines of `qft_basis` and `qftCircuit_WF`.
+the axiom lines of `qft_basis` and `qftCircuit_WF`. Stage 18c (C1–C4): the bounds at `m = 3`,
+`kmax = 2` and the axiom lines of `aqft_opNorm_le`, `channelDenote_of_unitary`,
+`diamondDist_ofUnitary_le` (with its two sub-lemmas) and `aqft_diamond_le`.
 -/
 
 namespace CQRV.Tests.QFT
 
 open CQRV CQRV.Synthesis Matrix
+open scoped Matrix.Norms.L2Operator
 
 /-! ## Gate lists -/
 
@@ -109,6 +112,42 @@ example (x s : Reg 3) :
         Complex.exp (2 * Real.pi * Complex.I * ((x.toNat * (bitRev s).toNat : ℕ) : ℂ) / 2 ^ 3) :=
   qft_basis 3 x s
 
+/-! ## Stage 18c: the AQFT bounds and the channel bridge at `m = 3`, `kmax = 2` -/
+
+#guard (qftCircuit 3).nBits == 0
+#guard (⟨3, adjointGates (qftGates 3)⟩ : Circuit).wf
+#guard (⟨3, adjointGates (aqftGates 3 2)⟩ : Circuit).wf
+#guard aqftKeep 2 (.cp 1 2 (.data 1) (.data 0)) && !aqftKeep 2 (.cp 1 3 (.data 2) (.data 0))
+#guard (qftGates 3).filter (aqftKeep 2) == aqftGates 3 2
+
+example (g : Gate) : ‖gateU 3 0 g‖ ≤ 1 := gateU_norm_le_one 3 0 g
+example (c t : Qubit) : ‖gateU 3 0 (.cp 1 2 c t) - 1‖ ≤ 2 * Real.pi / 2 ^ 2 :=
+  gateU_cp_sub_one_le 3 0 2 (by norm_num)
+example : ‖unitaryDenote 3 0 (qftGates 3) - unitaryDenote 3 0 ((qftGates 3).filter (aqftKeep 2))‖ ≤
+    (((qftGates 3).filter fun g => !aqftKeep 2 g).map fun g => ‖gateU 3 0 g - 1‖).sum :=
+  unitaryDenote_filter_sub_le 3 0 (qftGates 3) (aqftKeep 2)
+example : ‖unitaryDenote 3 0 (qftGates 3) - unitaryDenote 3 0 (aqftGates 3 2)‖ ≤
+    2 * Real.pi * (3 : ℕ) / 2 ^ 2 :=
+  aqft_opNorm_le 3 2
+example : channelDenote 3 0 (qftCircuit 3) =
+    CPTPMap.ofUnitary ⟨unitaryDenote 3 0 (qftGates 3), unitaryDenote_mem_unitaryGroup 3 0 _⟩ :=
+  channelDenote_of_unitary 3 0 (qftCircuit_WF 3) (qftGates_all_unitary 3)
+example (U V : 𝐔[Reg 3 × Reg 0]) :
+    diamondDist (CPTPMap.ofUnitary U) (CPTPMap.ofUnitary V) ≤
+      2 * ‖(U : Matrix (Reg 3 × Reg 0) (Reg 3 × Reg 0) ℂ) - V‖ :=
+  diamondDist_ofUnitary_le U V
+example (U : 𝐔[Reg 3 × Reg 0]) (ρ : MState ((Reg 3 × Reg 0) × (Reg 3 × Reg 0))) :
+    (CPTPMap.ofUnitary U ⊗ᶜᵖ CPTPMap.id (dIn := Reg 3 × Reg 0)) ρ =
+      ρ.uConj (Matrix.unitary_kron U 1) :=
+  prod_id_ofUnitary U ρ
+example : eta_aqft 3 2 = 4 * Real.pi * (3 : ℕ) / 2 ^ 2 := rfl
+example : diamondDist (channelDenote 3 0 (qftCircuit 3)) (channelDenote 3 0 (aqftCircuit 3 2)) ≤
+    eta_aqft 3 2 :=
+  aqft_diamond_le 3 2
+example : diamondDist (channelDenote 3 0 ⟨3, adjointGates (qftGates 3)⟩)
+    (channelDenote 3 0 ⟨3, adjointGates (aqftGates 3 2)⟩) ≤ eta_aqft 3 2 :=
+  aqft_adjoint_diamond_le 3 2
+
 /-! ## Axioms -/
 
 /-- info: 'CQRV.qft_basis' depends on axioms: [propext, Classical.choice, Quot.sound] -/
@@ -122,5 +161,43 @@ example (x s : Reg 3) :
 /-- info: 'CQRV.qftCircuit_WF' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms qftCircuit_WF
+
+-- Stage 18c (C1–C4): everything proved, no `sorry`
+
+/-- info: 'CQRV.aqft_opNorm_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms aqft_opNorm_le
+
+/--
+info: 'CQRV.channelDenote_of_unitary' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms channelDenote_of_unitary
+
+/-- info: 'CQRV.prod_id_ofUnitary' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms prod_id_ofUnitary
+
+/--
+info: 'CQRV.l2_opNorm_kronecker_one_le' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms l2_opNorm_kronecker_one_le
+
+/--
+info: 'CQRV.diamondDist_ofUnitary_le' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms diamondDist_ofUnitary_le
+
+/-- info: 'CQRV.aqft_diamond_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms aqft_diamond_le
+
+/--
+info: 'CQRV.aqft_adjoint_diamond_le' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms aqft_adjoint_diamond_le
 
 end CQRV.Tests.QFT

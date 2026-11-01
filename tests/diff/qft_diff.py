@@ -1,7 +1,8 @@
 """Differential test of the QFT / approximate QFT circuits (PHASE2_SPEC.md §A.2; Stage 18b B4;
 CLAUDE.md rule 9). `qft_basis` (CQRV/Circuit/QFTCorrect.lean) is proved; this harness is the
 independent numerical check of the circuits the Lean side builds, and it checks the AQFT bounds
-of Stage 18c numerically before they are proved.
+of Stage 18c numerically (`aqft_opNorm_le`, and the `eta_aqft` line of `aqft_diamond_le`; both
+proved in Stage 18c, CQRV/Circuit/QFTCorrect.lean).
 
 Convention — the harness's and `qft_basis`'s: **qubit 0 is the most significant bit** of the
 basis index (statevector.py). For m qubits the DFT matrix is
@@ -17,7 +18,12 @@ basis state s on input |x⟩ is 2^{-m/2} · exp(2πi · x · bitrev(s) / 2^m) �
   (c) for kmax = 1..m: the spectral norm ‖U_qft − U_aqft‖₂ (numpy.linalg.norm(·, 2)) is
       ≤ 2π m / 2^kmax (`aqft_opNorm_le`, PHASE2_SPEC §A.2) **and** ≤ Σ_dropped 2π / 2^k, the sum
       of the dropped angles (the telescoping bound of Stage 18c C1); kmax = m drops nothing
-      (`aqftGates_eq_self`); kmax < m drops exactly the `cp` gates with k > kmax;
+      (`aqftGates_eq_self`); kmax < m drops exactly the `cp` gates with k > kmax; and the
+      eta_aqft line: 2 ‖U_qft − U_aqft‖₂ ≤ eta_aqft m kmax = 4π m / 2^kmax (`aqft_diamond_le`).
+      A diamond distance is at most 2, so a pair (m, kmax) with eta_aqft ≥ 2 is a vacuous budget;
+      a pair with eta_aqft < 2 and kmax < m (a gate dropped) is informative, marked and counted,
+      and the final note reports the count: with 0 informative pairs the line is a consistency
+      check in that range, not a test of the bound (18c notes (ii) of STAGE18_TASK.md);
   (d) negative control: the sign of one rotation flipped (a = 1 → −1 in `cp a k`) is detected
       against R·F (error > 0.1).
 
@@ -84,6 +90,7 @@ def main():
     args = ap.parse_args()
     rng = np.random.default_rng(args.seed)
     data = json.loads(certify_tool(["qft-sample", "--all", str(args.m_max)]))
+    informative = []  # (m, kmax) with eta_aqft < 2 and a dropped gate
     assert sorted(int(k) for k in data) == list(range(1, args.m_max + 1)), sorted(data)
 
     for m in range(1, args.m_max + 1):
@@ -117,6 +124,7 @@ def main():
             all(g["a"] == -1 for g in adj["gates"] if g["op"] == "cp"), "adjointGates shape"
         # (c) the AQFT bounds
         bounds = []
+        etas = []
         for kmax in range(1, m + 1):
             a = aqft[str(kmax)]
             kept = [g for g in qft["gates"] if g["op"] != "cp" or g["k"] <= kmax]
@@ -132,9 +140,25 @@ def main():
             if kmax == m:
                 assert dist < EPS
             bounds.append(f"k{kmax}: {dist:.3f} <= {b2:.3f} <= {b1:.3f}")
+            # the eta_aqft line (Stage 18c, aqft_diamond_le): 2 ||U_qft - U_aqft||_2 <= eta_aqft m kmax
+            # = 4 pi m / 2^kmax, the diamond-distance budget. A diamond distance is at most 2, so
+            # eta_aqft >= 2 is a vacuous budget; a pair with eta_aqft < 2 and a dropped gate
+            # (kmax < m) is informative and counted (STAGE18_TASK.md, 18c notes (ii)).
+            eta = 4 * math.pi * m / 2 ** kmax
+            assert 2 * dist <= eta + EPS, f"m = {m}, kmax = {kmax}: 2 * {dist:.4f} > eta_aqft = {eta:.4f}"
+            if eta >= 2:
+                mark = " (vacuous, >= 2)"
+            elif kmax < m:
+                mark = " (informative)"
+                informative.append((m, kmax))
+            else:
+                mark = ""
+            etas.append(f"k{kmax}: {2 * dist:.3f} <= {eta:.3f}" + mark)
         print(f"ok:   m = {m}: qftCircuit = R F (max err {err:.1e}), unitary, adjoint inverse "
               f"(err {inv:.1e}); ||U_qft - U_aqft||_2 <= sum of dropped angles <= 2 pi m / 2^kmax: "
               + "; ".join(bounds))
+        print(f"      m = {m}: 2 ||U_qft - U_aqft||_2 <= eta_aqft m kmax = 4 pi m / 2^kmax: "
+              + "; ".join(etas))
 
     # (d) negative control: one rotation's sign flipped
     m = 3
@@ -144,8 +168,13 @@ def main():
     err = np.max(np.abs(simulate(bad) - bitrev_matrix(m) @ dft_matrix(m)))
     assert err > 0.1, f"negative control not detected ({err:.3g})"
     print(f"ok:   negative control: cp 1 2 -> cp (-1) 2 in qftCircuit 3 detected (max err {err:.3f})")
+    pairs = ", ".join(f"(m = {m}, kmax = {k})" for m, k in informative)
+    print(f"note: informative pairs (eta_aqft m kmax = 4 pi m / 2^kmax < 2 with a dropped gate, kmax < m) "
+          f"for m <= {args.m_max}: {len(informative)}" + (f" [{pairs}]" if informative else "")
+          + ("; in this range the eta_aqft line is a consistency check of aqft_diamond_le, not a "
+             "test of the bound (18c notes (ii))" if not informative else ""))
     print(f"qft_diff: PASS — m = 1..{args.m_max}: qftCircuit m = R F (qubit 0 the MSB, as "
-          "qft_basis), adjoint = inverse, aqft = the filter with both bounds")
+          "qft_basis), adjoint = inverse, aqft = the filter with both bounds, eta_aqft consistent")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,8 @@ module
 
 public import CQRV.Circuit.Basis
 public import CQRV.Circuit.Restoration
+public import CQRV.Circuit.UnitaryChannel
+public import CQRV.Realizability.Diamond
 public import CQRV.Synthesis.QFT
 
 /-!
@@ -27,6 +29,14 @@ Every statement is indexed by `ℕ` through `Reg.bit` (= `Qubit.get (.data l)`).
 Also here (B1): `qftCircuit_WF`, `aqftCircuit_WF`, `qftGates_unitary`, `aqftGates_unitary` —
 `Circuit.WF` and `Gate.isUnitary` are defined in `CQRV.Circuit.Semantics`, and
 `CQRV.Synthesis.QFT` stays in the Physlib-free closure of the synthesizer (see its header).
+
+Stage 18c (STAGE18_TASK.md C1, C4; PHASE2_SPEC.md §A.2 (4)–(5)): the operator-norm bound
+`aqft_opNorm_le : ‖U_qft − U_aqft‖ ≤ 2π m / 2^kmax` (`unitaryDenote_filter_sub_le`,
+`gateU_cp_sub_one_le`, the geometric tail `tailSum_le`) in the L2 operator norm
+`Matrix.Norms.L2Operator`, and the client `aqft_diamond_le : diamondDist (channelDenote (qftCircuit
+m)) (channelDenote (aqftCircuit m kmax)) ≤ eta_aqft m kmax = 4π m / 2^kmax` from the channel bridge
+(`CQRV.Circuit.UnitaryChannel`) and `diamondDist_ofUnitary_le` (`CQRV.Realizability.Diamond`);
+`aqft_adjoint_diamond_le` for the inverse circuits. Import discipline: PHASE2_SPEC.md §A.8 item 6.
 -/
 
 public section
@@ -458,6 +468,327 @@ theorem qft_unitary (m : ℕ) :
 theorem aqft_eq_qft_of_le {m kmax : ℕ} (h : m ≤ kmax) :
     unitaryDenote m 0 (aqftGates m kmax) = unitaryDenote m 0 (qftGates m) := by
   rw [aqftGates_eq_self h]
+
+end
+
+/-! ## C1. The operator-norm bound (PHASE2_SPEC.md §A.2 (4); Stage 18c, STAGE18_TASK.md C1)
+
+`‖·‖` on matrices is the L2 operator norm `Matrix.Norms.L2Operator`, the instance of Physlib's
+`Matrix.traceNorm_mul_le_opNorm_traceNorm` and of `CQRV.Realizability.Diamond`. -/
+
+noncomputable section
+
+open scoped Matrix.Norms.L2Operator
+
+section OpNorm
+
+variable (n a : ℕ)
+
+theorem gateU_norm_le_one (g : Gate) : ‖gateU n a g‖ ≤ 1 :=
+  l2_opNorm_le_one_of_mem_unitaryGroup (gateU_mem_unitaryGroup n a g)
+
+theorem unitaryDenote_norm_le_one (gs : List Gate) : ‖unitaryDenote n a gs‖ ≤ 1 :=
+  l2_opNorm_le_one_of_mem_unitaryGroup (unitaryDenote_mem_unitaryGroup n a gs)
+
+/-- PHASE2_SPEC.md §A.2 (4) — telescoping over a filtered gate list: dropping the gates `g` with
+`keep g = false` changes the unitary semantics by at most `∑ ‖gateU g − 1‖` over the dropped
+gates (every gate matrix and every prefix product has norm at most `1`; no unitarity hypothesis
+is needed). -/
+theorem unitaryDenote_filter_sub_le (gs : List Gate) (keep : Gate → Bool) :
+    ‖unitaryDenote n a gs - unitaryDenote n a (gs.filter keep)‖ ≤
+      ((gs.filter fun g => !keep g).map fun g => ‖gateU n a g - 1‖).sum := by
+  induction gs with
+  | nil => simp [unitaryDenote]
+  | cons g gs ih =>
+    by_cases hg : keep g = true
+    · rw [List.filter_cons_of_pos hg, List.filter_cons_of_neg (by simpa using hg)]
+      simp only [unitaryDenote]
+      rw [← Matrix.sub_mul]
+      calc ‖(unitaryDenote n a gs - unitaryDenote n a (gs.filter keep)) * gateU n a g‖
+          ≤ ‖unitaryDenote n a gs - unitaryDenote n a (gs.filter keep)‖ * ‖gateU n a g‖ :=
+            Matrix.l2_opNorm_mul (unitaryDenote n a gs - unitaryDenote n a (gs.filter keep))
+              (gateU n a g)
+        _ ≤ ‖unitaryDenote n a gs - unitaryDenote n a (gs.filter keep)‖ * 1 :=
+            mul_le_mul_of_nonneg_left (gateU_norm_le_one n a g) (norm_nonneg _)
+        _ ≤ _ := by rw [mul_one]; exact ih
+    · rw [List.filter_cons_of_neg hg, List.filter_cons_of_pos (by simpa using hg)]
+      simp only [unitaryDenote, List.map_cons, List.sum_cons]
+      have hsplit : unitaryDenote n a gs * gateU n a g - unitaryDenote n a (gs.filter keep) =
+          unitaryDenote n a gs * (gateU n a g - 1) +
+            (unitaryDenote n a gs - unitaryDenote n a (gs.filter keep)) := by
+        rw [Matrix.mul_sub, Matrix.mul_one]
+        abel
+      rw [hsplit]
+      have hm : ‖unitaryDenote n a gs * (gateU n a g - 1)‖ ≤
+          ‖unitaryDenote n a gs‖ * ‖gateU n a g - 1‖ := Matrix.l2_opNorm_mul _ _
+      have hm' : ‖unitaryDenote n a gs‖ * ‖gateU n a g - 1‖ ≤ 1 * ‖gateU n a g - 1‖ :=
+        mul_le_mul_of_nonneg_right (unitaryDenote_norm_le_one n a gs) (norm_nonneg _)
+      have hadd := norm_add_le (unitaryDenote n a gs * (gateU n a g - 1))
+        (unitaryDenote n a gs - unitaryDenote n a (gs.filter keep))
+      rw [one_mul] at hm'
+      linarith
+
+/-- `monoMat id φ` is the diagonal matrix of `φ` (`gateU` of `cz`, `cp`, `p` and the phase
+gates). -/
+theorem monoMat_id_eq_diagonal {ι : Type} [Fintype ι] [DecidableEq ι] (φ : ι → ℂ) :
+    monoMat id φ = Matrix.diagonal φ := by
+  ext i j
+  simp only [monoMat_apply, id, Matrix.diagonal_apply]
+  split_ifs with h <;> simp [h]
+
+/-- `‖e^{2πi/2^k} − 1‖ ≤ 2π/2^k` (`Real.norm_exp_I_mul_ofReal_sub_one_le`, Mathlib's
+`‖exp (I x) − 1‖ ≤ ‖x‖`). -/
+theorem norm_phaseOf_one_sub_one_le (k : ℕ) : ‖phaseOf 1 k - 1‖ ≤ 2 * Real.pi / 2 ^ k := by
+  have hx : (0 : ℝ) ≤ 2 * Real.pi / 2 ^ k := by positivity
+  have h := Real.norm_exp_I_mul_ofReal_sub_one_le (x := 2 * Real.pi / 2 ^ k)
+  rw [Real.norm_eq_abs, abs_of_nonneg hx] at h
+  have e : phaseOf 1 k = Complex.exp (Complex.I * ((2 * Real.pi / 2 ^ k : ℝ) : ℂ)) := by
+    simp only [phaseOf]
+    congr 1
+    push_cast
+    ring
+  rw [e]
+  exact h
+
+set_option linter.unusedVariables false in
+/-- PHASE2_SPEC.md §A.2 (4) — `‖cp 1 k − 1‖ ≤ 2π/2^k`: `gateU (cp 1 k)` is the diagonal matrix
+with entries `1` and `e^{2πi/2^k}` (`l2_opNorm_diagonal`), and `|e^{iφ} − 1| ≤ |φ|`. The bound
+holds for `k = 0` as well; `hk` is the hypothesis of the task text (unused, linter silenced). -/
+theorem gateU_cp_sub_one_le (k : ℕ) (hk : 1 ≤ k) {c t : Qubit} :
+    ‖gateU n a (.cp 1 k c t) - 1‖ ≤ 2 * Real.pi / 2 ^ k := by
+  rw [gateU_cp, monoMat_id_eq_diagonal, ← Matrix.diagonal_one, Matrix.diagonal_sub,
+    Matrix.l2_opNorm_diagonal]
+  refine (pi_norm_le_iff_of_nonneg (by positivity)).mpr fun s => ?_
+  split_ifs
+  · exact norm_phaseOf_one_sub_one_le k
+  · rw [sub_self, norm_zero]
+    positivity
+
+end OpNorm
+
+/-! The dropped-gate weight of `aqftGates`: block `j` drops `cp 1 k` for `k = kmax+1 .. m−j`,
+`∑ 2π/2^k ≤ 2π/2^kmax` (the geometric tail `tailSum`), `m` blocks. -/
+
+/-- The weight of a gate in the operator-norm bound: `2π/2^k` for a rotation `cp a k`, `0`
+otherwise. -/
+@[expose] def cpWeight : Gate → ℝ
+  | .cp _ k _ _ => 2 * Real.pi / 2 ^ k
+  | _ => 0
+
+/-- The keep predicate of `aqftGates m kmax` (its `List.filter`), named. -/
+@[expose] def aqftKeep (kmax : ℕ) : Gate → Bool
+  | .cp _ k _ _ => decide (k ≤ kmax)
+  | _ => true
+
+theorem aqftGates_eq_filter (m kmax : ℕ) :
+    aqftGates m kmax = (qftGates m).filter (aqftKeep kmax) := rfl
+
+theorem sum_map_filter_eq {α : Type} (l : List α) (p : α → Bool) (w : α → ℝ) :
+    ((l.filter p).map w).sum = (l.map fun x => if p x = true then w x else 0).sum := by
+  induction l with
+  | nil => rfl
+  | cons x l ih =>
+    rw [List.filter_cons]
+    split_ifs with h <;> simp [h, ih]
+
+theorem sum_map_const_mul {α : Type} (l : List α) (c : ℝ) (f : α → ℝ) :
+    (l.map fun x => c * f x).sum = c * (l.map f).sum := by
+  induction l with
+  | nil => simp
+  | cons x l ih => simp [ih, mul_add]
+
+/-- `tailTerm kmax i = 2^{−(i+2)}` if `kmax < i + 2`, else `0`. -/
+@[expose] def tailTerm (kmax i : ℕ) : ℝ := if kmax < i + 2 then ((2 : ℝ) ^ (i + 2))⁻¹ else 0
+
+/-- `tailSum kmax N = ∑_{i < N, kmax < i+2} 2^{−(i+2)}`, the dropped weights of one block over
+`2π`. -/
+@[expose] def tailSum (kmax N : ℕ) : ℝ := ((List.range N).map (tailTerm kmax)).sum
+
+theorem tailSum_succ (kmax N : ℕ) : tailSum kmax (N + 1) = tailSum kmax N + tailTerm kmax N := by
+  simp [tailSum, List.range_succ]
+
+theorem tailSum_eq_zero (kmax : ℕ) : ∀ N, N + 1 ≤ kmax → tailSum kmax N = 0
+  | 0, _ => by simp [tailSum]
+  | N + 1, h => by
+    rw [tailSum_succ, tailSum_eq_zero kmax N (by omega)]
+    have h' : ¬ kmax < N + 2 := by omega
+    simp [tailTerm, h']
+
+theorem tailSum_add_le (kmax : ℕ) :
+    ∀ N, kmax ≤ N + 1 → tailSum kmax N + ((2 : ℝ) ^ (N + 1))⁻¹ ≤ ((2 : ℝ) ^ kmax)⁻¹
+  | 0, h => by
+    simp only [tailSum, List.range_zero, List.map_nil, List.sum_nil, zero_add]
+    exact inv_anti₀ (by positivity) (pow_le_pow_right₀ one_le_two h)
+  | N + 1, h => by
+    rw [tailSum_succ]
+    by_cases hk : kmax ≤ N + 1
+    · have ih := tailSum_add_le kmax N hk
+      have h' : kmax < N + 2 := by omega
+      have e : ((2 : ℝ) ^ (N + 1 + 1))⁻¹ + ((2 : ℝ) ^ (N + 1 + 1))⁻¹ = ((2 : ℝ) ^ (N + 1))⁻¹ := by
+        rw [pow_succ, mul_inv]
+        ring
+      simp only [tailTerm, h', ↓reduceIte]
+      linarith
+    · have hk' : kmax = N + 2 := by omega
+      subst hk'
+      rw [tailSum_eq_zero _ N (by omega)]
+      simp [tailTerm, add_assoc]
+
+/-- The geometric tail: `∑_{i < N, kmax < i+2} 2^{−(i+2)} ≤ 2^{−kmax}`. -/
+theorem tailSum_le (kmax N : ℕ) : tailSum kmax N ≤ ((2 : ℝ) ^ kmax)⁻¹ := by
+  by_cases h : kmax ≤ N + 1
+  · have h1 := tailSum_add_le kmax N h
+    have h2 : (0 : ℝ) ≤ ((2 : ℝ) ^ (N + 1))⁻¹ := by positivity
+    linarith
+  · rw [tailSum_eq_zero kmax N (by omega)]
+    positivity
+
+theorem qftBlock_dropped_weight (m kmax j : ℕ) :
+    (((qftBlock m j).filter fun g => !aqftKeep kmax g).map cpWeight).sum =
+      2 * Real.pi * tailSum kmax (m - j - 1) := by
+  rw [qftBlock, List.filter_cons_of_neg (by simp [aqftKeep]), List.filter_map, List.map_map,
+    sum_map_filter_eq, tailSum, ← sum_map_const_mul]
+  congr 1
+  apply List.map_congr_left
+  intro i _
+  simp only [Function.comp, aqftKeep, cpWeight, tailTerm]
+  by_cases h : kmax < i + 2
+  · have h' : ¬ i + 2 ≤ kmax := by omega
+    simp [h, h', div_eq_mul_inv]
+  · have h' : i + 2 ≤ kmax := by omega
+    simp [h, h']
+
+theorem qftGates_dropped_weight_le (m kmax : ℕ) :
+    (((qftGates m).filter fun g => !aqftKeep kmax g).map cpWeight).sum ≤
+      m * (2 * Real.pi / 2 ^ kmax) := by
+  have hblock : ∀ j, (((qftBlock m j).filter fun g => !aqftKeep kmax g).map cpWeight).sum ≤
+      2 * Real.pi / 2 ^ kmax := by
+    intro j
+    rw [qftBlock_dropped_weight, div_eq_mul_inv]
+    exact mul_le_mul_of_nonneg_left (tailSum_le kmax _) (by positivity)
+  have key : ∀ js : List ℕ,
+      (((js.flatMap (qftBlock m)).filter fun g => !aqftKeep kmax g).map cpWeight).sum ≤
+        js.length * (2 * Real.pi / 2 ^ kmax) := by
+    intro js
+    induction js with
+    | nil => simp
+    | cons j js ih =>
+      rw [List.flatMap_cons, List.filter_append, List.map_append, List.sum_append,
+        List.length_cons]
+      push_cast
+      linarith [hblock j, ih]
+  have h := key (List.range m)
+  rwa [List.length_range] at h
+
+/-- PHASE2_SPEC.md §A.2 (4) — **the AQFT operator-norm bound**
+`‖U_qft − U_aqft‖ ≤ 2π m / 2^kmax`: telescoping (`unitaryDenote_filter_sub_le`), each dropped
+`cp 1 k` contributes at most `2π/2^k` (`gateU_cp_sub_one_le`), block `j` drops `k = kmax+1 ..
+m−j` with `∑ 2π/2^k ≤ 2π/2^kmax` (`tailSum_le`), `m` blocks. -/
+theorem aqft_opNorm_le (m kmax : ℕ) :
+    ‖unitaryDenote m 0 (qftGates m) - unitaryDenote m 0 (aqftGates m kmax)‖ ≤
+      2 * Real.pi * m / 2 ^ kmax := by
+  rw [aqftGates_eq_filter]
+  refine (unitaryDenote_filter_sub_le m 0 (qftGates m) (aqftKeep kmax)).trans ?_
+  refine (List.sum_le_sum (f := fun g => ‖gateU m 0 g - 1‖) (g := cpWeight) ?_).trans ?_
+  · intro g hg
+    rw [List.mem_filter] at hg
+    obtain ⟨j, _, hgj⟩ := mem_qftGates hg.1
+    rcases mem_qftBlock hgj with rfl | ⟨i, _, rfl⟩
+    · simp [aqftKeep] at hg
+    · exact gateU_cp_sub_one_le m 0 (i + 2) (by omega)
+  · refine (qftGates_dropped_weight_le m kmax).trans (le_of_eq ?_)
+    ring
+
+/-! ## C4. The client (PHASE2_SPEC.md §A.2 (5); STAGE18_TASK.md C4): the diamond-distance bound
+Theorem 3.3b consumes, for the QFT / AQFT circuits and for their inverses (§A.0.1). -/
+
+theorem qftGates_all_unitary (m : ℕ) : (qftGates m).all Gate.isUnitary = true :=
+  List.all_eq_true.mpr (qftGates_unitary m)
+
+theorem aqftGates_all_unitary (m kmax : ℕ) : (aqftGates m kmax).all Gate.isUnitary = true :=
+  List.all_eq_true.mpr (aqftGates_unitary m kmax)
+
+/-- PHASE2_SPEC.md §A.2 — `η_aqft m kmax = 4π m / 2^kmax`, the diamond-distance budget of the
+approximate QFT (`2 · 2π m / 2^kmax`). -/
+@[expose] def eta_aqft (m kmax : ℕ) : ℝ := 4 * Real.pi * m / 2 ^ kmax
+
+/-- PHASE2_SPEC.md §A.2 (5) — **the client**: `‖Φ_qft − Φ_aqft‖⋄ ≤ η_aqft m kmax`, from the
+channel bridge (`channelDenote_of_unitary`; both circuits are WF and unitary, 18b),
+`diamondDist_ofUnitary_le` and `aqft_opNorm_le`. -/
+theorem aqft_diamond_le (m kmax : ℕ) :
+    diamondDist (channelDenote m 0 (qftCircuit m)) (channelDenote m 0 (aqftCircuit m kmax)) ≤
+      eta_aqft m kmax := by
+  rw [channelDenote_of_unitary m 0 (qftCircuit_WF m) (qftGates_all_unitary m),
+    channelDenote_of_unitary m 0 (aqftCircuit_WF m kmax) (aqftGates_all_unitary m kmax)]
+  refine (diamondDist_ofUnitary_le _ _).trans ?_
+  have h := aqft_opNorm_le m kmax
+  have e : eta_aqft m kmax = 2 * (2 * Real.pi * m / 2 ^ kmax) := by
+    unfold eta_aqft
+    ring
+  rw [e]
+  change 2 * ‖unitaryDenote m 0 (qftGates m) - unitaryDenote m 0 (aqftGates m kmax)‖ ≤ _
+  linarith
+
+/-! The inverse circuits: `adjointGates` keeps well-formedness and unitarity, and
+`unitaryDenote_adjoint` with `‖Aᴴ‖ = ‖A‖` gives the same bound. -/
+
+theorem Gate.isUnitary_adjoint (g : Gate) : g.adjoint.isUnitary = g.isUnitary := by
+  cases g <;> rfl
+
+theorem Gate.qubitsOk_adjoint (nD : ℕ) (g : Gate) : g.adjoint.qubitsOk nD = g.qubitsOk nD := by
+  cases g <;> rfl
+
+theorem adjointGates_unitary {gs : List Gate} (h : ∀ g ∈ gs, g.isUnitary = true) :
+    ∀ g ∈ adjointGates gs, g.isUnitary = true := by
+  intro g hg
+  rw [adjointGates, List.mem_reverse, List.mem_map] at hg
+  obtain ⟨g', hg', rfl⟩ := hg
+  rw [Gate.isUnitary_adjoint]
+  exact h g' hg'
+
+theorem adjointGates_qubitsOk {nD : ℕ} {gs : List Gate} (h : ∀ g ∈ gs, g.qubitsOk nD = true) :
+    ∀ g ∈ adjointGates gs, g.qubitsOk nD = true := by
+  intro g hg
+  rw [adjointGates, List.mem_reverse, List.mem_map] at hg
+  obtain ⟨g', hg', rfl⟩ := hg
+  rw [Gate.qubitsOk_adjoint]
+  exact h g' hg'
+
+/-- PHASE2_SPEC.md §A.0.1 — the inverse of a well-formed unitary circuit is well formed. -/
+theorem adjointCircuit_WF {C : Circuit} (hWF : C.WF) (hU : ∀ g ∈ C.gates, g.isUnitary = true) :
+    (⟨C.nData, adjointGates C.gates⟩ : Circuit).WF := by
+  have hq : ∀ g ∈ C.gates, g.qubitsOk C.nData = true := by
+    have h := hWF
+    simp only [Circuit.WF, Circuit.wf, Bool.and_eq_true, List.all_eq_true] at h
+    exact h.1
+  simp only [Circuit.WF, Circuit.wf, Circuit.bitsOk, Bool.and_eq_true, List.all_eq_true]
+  exact ⟨adjointGates_qubitsOk hq, bitsOkFrom_of_unitary _ _ (adjointGates_unitary hU)⟩
+
+/-- PHASE2_SPEC.md §A.2 (5), §A.0.1 — the same bound for the inverse circuits
+`adjointGates (qftGates m)` and `adjointGates (aqftGates m kmax)` (`unitaryDenote_adjoint`,
+`l2_opNorm_conjTranspose`). -/
+theorem aqft_adjoint_diamond_le (m kmax : ℕ) :
+    diamondDist (channelDenote m 0 ⟨m, adjointGates (qftGates m)⟩)
+        (channelDenote m 0 ⟨m, adjointGates (aqftGates m kmax)⟩) ≤ eta_aqft m kmax := by
+  have h₁ := channelDenote_of_unitary m 0 (C := ⟨m, adjointGates (qftGates m)⟩)
+    (adjointCircuit_WF (qftCircuit_WF m) (qftGates_unitary m))
+    (List.all_eq_true.mpr (adjointGates_unitary (qftGates_unitary m)))
+  have h₂ := channelDenote_of_unitary m 0 (C := ⟨m, adjointGates (aqftGates m kmax)⟩)
+    (adjointCircuit_WF (aqftCircuit_WF m kmax) (aqftGates_unitary m kmax))
+    (List.all_eq_true.mpr (adjointGates_unitary (aqftGates_unitary m kmax)))
+  rw [h₁, h₂]
+  refine (diamondDist_ofUnitary_le _ _).trans ?_
+  have h := aqft_opNorm_le m kmax
+  have e : eta_aqft m kmax = 2 * (2 * Real.pi * m / 2 ^ kmax) := by
+    unfold eta_aqft
+    ring
+  rw [e]
+  change 2 * ‖unitaryDenote m 0 (adjointGates (qftGates m)) -
+    unitaryDenote m 0 (adjointGates (aqftGates m kmax))‖ ≤ _
+  rw [unitaryDenote_adjoint m 0 _ (qftGates_unitary m),
+    unitaryDenote_adjoint m 0 _ (aqftGates_unitary m kmax), ← star_sub,
+    Matrix.star_eq_conjTranspose, Matrix.l2_opNorm_conjTranspose]
+  linarith
 
 end
 

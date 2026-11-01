@@ -131,6 +131,129 @@ theorem diamondDist_compose_le (Ψ : CPTPMap B C) (Φ₁ Φ₂ : CPTPMap A B) :
     linarith)
     (diamondDist_nonneg _ _)
 
+
+/-! ## Unitary channels (PHASE2_SPEC.md §A.2 (5); Stage 18c, STAGE18_TASK.md C3)
+
+The matrix norm `‖·‖` below is the L2 operator norm `Matrix.Norms.L2Operator`, the instance
+Physlib's `Matrix.traceNorm_mul_le_opNorm_traceNorm` uses, so that these lemmas compose with
+Physlib's trace-norm inequalities. -/
+
+section Unitary
+
+open Matrix Kronecker
+open scoped Matrix.Norms.L2Operator MatrixMap
+
+variable {d : Type} [Fintype d] [DecidableEq d]
+
+/-- `‖1‖ ≤ 1` in the L2 operator norm (the identity is the diagonal of the constant-one vector;
+no `Nonempty` hypothesis). -/
+theorem l2_opNorm_one_le : ‖(1 : Matrix d d ℂ)‖ ≤ 1 := by
+  rw [← Matrix.diagonal_one, Matrix.l2_opNorm_diagonal]
+  exact (pi_norm_le_iff_of_nonneg zero_le_one).mpr fun _ => by simp
+
+/-- A unitary matrix has operator norm at most `1` (`‖U‖² = ‖Uᴴ U‖ = ‖1‖ ≤ 1`). -/
+theorem l2_opNorm_le_one_of_mem_unitaryGroup {U : Matrix d d ℂ}
+    (hU : U ∈ Matrix.unitaryGroup d ℂ) : ‖U‖ ≤ 1 := by
+  have h : ‖U‖ * ‖U‖ ≤ 1 := by
+    rw [← Matrix.l2_opNorm_conjTranspose_mul_self, ← Matrix.star_eq_conjTranspose,
+      Matrix.mem_unitaryGroup_iff'.mp hU]
+    exact l2_opNorm_one_le
+  nlinarith [norm_nonneg U]
+
+theorem conj_one_eq_id : MatrixMap.conj (1 : Matrix d d ℂ) = LinearMap.id := by
+  apply LinearMap.ext
+  intro x
+  simp [MatrixMap.conj_apply]
+
+set_option maxRecDepth 1000 in -- as for Physlib's `CPTPMap.prod`
+/-- PHASE2_SPEC.md §A.2 (5) — the unitary channel with the identity on the reference system is
+conjugation by `U ⊗ 1` (`CPTPMap.prod` is `MatrixMap.kron` of the two linear maps;
+`MatrixMap.conj_kron`). -/
+theorem prod_id_ofUnitary (U : 𝐔[d]) (ρ : MState (d × d)) :
+    (CPTPMap.ofUnitary U ⊗ᶜᵖ CPTPMap.id (dIn := d)) ρ = ρ.uConj (Matrix.unitary_kron U 1) := by
+  apply MState.ext_m
+  rw [CPTPMap.mat_coe_eq_apply_mat]
+  change (MatrixMap.conj (U : Matrix d d ℂ) ⊗ₖₘ LinearMap.id) ρ.m = _
+  rw [← conj_one_eq_id, MatrixMap.conj_kron, MatrixMap.conj_apply]
+  rfl
+
+theorem mulVec_kronecker_one (A : Matrix d d ℂ) (x : d × d → ℂ) (i j : d) :
+    ((A ⊗ₖ (1 : Matrix d d ℂ)) *ᵥ x) (i, j) = (A *ᵥ fun k => x (k, j)) i := by
+  simp only [Matrix.mulVec, dotProduct, Fintype.sum_prod_type, Matrix.kronecker_apply,
+    Matrix.one_apply, mul_ite, mul_one, mul_zero, ite_mul, zero_mul, Finset.sum_ite_eq,
+    Finset.mem_univ, ↓reduceIte]
+
+/-- `∑_i ‖(A y)_i‖² ≤ ‖A‖² ∑_k ‖y_k‖²`: the operator norm on one column. -/
+theorem sum_norm_sq_mulVec_le (A : Matrix d d ℂ) (y : d → ℂ) :
+    ∑ i, ‖(A *ᵥ y) i‖ ^ 2 ≤ ‖A‖ ^ 2 * ∑ k, ‖y k‖ ^ 2 := by
+  have h := (Matrix.toEuclideanCLM (n := d) (𝕜 := ℂ) A).le_opNorm (WithLp.toLp 2 y)
+  rw [Matrix.l2_opNorm_toEuclideanCLM, Matrix.toEuclideanCLM_toLp] at h
+  have h2 := pow_le_pow_left₀ (norm_nonneg _) h 2
+  rwa [mul_pow, EuclideanSpace.norm_sq_eq, EuclideanSpace.norm_sq_eq] at h2
+
+/-- PHASE2_SPEC.md §A.2 (5) — `‖A ⊗ 1‖ ≤ ‖A‖`: `‖(A ⊗ 1) x‖² = ∑_j ‖A x_{·,j}‖² ≤ ‖A‖² ∑_j
+‖x_{·,j}‖²` (`Fintype.sum_prod_type_right`). -/
+theorem l2_opNorm_kronecker_one_le (A : Matrix d d ℂ) :
+    ‖A ⊗ₖ (1 : Matrix d d ℂ)‖ ≤ ‖A‖ := by
+  rw [← Matrix.l2_opNorm_toEuclideanCLM]
+  refine ContinuousLinearMap.opNorm_le_bound _ (norm_nonneg A) fun x => ?_
+  refine (sq_le_sq₀ (norm_nonneg _) (by positivity)).mp ?_
+  rw [EuclideanSpace.norm_sq_eq, mul_pow, EuclideanSpace.norm_sq_eq x, Fintype.sum_prod_type_right,
+    Fintype.sum_prod_type_right, Finset.mul_sum]
+  refine Finset.sum_le_sum fun j _ => ?_
+  simp only [Matrix.ofLp_toEuclideanCLM, mulVec_kronecker_one]
+  exact sum_norm_sq_mulVec_le A _
+
+omit [Fintype d] in
+theorem sub_kronecker_one (A B : Matrix d d ℂ) :
+    (A - B) ⊗ₖ (1 : Matrix d d ℂ) = A ⊗ₖ 1 - B ⊗ₖ 1 := by
+  ext ⟨i, j⟩ ⟨k, l⟩
+  simp [sub_mul]
+
+/-- PHASE2_SPEC.md §A.2 (5), report §2.3.2 — **the diamond distance of two unitary channels is
+at most twice the operator norm of the difference**: with `W_i = U_i ⊗ 1`,
+`W₁ ρ W₁ᴴ − W₂ ρ W₂ᴴ = (W₁ − W₂) ρ W₁ᴴ + W₂ ρ (W₁ − W₂)ᴴ`, `traceNorm_add_le`,
+`traceNorm_mul_le_opNorm_traceNorm` / `traceNorm_mul_le_traceNorm_opNorm`, `‖ρ‖₁ = 1`,
+`‖W_i‖ ≤ 1` and `‖(U − V) ⊗ 1‖ ≤ ‖U − V‖`. -/
+theorem diamondDist_ofUnitary_le (U V : 𝐔[d]) :
+    diamondDist (CPTPMap.ofUnitary U) (CPTPMap.ofUnitary V) ≤ 2 * ‖(U : Matrix d d ℂ) - V‖ := by
+  refine Real.iSup_le (fun ρ => ?_) (by positivity)
+  rw [prod_id_ofUnitary, prod_id_ofUnitary]
+  set W₁ : Matrix (d × d) (d × d) ℂ := (U : Matrix d d ℂ) ⊗ₖ 1 with hW₁
+  set W₂ : Matrix (d × d) (d × d) ℂ := (V : Matrix d d ℂ) ⊗ₖ 1 with hW₂
+  have hm₁ : (ρ.uConj (Matrix.unitary_kron U 1)).m = W₁ * ρ.m * W₁ᴴ := rfl
+  have hm₂ : (ρ.uConj (Matrix.unitary_kron V 1)).m = W₂ * ρ.m * W₂ᴴ := rfl
+  have hn₁ : ‖W₁‖ ≤ 1 := l2_opNorm_le_one_of_mem_unitaryGroup (Matrix.unitary_kron U 1).prop
+  have hn₂ : ‖W₂‖ ≤ 1 := l2_opNorm_le_one_of_mem_unitaryGroup (Matrix.unitary_kron V 1).prop
+  have hD : ‖W₁ - W₂‖ ≤ ‖(U : Matrix d d ℂ) - V‖ := by
+    rw [hW₁, hW₂, ← sub_kronecker_one]
+    exact l2_opNorm_kronecker_one_le _
+  have hsplit : W₁ * ρ.m * W₁ᴴ - W₂ * ρ.m * W₂ᴴ =
+      (W₁ - W₂) * ρ.m * W₁ᴴ + W₂ * ρ.m * (W₁ - W₂)ᴴ := by
+    simp only [Matrix.sub_mul, Matrix.mul_sub, Matrix.conjTranspose_sub]
+    abel
+  unfold TrDistance
+  rw [hm₁, hm₂, hsplit]
+  have h1 := Matrix.traceNorm_add_le ((W₁ - W₂) * ρ.m * W₁ᴴ) (W₂ * ρ.m * (W₁ - W₂)ᴴ)
+  have h2 := Matrix.traceNorm_mul_le_traceNorm_opNorm ((W₁ - W₂) * ρ.m) W₁ᴴ
+  have h3 := Matrix.traceNorm_mul_le_opNorm_traceNorm (W₁ - W₂) ρ.m
+  have h4 := Matrix.traceNorm_mul_le_traceNorm_opNorm (W₂ * ρ.m) (W₁ - W₂)ᴴ
+  have h5 := Matrix.traceNorm_mul_le_opNorm_traceNorm W₂ ρ.m
+  rw [Matrix.l2_opNorm_conjTranspose] at h2 h4
+  rw [MState.traceNorm_eq_one, mul_one] at h3 h5
+  have e2 : ((W₁ - W₂) * ρ.m * W₁ᴴ).traceNorm ≤ ‖W₁ - W₂‖ :=
+    calc _ ≤ ((W₁ - W₂) * ρ.m).traceNorm * ‖W₁‖ := h2
+      _ ≤ ((W₁ - W₂) * ρ.m).traceNorm * 1 :=
+          mul_le_mul_of_nonneg_left hn₁ (Matrix.traceNorm_nonneg _)
+      _ ≤ ‖W₁ - W₂‖ := by rw [mul_one]; exact h3
+  have e4 : (W₂ * ρ.m * (W₁ - W₂)ᴴ).traceNorm ≤ ‖W₁ - W₂‖ :=
+    calc _ ≤ (W₂ * ρ.m).traceNorm * ‖W₁ - W₂‖ := h4
+      _ ≤ 1 * ‖W₁ - W₂‖ := mul_le_mul_of_nonneg_right (h5.trans hn₂) (norm_nonneg _)
+      _ = ‖W₁ - W₂‖ := one_mul _
+  linarith
+
+end Unitary
+
 end CQRV
 
 end
