@@ -206,6 +206,7 @@ so at load time (a fourth, pre-verdict outcome: "not expressible").
 | P3.2 front end | extractor from the restricted language subset into the DSL, with the source hash in the certificate; Stage 16's `toNetwork_pred` is the trust anchor | Stage 16 | medium |
 | P3.3 verdict engine | one JSON verdict record per run: verdict, pattern, repair hints, (ε, δ), grade, budget check per component, noise bound, expected repetitions; every terminating diagnostic of the CLI maps to exactly one verdict | Stage 21 certified selection (§A.6), Stages 26–27 `PhysGrade` and feasibility frontier | small |
 | P3.4 user interface | thin web or desktop layer over the CLI and the verdict record; device runs through Track C | Stages 24–28 | smallest; last |
+| P3.5 scale (author, 2026-11-01) | Certificates for large instances (hundreds to thousands of logical qubits, 10⁵–10⁷ gates) without evaluating the circuit gate by gate in the kernel. Phase 2's per-instance checks stop at about 10 search qubits for a kernel-decided count, about 600–750 instructions per kernel-evaluated grade, and about 25 qubits for the statevector harness. (a) **Symbolic grade theorems** for every circuit family of the library, stated for all parameters: for example `(qftCircuit m).grade = ⟨m, 2m−1, 0, 0⟩`, and the grade of the Grover and controlled-Grover iterates as a function of `n` and the oracle's grade. The certificate's grade is then a formula evaluated on numbers, not a scheduler run. These theorems are exact where the proof is cheap (width, T-count, ancillae, the additive `GradeExt` components) and upper bounds for depth and T-depth; `Realizes` reads the grade as a budget (PHASE2_SPEC §A.3). (b) **Solution counts** from the predicate's structure (a proved counting lemma per predicate class) or the conditional form; never 2ⁿ enumeration. (c) **Fault-tolerant cost**: the Clifford+T cost of rotations at a stated synthesis precision (PHASE2_SPEC §C), and logical-to-physical resource estimates through the hardware profile; the error-correction overhead belongs to the profile, and the certificate stays a theorem about the logical circuit. (d) Streaming emitters, hashes and re-parsers for outputs of many megabytes. (e) The differential harness runs on small instances of each family (n ≤ 12), and the parametric theorem carries the large instance; the application states that large instances are proved, not simulated | the compositional form (18a review, PHASE2_SPEC §A.3), the measured `#guard` grades of small instances (Stages 17–20) as test values for the formulas, the parametric lemmas of Tracks A and B | large; the depth bounds of the ASAP scheduler are the hardest part |
 
 ### 6.3 Constraints this target puts on Phase 2
 
@@ -217,5 +218,10 @@ so at load time (a fourth, pre-verdict outcome: "not expressible").
   diagnostics, and a documented minimal set of fields.
 - Each diagnostic that ends a run is classified in its DECISIONS entry as verdict 1, 2 or "not
   expressible"; no diagnostic is left unclassified.
+- For P3.5, every circuit family introduced in Phase 2 is built from named blocks joined by
+  `Circuit.append`, not as one unstructured gate list, and its measured grades on small instances
+  stay as `#guard`s in `tests/`. These are the test values for the symbolic grade theorems of
+  P3.5. Where a symbolic grade theorem is short in Phase 2 (width, T-count), it may be proved
+  there, but it is not required.
 
 A Phase 3 roadmap is written after M5, in the same form as this file.

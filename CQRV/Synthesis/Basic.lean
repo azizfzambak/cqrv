@@ -7,6 +7,7 @@ public import CQRV.Synthesis.Oracle
 public import CQRV.Synthesis.Bennett
 public import CQRV.Synthesis.Diffusion
 public import CQRV.Synthesis.MczFew
+public import CQRV.Synthesis.QFT
 
 /-!
 # CQRV.Synthesis

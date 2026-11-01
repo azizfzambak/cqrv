@@ -3,10 +3,12 @@ module
 public import CQRV.Circuit.IR
 public import CQRV.Circuit.Schedule
 public import CQRV.Circuit.Semantics
+public import CQRV.Circuit.Basis
 public import CQRV.Circuit.Restoration
 public import CQRV.Circuit.OracleBlocks
 public import CQRV.Circuit.OracleCorrectXor
 public import CQRV.Circuit.OracleCorrect
+public import CQRV.Circuit.QFTCorrect
 
 /-!
 # CQRV.Circuit

@@ -31,6 +31,16 @@ Run with `lake env lean --run scripts/CertifyTool.lean <command>` (after `lake b
   parameter, such as `k : Nat 3`, as a decision problem, so `cqr certify` cannot produce its
   certificate). `scripts/kernel_forms.py` profiles that file to name the slow declaration of the
   `Nat m` item (report only; no fix).
+* `qft-sample <m> [<kmax>] [--adjoint]` (Stage 18b B4, PHASE2_SPEC.md §A.2): the IR JSON of
+  `qftCircuit m` (or `aqftCircuit m kmax`), with `--adjoint` the inverse circuit
+  (`adjointGates`); `qft-sample --all <m-max>` prints one JSON object
+  `{"m": {"qft", "adjoint", "aqft": {"kmax": …}}}` for `m = 1 .. m-max`, which is what
+  `tests/diff/qft_diff.py` reads (one Lean start for the whole run).
+* `command-output <timeout-ms> <cmd> <args…>` (Stage 18b B0): run `CQRV.Certify.runCommand` —
+  the guarded command runner of the machine detection — and print its trimmed stdout, or `none`
+  (`none (timed out after T ms)` when the child was killed at the timeout), then `wall_ms: N`.
+  `tests/diff/certify_check.py` calls it on a child that sleeps past a 1 s timeout (asserting
+  `none` within 5 s and that the child is gone) and on one that exits at once.
 -/
 
 open CQRV CQRV.Synthesis CQRV.Certify
@@ -104,6 +114,53 @@ def main (args : List String) : IO UInt32 := do
     | _ =>
       IO.eprintln "usage: CertifyTool emit-sample <json|qasm|qir> [--decompose-cp] [--if-cp]"
       return 2
+  | "qft-sample" :: rest =>
+    -- Stage 18b B4 (PHASE2_SPEC.md §A.2): the IR JSON of `qftCircuit m` / `aqftCircuit m kmax`,
+    -- `--adjoint` for the inverse (`adjointGates`), `--all <m-max>` for every circuit the harness
+    -- needs in one JSON object (one Lean start instead of one per circuit).
+    let usage : IO UInt32 := do
+      IO.eprintln "usage: CertifyTool qft-sample (<m> [<kmax>] [--adjoint] | --all <m-max>)"
+      return 2
+    let adj := rest.contains "--adjoint"
+    let circuitOf (m : Nat) (kmax : Option Nat) : CQRV.Circuit :=
+      let c := match kmax with | some k => aqftCircuit m k | none => qftCircuit m
+      if adj then ⟨c.nData, adjointGates c.gates⟩ else c
+    match rest.filter (· != "--adjoint") with
+    | ["--all", s] =>
+      match s.toNat? with
+      | some mMax =>
+        let entries := (List.range mMax).map fun i =>
+          let m := i + 1
+          (toString m, Lean.Json.mkObj
+            [("qft", (qftCircuit m).toJson),
+             ("adjoint", (⟨m, adjointGates (qftGates m)⟩ : CQRV.Circuit).toJson),
+             ("aqft", Lean.Json.mkObj ((List.range m).map fun k =>
+               (toString (k + 1), (aqftCircuit m (k + 1)).toJson)))])
+        IO.println (Lean.Json.mkObj entries).compress
+        return 0
+      | none => usage
+    | [mStr] =>
+      match mStr.toNat? with
+      | some m => IO.println (circuitOf m none).toJson.compress; return 0
+      | none => usage
+    | [mStr, kStr] =>
+      match mStr.toNat?, kStr.toNat? with
+      | some m, some k => IO.println (circuitOf m (some k)).toJson.compress; return 0
+      | _, _ => usage
+    | _ => usage
+  | "command-output" :: timeoutStr :: cmd :: cmdArgs =>
+    -- Stage 18b B0: exercise `runCommand` (the timeout of the machine-detection commands)
+    let some timeoutMs := timeoutStr.toNat?
+      | IO.eprintln "usage: CertifyTool command-output <timeout-ms> <cmd> <args…>"; return 2
+    let t0 ← IO.monoMsNow
+    let r ← runCommand cmd cmdArgs.toArray timeoutMs
+    let t1 ← IO.monoMsNow
+    match r with
+    | .ok s => IO.println s
+    | .failed => IO.println "none"
+    | .timedOut => IO.println s!"none (timed out after {timeoutMs} ms)"
+    IO.println s!"wall_ms: {t1 - t0}"
+    return 0
   | ["front-end", file, out] =>
     let src ← IO.FS.readFile file
     match (CQRV.DSL.parse src >>= CQRV.DSL.check) with
@@ -137,5 +194,6 @@ end CQRV.Forms.«{tp.name}»
         return 0
   | _ => IO.eprintln "usage: CertifyTool (sha3 | sample <file.cqr> | audit <Cert.lean> <theorem> \
       [<theorem> …] | emit-sample <json|qasm|qir> [--decompose-cp] [--if-cp] | front-end <file.cqr> \
-      <out.lean>)"
+      <out.lean> | qft-sample (<m> [<kmax>] [--adjoint] | --all <m-max>) | command-output \
+      <timeout-ms> <cmd> <args…>)"
          return 2

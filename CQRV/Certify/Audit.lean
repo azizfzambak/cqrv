@@ -136,14 +136,65 @@ def checkAndAudit (path thm : String) : IO (Except String AuditOutcome) := do
 
 /-! ## The machine (decision 6, §9.5.1 reference configuration) -/
 
-/-- Run a command; its trimmed stdout on exit code 0. -/
-def commandOutput (cmd : String) (args : Array String) : IO (Option String) := do
+/-- The outcome of `runCommand` (Stage 18b B0): the trimmed stdout, `failed` (non-zero exit,
+empty output or a command that could not be spawned), or `timedOut`. -/
+inductive CommandResult where
+  | ok (s : String)
+  | failed
+  | timedOut
+  deriving Repr, DecidableEq, Inhabited
+
+/-- Stage 18b B0 (docs/tasks/STAGE18_TASK.md) — run a command with a wall-clock timeout: the
+child is spawned with piped output (`IO.Process.spawn`), read by a background task, and polled
+with `IO.Process.Child.tryWait` every 20 ms until it exits or `timeoutMs` have passed; on timeout
+it is killed (`IO.Process.Child.kill`) and reaped, and the result is `.timedOut`. The machine
+detection of `detectMachine` must never block a certificate (the first CI run of Stage 18a
+waited 2.5 h on a `powershell` that did not start). -/
+def runCommand (cmd : String) (args : Array String) (timeoutMs : Nat) : IO CommandResult := do
   try
-    let out ← IO.Process.output { cmd, args }
-    if out.exitCode != 0 then return none
-    let s := out.stdout.trimAscii.toString
-    return if s.isEmpty then none else some s
-  catch _ => return none
+    let child ← IO.Process.spawn
+      { cmd, args, stdin := .null, stdout := .piped, stderr := .piped }
+    let outTask ← IO.asTask child.stdout.readToEnd
+    let errTask ← IO.asTask child.stderr.readToEnd
+    let t0 ← IO.monoMsNow
+    let mut code : Option UInt32 := none
+    repeat
+      match ← child.tryWait with
+      | some c => code := some c; break
+      | none =>
+        if (← IO.monoMsNow) - t0 ≥ timeoutMs then break
+        IO.sleep 20
+    match code with
+    | none =>
+      child.kill
+      let _ ← child.wait
+      return .timedOut
+    | some c =>
+      let out ← IO.ofExcept (← IO.wait outTask)
+      let _ ← IO.wait errTask
+      if c != 0 then return .failed
+      let s := out.trimAscii.toString
+      return if s.isEmpty then .failed else .ok s
+  catch _ => return .failed
+
+/-- Run a command; its trimmed stdout on exit code 0 within `timeoutMs` (`runCommand`). -/
+def commandOutput (cmd : String) (args : Array String) (timeoutMs : Nat) : IO (Option String) := do
+  match ← runCommand cmd args timeoutMs with
+  | .ok s => return some s
+  | _ => return none
+
+/-- The timeout of every machine-detection command (Stage 18b B0): 20 s. -/
+def machineCommandTimeoutMs : Nat := 20000
+
+/-- What `detectMachine` found: CPU model, number of logical CPUs, clock, and the
+machine-detection commands that hit `machineCommandTimeoutMs` (`cqr certify` names them on
+stderr; the fields then come from the environment). -/
+structure MachineInfo where
+  cpu : Option String
+  logicalCpus : Option Nat
+  clock : Option String
+  timedOut : List String := []
+  deriving Repr, Inhabited
 
 /-- The value of the first `key : value` line of `/proc/cpuinfo`. -/
 def cpuinfoField (info key : String) : Option String :=
@@ -156,8 +207,11 @@ def cpuinfoField (info key : String) : Option String :=
 
 /-- Report §9.5.1 — CPU model, number of logical CPUs and clock of this machine: Linux from
 `/proc/cpuinfo` (clock: `cpuinfo_max_freq`, not the fluctuating current `cpu MHz`), Windows from
-`Win32_Processor` (`MaxClockSpeed`), macOS from `sysctl`; `none` where unavailable. -/
-def detectMachine : IO (Option String × Option Nat × Option String) := do
+`Win32_Processor` (`MaxClockSpeed`), macOS from `sysctl`; `none` where unavailable. Every
+command runs under `machineCommandTimeoutMs` (Stage 18b B0); a command that times out is
+listed in `timedOut` and the Windows fields fall back to `PROCESSOR_IDENTIFIER` /
+`NUMBER_OF_PROCESSORS` (no clock). -/
+def detectMachine : IO MachineInfo := do
   if ← System.FilePath.pathExists "/proc/cpuinfo" then
     let info ← IO.FS.readFile "/proc/cpuinfo"
     let cpus := ((info.splitOn "\n").filter fun l => l.startsWith "processor").length
@@ -166,23 +220,34 @@ def detectMachine : IO (Option String × Option Nat × Option String) := do
       catch _ => pure none
     let clock := maxKHz.bind fun s =>
       s.trimAscii.toString.toNat?.map fun k => s!"{k / 1000} MHz (max)"
-    return (cpuinfoField info "model name", if cpus == 0 then none else some cpus, clock)
+    return { cpu := cpuinfoField info "model name",
+             logicalCpus := if cpus == 0 then none else some cpus, clock }
   if System.Platform.isWindows then
     let q := "$p = Get-CimInstance Win32_Processor | Select-Object -First 1; " ++
       "\"$($p.Name)|$($p.NumberOfLogicalProcessors)|$($p.MaxClockSpeed)\""
-    match ← commandOutput "powershell" #["-NoProfile", "-NonInteractive", "-Command", q] with
-    | some s =>
-      match s.splitOn "|" with
-      | [name, cpus, mhz] =>
-        return (some name.trimAscii.toString, cpus.trimAscii.toString.toNat?,
-          mhz.trimAscii.toString.toNat?.map fun m => s!"{m} MHz (max)")
-      | _ => pure ()
-    | none => pure ()
+    let timedOut ← match ← runCommand "powershell"
+        #["-NoProfile", "-NonInteractive", "-Command", q] machineCommandTimeoutMs with
+      | .ok s =>
+        match s.splitOn "|" with
+        | [name, cpus, mhz] =>
+          return { cpu := some name.trimAscii.toString, logicalCpus := cpus.trimAscii.toString.toNat?,
+                   clock := mhz.trimAscii.toString.toNat?.map fun m => s!"{m} MHz (max)" }
+        | _ => pure []
+      | .failed => pure []
+      | .timedOut => pure ["powershell -NoProfile -NonInteractive -Command (Get-CimInstance Win32_Processor)"]
     let cpus := (← IO.getEnv "NUMBER_OF_PROCESSORS").bind (·.toNat?)
-    return (← IO.getEnv "PROCESSOR_IDENTIFIER", cpus, none)
-  let name ← commandOutput "sysctl" #["-n", "machdep.cpu.brand_string"]
-  let cpus ← commandOutput "sysctl" #["-n", "hw.logicalcpu"]
-  return (name, cpus.bind (·.toNat?), none)
+    return { cpu := ← IO.getEnv "PROCESSOR_IDENTIFIER", logicalCpus := cpus, clock := none, timedOut }
+  let mut timedOut : List String := []
+  let name ← match ← runCommand "sysctl" #["-n", "machdep.cpu.brand_string"]
+      machineCommandTimeoutMs with
+    | .ok s => pure (some s)
+    | .failed => pure none
+    | .timedOut => timedOut := timedOut ++ ["sysctl -n machdep.cpu.brand_string"]; pure none
+  let cpus ← match ← runCommand "sysctl" #["-n", "hw.logicalcpu"] machineCommandTimeoutMs with
+    | .ok s => pure s.toNat?
+    | .failed => pure none
+    | .timedOut => timedOut := timedOut ++ ["sysctl -n hw.logicalcpu"]; pure none
+  return { cpu := name, logicalCpus := cpus, clock := none, timedOut }
 
 end CQRV.Certify
 

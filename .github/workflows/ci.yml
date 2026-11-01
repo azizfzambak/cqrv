@@ -75,6 +75,9 @@ jobs:
       - name: Few-ancilla MCZ (Stage 12b; every branch, negative controls; few:log certified, 12d; every n, 13a)
         run: scripts/diff_mcz.sh
 
+      - name: QFT / AQFT (Stage 18b; qftCircuit = R F, adjoint = inverse, both AQFT bounds, negative control)
+        run: scripts/diff_qft.sh
+
       - name: Second worked predicate simple_alu_x0_1 (Stage 9b; oracle every branch, Grover circuit 512 sampled branches; exact delta)
         run: scripts/diff_benchmark.sh
 

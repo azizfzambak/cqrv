@@ -453,10 +453,60 @@ def without(cert, keys):
     return c
 
 
+def pid_alive(pid):
+    if os.name == "nt":
+        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True,
+                             text=True, encoding="utf-8", errors="replace").stdout
+        return str(pid) in out
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def check_command_output(tmp):
+    """Stage 18b B0 (docs/tasks/STAGE18_TASK.md): `CQRV.Certify.runCommand`, the guarded command
+    runner of the machine detection, through `CertifyTool command-output <timeout-ms> <cmd> …`:
+    (i) a child that sleeps past a 1 s timeout → `none (timed out …)` with the tool's wall time
+    under 5 s, and the child (its pid written to a file first) is gone afterwards; (ii) a child
+    that exits at once → its output."""
+    tool = ["lake", "env", "lean", "--run", os.path.join("scripts", "CertifyTool.lean"),
+            "command-output"]
+    pidfile = os.path.join(tmp, "child.pid")
+    sleeper = ("import os, sys, time; open(sys.argv[1], 'w').write(str(os.getpid())); "
+               "time.sleep(10)")
+    rc, so, se = run(tool + ["1000", sys.executable, "-I", "-c", sleeper, pidfile])
+    lines = so.rstrip("\n").split("\n")
+    assert rc == 0 and len(lines) == 2, (rc, so, se)
+    assert lines[0] == "none (timed out after 1000 ms)", lines
+    m = re.fullmatch(r"wall_ms: (\d+)", lines[1])
+    assert m and 1000 <= int(m.group(1)) < 5000, lines
+    pid = int(read(pidfile).strip())
+    for _ in range(50):
+        if not pid_alive(pid):
+            break
+        time.sleep(0.1)
+    assert not pid_alive(pid), f"child {pid} still alive after the timeout kill"
+    rc, so, se = run(tool + ["5000", sys.executable, "-I", "-c", "print('hello from the child')"])
+    lines = so.rstrip("\n").split("\n")
+    assert rc == 0 and lines[0] == "hello from the child" and lines[1].startswith("wall_ms: "), \
+        (rc, so, se)
+    print(f"ok:   B0 command-output: a child sleeping past a 1 s timeout → `none (timed out after "
+          f"1000 ms)` in {m.group(1)} ms, child {pid} killed; an instant child → its output "
+          "(Stage 18b)")
+
+
 def main():
+    sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
     ap.add_argument("--cqr", required=True)
     args = ap.parse_args()
+    b0tmp = tempfile.mkdtemp(prefix="cqrv-b0-")
+    try:
+        check_command_output(b0tmp)
+    finally:
+        shutil.rmtree(b0tmp, ignore_errors=True)
     validator = jsonschema.Draft202012Validator(json.loads(read(SCHEMA)))
     tmp = tempfile.mkdtemp(prefix="cqrv-certify-")
     try:

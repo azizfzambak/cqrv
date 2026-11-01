@@ -573,7 +573,13 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
     let (status, obligations) := match last.result with
       | .pass => (Status.certified, [])
       | .fail bad => (Status.withObligations, obligationsOf bad)
-    let (cpu, cpus, clock) ← detectMachine
+    let mi ← detectMachine
+    -- Stage 18b B0: a machine-detection command that hit the 20 s timeout is named on stderr;
+    -- the machine fields then come from the environment (stdout unchanged).
+    for c in mi.timedOut do
+      IO.eprintln s!"cqr certify: machine detection: `{c}` timed out after \
+        {machineCommandTimeoutMs / 1000} s; machine fields from the environment"
+    let (cpu, cpus, clock) := (mi.cpu, mi.logicalCpus, mi.clock)
     let cfg := { cfg with cpu := some (cpu.getD "unknown"), logicalCpus := cpus, clock,
                           leanThreads := ← IO.getEnv "LEAN_NUM_THREADS", kernelCheck := timing }
     let base ← match Certificate.build src sig gi.entry gi.facts gi.circuit gi.circuit.grade gi.r
