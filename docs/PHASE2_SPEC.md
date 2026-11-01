@@ -238,7 +238,16 @@ on the second run; the first hung in step 20 on the machine-detection `powershel
 **memory**, about 750 instructions on the 16 GB machine (6.9 GB at 706, above 8 GB at 838); the
 kernel cost is the scheduler's evaluation inside `grade_eq` / `gradeExt_eq` (about 90 %, slope
 2.07 in the gate count); `Nat m` is not reproducible through `cqr certify` and is **closed**.
-**Decided at the 18a review: the compositional certificate form of §A.3.**
+**Decided at the 18a review: the compositional certificate form of §A.3.** **18b done 3ec8377,
+accepted 2026-11-01** (CI 17 PASS, 0 FAIL, 4 n/a on the second run; the first failed in
+`certify_check.py` on a `→` printed to a cp1252 stdout, after every B0 assertion had passed):
+(1)–(3) as stated, `qft_basis` proved with no `sorry` (axioms `propext`, `Classical.choice`,
+`Quot.sound`), `gateU_h_mulVec` / `gateU_cp_mulVec` unchanged; measured `qftCircuit m` grade
+`(m, 2m−1, 0, 0)` and `GradeExt (m(m−1)/2, 0, m(m−1)/2, 0, 0)` for m = 1..8; the harness for
+m ≤ 6 confirms `U_qft = R·F` and both AQFT bounds (m = 6, kmax = 3: `‖U_qft − U_aqft‖₂` = 1.482
+≤ Σ_dropped = 1.669 ≤ 2πm/2^kmax = 4.712; the dropped-angle sum is attained to three digits at
+kmax = m − 1). `qftCircuit_WF` / `qftGates_unitary` are in `CQRV/Circuit/QFTCorrect.lean`, not in
+`CQRV/Synthesis/QFT.lean` (accepted at the 18b review, §A.8 item 6).
 
 ### A.3 The counting circuit (extends report §8.2, §6.1.4)
 
@@ -438,3 +447,14 @@ M3 review decides; the obstacle is recorded either way.
 5. Certificate form of the counting certificates: compositional (§A.3), with blocks of at most 600
    instructions measured exactly and the whole grade a ⊕ bound labelled `composed_bound`. Every
    Lean process stays below 8 GB on the 16 GB machine (decided at the 18a review, 2026-11-01).
+6. Import discipline: the `cqr` executable's import closure (the synthesizer `CQRV/Synthesis/*`,
+   the certificate generator, the emitters) is Lean core and Mathlib only, never Physlib.
+   Theorems that need the semantics (`Circuit.WF`, `Gate.isUnitary`, `unitaryDenote`,
+   `channelDenote`) live in `CQRV/Circuit/Semantics.lean`, a `*Correct.lean` module or a later
+   module that the executable does not import. Reason: Physlib's trailing notation
+   `p [x₁ ↔ x₂]` (`QuantumInfo/ClassicalInfo/Prob.lean`) changes the parse of a term followed by a
+   newline and `[` (the 18b `RunReport.lean` failure), and the executable has had this closure
+   since Stage 6. There is no project-wide guard against the notation and no CI check: in a file
+   that imports Physlib, such a list is parenthesised where it occurs, and the reviewer checks
+   the closure at each audit (at 3ec8377: `Lean`, `Mathlib`, 46 local modules). Decided at the
+   18b review, 2026-11-01.

@@ -332,6 +332,21 @@ change the harness); `gateU_h_mulVec` or `gateU_cp_mulVec` need a change; more t
 
 ## 18c — The AQFT bounds and the channel bridge: the Theorem 3.3b client (after 18b is accepted)
 
+**Notes added at the 18b review (2026-11-01).** (i) Imports: every 18c lemma goes into a module
+that imports `CQRV.Circuit.Semantics` (`QFTCorrect.lean`, `Semantics.lean` or a new
+`UnitaryChannel.lean`, and `CQRV/Realizability/Diamond.lean`). None of these modules may be
+imported by `CQRV/Synthesis/*`, `CQRV/Certify/*` that the executable uses, `CQRV/Emit/*` or
+`Apps/cqr` (PHASE2_SPEC §A.8 item 6). In these Physlib-importing files a term followed by a
+newline and `[` parses as Physlib's `p [x ↔ y]` notation: parenthesise such a list where it
+occurs. (ii) Harness: the `η_aqft` line of `qft_diff.py` prints `η_aqft m kmax` next to
+`2 · ‖U_qft − U_aqft‖₂` and marks `η_aqft ≥ 2` as vacuous, since a diamond distance is at most 2.
+`η_aqft < 2` needs `2^kmax > 2πm`, and a dropped gate needs `kmax < m`; for m ≤ 6 the two never
+hold together (m = 6: vacuous for kmax ≤ 5, nothing dropped at kmax = 6). So in the harness range
+the line is a consistency check, not a test of the bound. State this in the output; do not raise
+`--m-max` for it. (iii) Run the harness scripts
+before CI the way `scripts/ci_local.sh` does: `.venv/Scripts/python.exe -I`, stdout redirected to a
+file, no `-X utf8`.
+
 ### C1. Operator-norm bound (`CQRV/Circuit/QFTCorrect.lean`)
 
 Norm: the L2 operator norm on `Matrix (Reg m × Reg 0) (Reg m × Reg 0) ℂ`, **the same instance
