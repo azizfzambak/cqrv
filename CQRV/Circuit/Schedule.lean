@@ -22,6 +22,15 @@ It is not tuned to reproduce any number of the report.
 Stage 17a (PHASE2_SPEC.md §A.1): `Circuit.gradeExt` reads the second record `GradeExt` off the
 **same** schedule (no second scheduler); `SchedState.step`, `schedule`, `depth`, `tCount`,
 `grade` are unchanged.
+
+Stage 18a (docs/tasks/STAGE18_TASK.md A1; DECISIONS.md 2026-10-31): the scheduler state keeps the
+placed gates as a **cons list, most recent first**, and `schedule` is `Array.mk` of its reverse.
+The placement rule and the value of `schedule` are unchanged (`tests/CQRVTests/Schedule.lean`
+checks `scheduleOld c == schedule c` against a verbatim copy of the Stage 17b definitions). Why:
+the former `Array.push` per gate nests one `List.concat` per gate inside the kernel's term, and
+the first traversal of a 1953-gate schedule hit the kernel's recursion guard
+(`bench/scaling/out/rand_a64_r1_h/lean.log`, `grade_eq`, Stage 14b); a cons list and one
+tail-recursive `List.reverse` do not.
 -/
 
 @[expose] public section
@@ -33,13 +42,14 @@ namespace CQRV
 structure SchedState where
   qReady : List (Qubit × Nat) := []
   cReady : List (Nat × Nat) := []
-  /-- `(gate, layer)` in program order; `alloc`/`free` have layer 0. -/
-  placed : Array (Gate × Nat) := #[]
+  /-- `(gate, layer)`, **most recent first** (a cons list, Stage 18a); `alloc`/`free` have
+  layer 0. -/
+  placed : List (Gate × Nat) := []
 
 /-- Report §6.1.4, decision 4 — place one gate ASAP. -/
 def SchedState.step (st : SchedState) (g : Gate) : SchedState :=
   match g with
-  | .alloc _ | .free _ => { st with placed := st.placed.push (g, 0) }
+  | .alloc _ | .free _ => { st with placed := (g, 0) :: st.placed }
   | _ =>
     let qs := g.qubits
     let ready := qs.foldl (fun m q => Nat.max m ((st.qReady.lookup q).getD 0)) 0
@@ -51,11 +61,13 @@ def SchedState.step (st : SchedState) (g : Gate) : SchedState :=
     let cReady := match g with
       | .measure _ c => (c, layer) :: st.cReady.filter (·.1 != c)
       | _ => st.cReady
-    { qReady, cReady, placed := st.placed.push (g, layer) }
+    { qReady, cReady, placed := (g, layer) :: st.placed }
 
-/-- Report §6.1.4, decision 4 — every gate with its ASAP layer (1-based; `alloc`/`free`: 0). -/
+/-- Report §6.1.4, decision 4 — every gate with its ASAP layer (1-based; `alloc`/`free`: 0), in
+program order: the structure constructor `Array.mk` on the reversed cons list (Stage 18a; not
+`List.toArray`, which pushes element by element and would nest again). -/
 def schedule (c : Circuit) : Array (Gate × Nat) :=
-  (c.gates.foldl SchedState.step {}).placed
+  ⟨(c.gates.foldl SchedState.step {}).placed.reverse⟩
 
 namespace Circuit
 
@@ -111,25 +123,25 @@ theorem gradeExt_meas_eq_nBits (c : Circuit) : c.gradeExt.meas = c.nBits := by
   simp only [gradeExt, nBits, written]
   exact (length_written_eq_countP c.gates).symm
 
-/-- One scheduler step appends the gate to `placed` (in some layer). -/
+/-- One scheduler step conses the gate onto `placed` (in some layer; Stage 18a form). -/
 theorem _root_.CQRV.SchedState.step_placed (st : SchedState) (g : Gate) :
-    ∃ l, (st.step g).placed = st.placed.push (g, l) := by
+    ∃ l, (st.step g).placed = (g, l) :: st.placed := by
   cases g <;> exact ⟨_, rfl⟩
 
-/-- The gates of the schedule are the gates of the circuit, in program order. -/
+/-- The gates of the fold are the gates of the list, most recent first (Stage 18a form). -/
 theorem foldl_step_placed (gs : List Gate) (st : SchedState) :
-    (gs.foldl SchedState.step st).placed.toList.map Prod.fst =
-      st.placed.toList.map Prod.fst ++ gs := by
+    (gs.foldl SchedState.step st).placed.map Prod.fst = gs.reverse ++ st.placed.map Prod.fst := by
   induction gs generalizing st with
   | nil => simp
   | cons g gs ih =>
     rw [List.foldl_cons, ih]
     obtain ⟨l, hl⟩ := SchedState.step_placed st g
-    rw [hl, Array.toList_push, List.map_append]
+    rw [hl, List.map_cons]
     simp
 
+/-- The gates of the schedule are the gates of the circuit, in program order. -/
 theorem schedule_gates (c : Circuit) : (schedule c).toList.map Prod.fst = c.gates := by
-  simpa [schedule] using foldl_step_placed c.gates {}
+  simp [schedule, List.map_reverse, foldl_step_placed]
 
 theorem countP_or_le {α : Type} (p q : α → Bool) (l : List α) :
     l.countP (fun x => p x || q x) ≤ l.countP p + l.countP q := by

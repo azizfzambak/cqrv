@@ -105,6 +105,8 @@ Runs the built `cqr` from the project root and checks
     phase gate in a synthesized circuit, so no `rz`); the measured values: grover_pred_037
     (126, 39, 0, 18, 36), simple_alu_x0_1 (137, 28, 0, 15, 30), grover_pred_037_few
     (106, 77, 0, 8, 16), grover_pred_037_coh (216, 74, 0, 0, 0); run report row 4 prints them.
+  * Stage 18a: the committed Cert.lean / .qir / .qasm files are the Stage 17b files (git 9fc909b)
+    byte for byte (the scheduler state became a cons list; no measured value changed).
 
 Usage: python -I tests/diff/certify_check.py --cqr <path to cqr>   (after `lake build`)
 """
@@ -149,6 +151,7 @@ PROVED = ("DSL typed term → network: proved (toNetwork_pred; kernel-checked ne
           "predicate_hash binds the source")
 STAGE16A = "52ad73b"  # the Stage 16a commit: its Cert.lean files have no front-end block
 STAGE16B = "7f46857"  # the Stage 16b commit: its Cert.lean files have no gradeExt_eq
+STAGE17B = "9fc909b"  # the Stage 17b commit: Cert.lean / .qir / .qasm byte-identical since (Stage 18a)
 RE_FRONT_END = re.compile(r"/-- The typed term of the request.*?#print axioms front_end\n\n", re.S)
 # Stage 17b: the theorem gradeExt_eq with its doc-comment, between grade_eq and nAnc_eq
 RE_GRADE_EXT = re.compile(
@@ -736,6 +739,17 @@ def main():
         print("ok:   the four committed Cert.lean files = the Stage 16b files (git 7f46857) + "
               "gradeExt_eq after grade_eq (= the Stage 16a files + the front-end block + gradeExt_eq); "
               "the committed .qir / .qasm files = the 16b files byte for byte")
+        # Stage 18a: the cons-list scheduler changes no measured value and no emitted text — the
+        # committed Cert.lean / .qir / .qasm files are the Stage 17b files byte for byte
+        for dname, src_name in (("grover_pred_037", NAME), ("simple_alu_x0_1", alu),
+                                ("grover_pred_037_few", NAME), ("grover_pred_037_coh", NAME)):
+            for fname in ("Cert.lean", f"{src_name}.qir", f"{src_name}.qasm"):
+                relf = f"examples/certs/{dname}/{fname}"
+                assert read(os.path.join(ROOT, relf), "rb") == \
+                    subprocess.run(["git", "show", f"{STAGE17B}:{relf}"], cwd=ROOT,
+                                   capture_output=True, check=True).stdout, f"{relf} differs from 17b"
+        print("ok:   the committed Cert.lean / .qir / .qasm files = the Stage 17b files (git 9fc909b) "
+              "byte for byte (Stage 18a: the cons-list scheduler changed no measured value)")
 
         # XOR predicate: certified since Stage 9a (Lemma 6.3.2 for XOR, `lemma_6_3_2_xor`)
         out = os.path.join(tmp, "xor")

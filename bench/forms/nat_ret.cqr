@@ -1,0 +1,1 @@
+fn nat_ret(k: Nat 3, b: Bool) -> Nat 3 { if b then k else k }

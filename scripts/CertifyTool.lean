@@ -24,9 +24,16 @@ Run with `lake env lean --run scripts/CertifyTool.lean <command>` (after `lake b
   takes `sampleCircuitIfCp` instead (one `ifBit` over `cp 1 1`): `qir --if-cp` prints the
   diagnostic JSON `unsupported_in_qir` and exits 1. The test path for gates no synthesized circuit
   contains (`tests/diff/emit_diff.py`).
+* `front-end <file.cqr> <out.lean>` (Stage 18a A0, docs/tasks/STAGE18_TASK.md): write a standalone
+  Lean file holding exactly the front-end block of a certificate for any typed program — `net`
+  (the network literal) and `CertRequest.progBlock` (`prog`, `prog_scoped`, `net_ok`,
+  `front_end`) — without the Grover match (the extractor classifies a program with a second
+  parameter, such as `k : Nat 3`, as a decision problem, so `cqr certify` cannot produce its
+  certificate). `scripts/kernel_forms.py` profiles that file to name the slow declaration of the
+  `Nat m` item (report only; no fix).
 -/
 
-open CQRV.Certify
+open CQRV CQRV.Synthesis CQRV.Certify
 
 /-- Decode a hex string (even length, `0-9a-f`). -/
 def unhex (s : String) : Option ByteArray := do
@@ -97,6 +104,38 @@ def main (args : List String) : IO UInt32 := do
     | _ =>
       IO.eprintln "usage: CertifyTool emit-sample <json|qasm|qir> [--decompose-cp] [--if-cp]"
       return 2
+  | ["front-end", file, out] =>
+    let src ← IO.FS.readFile file
+    match (CQRV.DSL.parse src >>= CQRV.DSL.check) with
+    | .error d => IO.println d.toJson.compress; return 1
+    | .ok tp =>
+      match toNetwork tp with
+      | .error d => IO.println d.toJson.compress; return 1
+      | .ok net =>
+        let n := tp.arity
+        -- a request with the front-end fields only (the rest is unused by `progBlock`)
+        let q : CertRequest :=
+          { name := tp.name, net, prog := tp, n, M := 0, r := 0, circuit := ⟨n, []⟩, delta := 0,
+            grade := ⟨0, 0, 0, 0⟩, gradeExt := ⟨0, 0, 0, 0, 0⟩, nAnc := 0, predicateHash := "" }
+        let text := s!"import CQRV
+
+/-! Stage 18a A0 probe (docs/tasks/STAGE18_TASK.md): the front-end block of a certificate for
+`{tp.name}` ({file}), as `cqr certify` would write it, without the rest of the certificate. -/
+
+namespace CQRV.Forms.«{tp.name}»
+
+open CQRV CQRV.Synthesis CQRV.Grover CQRV.Certify
+
+/-- The Boolean network of the request (`toNetwork`, §6.1.2). -/
+def net : Network := {networkLit net}
+
+{q.progBlock}
+end CQRV.Forms.«{tp.name}»
+"
+        IO.FS.writeFile out text
+        IO.println s!"wrote {out} (n = {n}, {net.nodes.size} nodes)"
+        return 0
   | _ => IO.eprintln "usage: CertifyTool (sha3 | sample <file.cqr> | audit <Cert.lean> <theorem> \
-      [<theorem> …] | emit-sample <json|qasm|qir> [--decompose-cp] [--if-cp])"
+      [<theorem> …] | emit-sample <json|qasm|qir> [--decompose-cp] [--if-cp] | front-end <file.cqr> \
+      <out.lean>)"
          return 2

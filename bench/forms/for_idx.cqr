@@ -1,0 +1,3 @@
+fn for_idx(x: Vec Bool 8) -> Bool {
+  for i in [0 ..< 8] with acc = false do acc or idx(x, i)
+}

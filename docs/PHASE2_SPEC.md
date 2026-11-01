@@ -188,6 +188,52 @@ theorem aqft_opNorm_le (m kmax : Nat) :
 `diamondDist (ofUnitary (qft m)) (ofUnitary (aqft m kmax)) ≤ 4π m / 2^kmax =: η_aqft m kmax`.
 The adjoint circuits (inverse QFT) are `adjoint (qft m)`, `adjoint (aqft m kmax)` from §A.0.1.
 
+**Amendments before Stage 18 (reviewer, 2026-10-31; docs/tasks/STAGE18_TASK.md).** (1)
+*Encoding.* The basis index of `Reg m = Fin m → Bool` reads qubit 0 as the **most significant
+bit**, as the harness does (`tests/diff/statevector.py`): `Reg.toNat s = ∑_j [s j] 2^(m−1−j)`;
+`Reg.toNatLE` is the little-endian reading, `bitRev s = fun j => s (Fin.rev j)` and
+`(bitRev s).toNat = s.toNatLE`; `Reg.ofNat m x = fun j => x.testBit (m−1−j)`. `Fin (2^m)` is not
+used in the statements; `Reg m` is. (2) *Circuits.* `qftGates m = (List.range m).flatMap (qftBlock
+m)` with `qftBlock m j = h (data j) :: [cp 1 (i+2) (data (j+i+1)) (data j) | i < m−j−1]` (the text
+above, 0-based); `aqftGates m kmax = (qftGates m).filter (cp 1 k kept iff k ≤ kmax)`;
+`qftCircuit m = ⟨m, qftGates m⟩`, `aqftCircuit`; `qftCircuit_WF`, `qftGates_unitary` proved.
+Every `cp 1 k` with k ≥ 2 is a rotation of §A.1 (`GradeExt.rot = m(m−1)/2`, `t = 0`). (3) *The
+theorem*, pointwise on the circuit's own register `Reg m × Reg 0` (`reg0` the unique element of
+`Reg 0`; `basisVec` of `CQRV.Circuit.Restoration`), replaces the vector form above:
+
+```
+theorem qft_basis (m : ℕ) (x s : Reg m) :
+    (unitaryDenote m 0 (qftGates m) *ᵥ basisVec (x, reg0)) (s, reg0) =
+      ((Real.sqrt 2)⁻¹ : ℂ) ^ m *
+        Complex.exp (2 * Real.pi * Complex.I * ((x.toNat * (bitRev s).toNat : ℕ) : ℂ) / 2 ^ m)
+```
+
+(the amplitude of output state `s` is `2^{−m/2} e^{2πi · x · bitrev(s) / 2^m}`: the textbook
+output without swaps). Proof by the block invariant (after blocks `0..j−1` the state is
+`⊗_{i<j} (|0⟩ + e^{2πi φ_i}|1⟩)/√2 ⊗ |x_j … x_{m−1}⟩`, `φ_i = (x.toNat mod 2^{m−i}) / 2^{m−i}`) and
+the arithmetic identity `exp_sum_phases` (the exponents differ by an integer); the task text
+names the sub-lemmas. (4) *Norm.* `‖·‖` on matrices is the L2 operator norm in the instance
+Physlib's `Matrix.traceNorm_mul_le_opNorm_traceNorm` uses (Mathlib `Matrix.l2_opNorm_*`).
+`aqft_opNorm_le` is proved from `unitaryDenote_filter_sub_le` (telescoping over a filtered gate
+list, unitaries of norm 1) and `gateU_cp_sub_one_le : ‖gateU (.cp 1 k c t) − 1‖ ≤ 2π/2^k`
+(`Complex.norm_exp_I_mul_ofReal_sub_one_le`). (5) *Channels.* `channelDenote_of_unitary : C.WF →
+C.gates.all isUnitary → channelDenote n a C = CPTPMap.ofUnitary ⟨unitaryDenote n a C.gates, _⟩`
+(the bridge Stages 19–20 reuse); `diamondDist_ofUnitary_le (U V : 𝐔[d]) : diamondDist (ofUnitary
+U) (ofUnitary V) ≤ 2‖U − V‖` through the two sub-lemmas `prod_id_ofUnitary ((ofUnitary U ⊗ᶜᵖ id)
+ρ = ρ.uConj (unitary_kron U 1))` and `l2_opNorm_kronecker_one_le (‖A ⊗ₖ 1‖ ≤ ‖A‖)`, each a
+tracked obligation if it resists; `eta_aqft m kmax := 4π m / 2^kmax`; the client statement is
+`aqft_diamond_le : diamondDist (channelDenote m 0 (qftCircuit m)) (channelDenote m 0 (aqftCircuit
+m kmax)) ≤ eta_aqft m kmax`. (6) *Stages.* 18a: the kernel-evaluation forms — the 14b ceiling is
+re-attributed (the single error of `bench/scaling/out/rand_a64_r1_h/lean.log` is at `grade_eq`,
+line 449, not `emitted_ok`, which passed on the 1953-gate literal), the scheduler state becomes a
+cons list (`placed : List`, `schedule := ⟨placed.reverse⟩`, placement rule and every measured
+value unchanged, three Stage 17a lemma statements adapted), a probe (`scripts/kernel_forms.sh`,
+`docs/benchmarks/KERNEL_FORMS.md`: rand_a64 at r = 1, 2, 3, per declaration, with a memory
+guard) and the `Nat m` diagnosis (report only); 18b: circuits, encodings, `qft_basis`, harness
+`tests/diff/qft_diff.py` for m ≤ 6 with both AQFT bounds, CI step "QFT / AQFT" (pass mark 17
+PASS); 18c: C1–C4 above. The Stage 19–20 certificate form (flat literal or compositional) is
+decided at the 18a review from the probe.
+
 ### A.3 The counting circuit (extends report §8.2, §6.1.4)
 
 Registers: `m` phase qubits `data 0..m−1`, `n` search qubits `data m..m+n−1`, ancillae.
