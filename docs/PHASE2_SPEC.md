@@ -232,7 +232,13 @@ value unchanged, three Stage 17a lemma statements adapted), a probe (`scripts/ke
 guard) and the `Nat m` diagnosis (report only); 18b: circuits, encodings, `qft_basis`, harness
 `tests/diff/qft_diff.py` for m ≤ 6 with both AQFT bounds, CI step "QFT / AQFT" (pass mark 17
 PASS); 18c: C1–C4 above. The Stage 19–20 certificate form (flat literal or compositional) is
-decided at the 18a review from the probe.
+decided at the 18a review from the probe. **18a done 5058ea4, accepted 2026-11-01** (CI 16 PASS
+on the second run; the first hung in step 20 on the machine-detection `powershell` call, see
+18b B0): no recursion error at any size after the cons-list state; the flat form is limited by
+**memory**, about 750 instructions on the 16 GB machine (6.9 GB at 706, above 8 GB at 838); the
+kernel cost is the scheduler's evaluation inside `grade_eq` / `gradeExt_eq` (about 90 %, slope
+2.07 in the gate count); `Nat m` is not reproducible through `cqr certify` and is **closed**.
+**Decided at the 18a review: the compositional certificate form of §A.3.**
 
 ### A.3 The counting circuit (extends report §8.2, §6.1.4)
 
@@ -265,6 +271,44 @@ restores its ancillae on every register at least as large as its own and applies
 `U_count = (QFT†_m ⊗ I) · (∑_k |k⟩⟨k| ⊗ G^k) · (H^{⊗m} ⊗ I)` to the data register; proved from
 `AncRestore.comp`/`ancRestore_foldl` over the controlled iterates, whose own restoration is
 Lemma 6.3.2 for `withControl` networks plus the data-layer lemma.
+
+**Certificate form (decided at the 18a review, 2026-11-01; docs/benchmarks/KERNEL_FORMS.md).**
+The flat form of Stages 8–18 (`grade_eq` / `gradeExt_eq` by `decide +kernel` on the whole
+`emitted` literal) is limited by memory to about 750 instructions on the 16 GB machine (Stage
+18a: the kernel's evaluation of the scheduler, quadratic in the gate count; 6.9 GB at 706
+instructions, above 8 GB at 838), while the committed counting certificate (`n = 8`, `m = 4`,
+§A.8.3) has about 10 000 gates. Every certificate must check on a 16 GB machine with each Lean
+process below 8 GB, whatever machine measures it. The counting certificates therefore use the
+**compositional form**:
+
+1. *Blocks.* `countingCircuit` is the `Circuit.append` of named blocks: the Hadamard layer, the
+   controlled iterates `controlledGrover N n m k mode`, the inverse (A)QFT. Each **distinct**
+   block is a literal in `Cert.lean` with its own hash link (`… = .ok block` by `decide +kernel`,
+   as `emitted_ok` today) and its own exact `grade_eq` / `gradeExt_eq`. The `2^k` copies of
+   iterate `k` are stated once. The generator refuses a block above 600 emitted instructions with
+   a diagnostic; there is no flat fallback.
+2. *Composition of the grade.* New general theorems (Stage 19a), under the hypotheses the task
+   text fixes (the same data register; `C₁` frees every ancilla it allocates, which `WF` gives):
+   `Circuit.grade (C₁.append C₂) ≤ Circuit.grade C₁ + Circuit.grade C₂`. This is ⊕ of report
+   §3.1.1, Table 3.1: width and ancillae as maxima, depth and T-count added. The T-count is in
+   fact additive; the depth is a bound, because the scheduler may overlap two blocks. The
+   theorems also give the n-fold form `≤ n • Circuit.grade C` for `n` copies (the `AddCommMonoid
+   Grade` instance, §3.1.4) and the `GradeExt` analogue: `twoQ`, `rot`, `meas`, `ff` additive
+   (equalities), `tDepth` at most the sum. The whole circuit's grade in the certificate is the
+   composed value `g`. It is **an upper bound in the budget order, not the measured grade**, and
+   `certificate.json` and the run report say so: a field names the kind of grade, `measured` for
+   every certificate before Stage 19 and `composed_bound` here; the schema bump belongs to Stage
+   20b. The hardware check (`fits`) is made against `g`.
+3. *Realization against the bound.* `Realizes … r` already reads the grade as a budget
+   (`Φ.grade ≤ r`, `CQRV/Realizability/Realizes.lean`, report §3.1.2). The lemmas of §A.4 are
+   therefore stated with the bound `g`, from `Synthesis.grade C ≤ g` by transitivity; `Realizes`
+   does not change and no new realization lemma is needed.
+4. *Unchanged.* The four committed certificates and every Phase 1 certificate keep the flat,
+   measured form: all are below 600 instructions, and nothing is regenerated for this decision. A
+   kernel-friendly evaluator proved equal to `Circuit.grade` (option (a) of KERNEL_FORMS.md) is
+   **not scheduled**. It is reconsidered only if a block that must be measured exceeds 600
+   instructions, or a block's `grade_eq` exceeds 30 s under the certificate's metric. A layer
+   witness from an untrusted scheduler (option (c)) is rejected.
 
 ### A.4 The amplitude-estimation parametric lemma (extends report §8.2, §2.2)
 
@@ -299,14 +343,18 @@ the tolerance, `fun _ y => |ã y − a| ≤ ε`, with `RealizesExact`; the task 
 def ae_eps (a : ℝ) (m : Nat) : ℝ := 2π √(a(1−a)) / 2^m + π² / 4^m
 def ae_delta : ℝ := 1 − 8/π²
 
-theorem ae_parametric_lemma (gp : GroverParams) (m : Nat) (mode) (C) (hC : countingCircuit … = .ok C) :
+theorem ae_parametric_lemma (gp : GroverParams) (m : Nat) (mode) (C) (hC : countingCircuit … = .ok C)
+    (g : Grade) (hg : Synthesis.grade C ≤ g) :
     Realizes (CountSpec (gp.M / 2^gp.n) m) (countPOVM m) (countingChannel gp.n m C)
-      (ae_eps (gp.M/2^gp.n) m) ae_delta (Synthesis.grade C)
+      (ae_eps (gp.M/2^gp.n) m) ae_delta g
   ∧ AncRestore (m + gp.n) C.nAnc C U_count
 
-theorem ae_parametric_lemma_aqft … (kmax) … :
-    Realizes … (ae_eps …) (ae_delta + η_aqft m kmax / 2) (Synthesis.grade C)
+theorem ae_parametric_lemma_aqft … (kmax) … (g) (hg : Synthesis.grade C ≤ g) :
+    Realizes … (ae_eps …) (ae_delta + η_aqft m kmax / 2) g
 ```
+
+(The grade argument is the composed bound of §A.3, as amended at the 18a review, 2026-11-01. With
+`g := Synthesis.grade C` the statements are the measured ones.)
 
 The second is `coherent_composition_diamond` applied with `Φ₁ = Φ₂` the controlled-powers block
 (η_f = 0) and `Ψ₁, Ψ₂` the exact and approximate inverse QFT (η_g from §A.2): the first
@@ -387,3 +435,6 @@ M3 review decides; the obstacle is recorded either way.
 4. Still fixed in the task files: the convention for `ψ_±` and the sign of the eigenphase
    (Stage 20a); whether the controlled oracle's final conjunction is an AND node or a `cz` on the
    pivots (Stage 19, decision log).
+5. Certificate form of the counting certificates: compositional (§A.3), with blocks of at most 600
+   instructions measured exactly and the whole grade a ⊕ bound labelled `composed_bound`. Every
+   Lean process stays below 8 GB on the 16 GB machine (decided at the 18a review, 2026-11-01).

@@ -169,6 +169,32 @@ than the three named lemmas would have to change.
 
 ## 18b — QFT and approximate QFT: circuits, encodings, `qft_basis`, harness (after 18a is accepted)
 
+### B0. A timeout for the machine-detection commands (`CQRV/Certify/Audit.lean`; added at the 18a review, 2026-11-01)
+
+The first CI run of 18a hung for 2.5 h in step 20. Run 2 of `cqr certify` waited on `powershell
+… Get-CimInstance Win32_Processor` (`detectMachine` → `commandOutput`, which has no timeout)
+while new `powershell.exe` processes did not start on the machine; a reboot fixed the machine and
+the rerun passed. Machine detection only fills machine fields, so it must never block a
+certificate.
+
+- `commandOutput` takes a timeout as an explicit argument; `detectMachine`'s calls use 20 s.
+  Spawn the child with piped output and poll until it exits or the time is up. On timeout, kill
+  it and return `none`. `detectMachine` then falls back as today (`PROCESSOR_IDENTIFIER`,
+  `NUMBER_OF_PROCESSORS`, no clock), and `cqr certify` writes one line to **stderr** naming the
+  command that timed out. Stdout is unchanged: the status line stays the last line.
+- Confirm with `#check` every process function you use (for instance `IO.Process.spawn`,
+  `IO.Process.Child.tryWait`, `IO.Process.Child.kill` in this toolchain). If a needed function
+  does not exist, say so and propose the replacement before writing it (rule 2).
+- `kernelCheck` (`lake env lean`) gets **no** timeout in this stage: its run time is the
+  measurement.
+- Test through a new `CertifyTool command-output <timeout-ms> <cmd> <args…>` subcommand, which
+  prints the output or `none` and the wall time. `tests/diff/certify_check.py` calls it twice:
+  - on a command that does not exit within a 1 s timeout (portable: the harness's own Python
+    with `-c "import time; time.sleep(10)"`), asserting `none` in under 5 s and that the child
+    is gone afterwards;
+  - on a command that exits at once, asserting its output.
+- Invariants: no certificate text changes, and no certificate is regenerated in 18b.
+
 ### B1. Circuits (`CQRV/Synthesis/QFT.lean`, new)
 
 ```
@@ -288,12 +314,14 @@ CP(1/4) x2 x1, H x2]`; `aqftGates 3 1` is the three H's only (`k ≥ 2` always; 
 ### 18b Docs / Acceptance / Stop
 
 Docs: DECISIONS.md entry (conventions: qubit 0 MSB as the harness, the pointwise statement, the
-filter form of `aqft`, where `basisVec` lives, the CI pass mark 17); SORRIES.md if 4 is tracked;
-`docs/PROJECT_STATUS.md` one line; no README change. Reviewer files untouched.
+filter form of `aqft`, where `basisVec` lives, the CI pass mark 17; B0: the timeout, the process
+API used, the fallback); SORRIES.md if 4 is tracked; `docs/PROJECT_STATUS.md` one line; no
+README change. Reviewer files untouched.
 
-Acceptance: `lake build` green; CI 17 PASS, 0 FAIL, 4 n/a; `qft_basis` proved (at most
-`exp_sum_phases` tracked); WF and unitarity proved; the harness passes for m ≤ 6 with both
-AQFT bounds; the measured grades reported in the closing reply.
+Acceptance: `lake build` green; CI 17 PASS, 0 FAIL, 4 n/a; the B0 timeout test passes inside
+step 20; `qft_basis` proved (at most `exp_sum_phases` tracked); WF and unitarity proved; the
+harness passes for m ≤ 6 with both AQFT bounds; the measured grades reported in the closing
+reply.
 
 Stop and ask: `qft_basis` needs a statement other than B3's (for instance a different sign or
 bit order — then the harness and the statement disagree: stop, report both conventions, do not
