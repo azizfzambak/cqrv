@@ -216,7 +216,8 @@ names the sub-lemmas. (4) *Norm.* `‖·‖` on matrices is the L2 operator norm
 Physlib's `Matrix.traceNorm_mul_le_opNorm_traceNorm` uses (Mathlib `Matrix.l2_opNorm_*`).
 `aqft_opNorm_le` is proved from `unitaryDenote_filter_sub_le` (telescoping over a filtered gate
 list, unitaries of norm 1) and `gateU_cp_sub_one_le : ‖gateU (.cp 1 k c t) − 1‖ ≤ 2π/2^k`
-(`Complex.norm_exp_I_mul_ofReal_sub_one_le`). (5) *Channels.* `channelDenote_of_unitary : C.WF →
+(`Real.norm_exp_I_mul_ofReal_sub_one_le`; the name was `Complex.…` here before the 18c review,
+which does not exist in the pinned Mathlib). (5) *Channels.* `channelDenote_of_unitary : C.WF →
 C.gates.all isUnitary → channelDenote n a C = CPTPMap.ofUnitary ⟨unitaryDenote n a C.gates, _⟩`
 (the bridge Stages 19–20 reuse); `diamondDist_ofUnitary_le (U V : 𝐔[d]) : diamondDist (ofUnitary
 U) (ofUnitary V) ≤ 2‖U − V‖` through the two sub-lemmas `prod_id_ofUnitary ((ofUnitary U ⊗ᶜᵖ id)
@@ -247,7 +248,15 @@ accepted 2026-11-01** (CI 17 PASS, 0 FAIL, 4 n/a on the second run; the first fa
 m ≤ 6 confirms `U_qft = R·F` and both AQFT bounds (m = 6, kmax = 3: `‖U_qft − U_aqft‖₂` = 1.482
 ≤ Σ_dropped = 1.669 ≤ 2πm/2^kmax = 4.712; the dropped-angle sum is attained to three digits at
 kmax = m − 1). `qftCircuit_WF` / `qftGates_unitary` are in `CQRV/Circuit/QFTCorrect.lean`, not in
-`CQRV/Synthesis/QFT.lean` (accepted at the 18b review, §A.8 item 6).
+`CQRV/Synthesis/QFT.lean` (accepted at the 18b review, §A.8 item 6). **18c done 65caea8,
+accepted 2026-11-01** (CI 17 PASS, 0 FAIL, 4 n/a): (4)–(5) as stated, everything proved — the two
+sub-lemmas `prod_id_ofUnitary` (through Physlib's `MatrixMap.conj_kron`) and
+`l2_opNorm_kronecker_one_le` included — with axioms `propext`, `Classical.choice`, `Quot.sound`;
+`channelDenote_of_unitary` is in `CQRV/Circuit/UnitaryChannel.lean`; `aqft_adjoint_diamond_le`
+gives the same bound for the inverse circuits. Numerically, `η_aqft` is informative (below 2 with
+a gate dropped) only from m = 7 on: m = 7, kmax = 6: `2‖U_qft − U_aqft‖₂` = 0.098 ≤ 1.374;
+m = 8, kmax = 6 and 7: 0.245 ≤ 1.571 and 0.049 ≤ 0.785 (harness `--m-max 8`, outside CI). **Stage
+18 complete.**
 
 ### A.3 The counting circuit (extends report §8.2, §6.1.4)
 
