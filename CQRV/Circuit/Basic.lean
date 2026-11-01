@@ -2,6 +2,7 @@ module
 
 public import CQRV.Circuit.IR
 public import CQRV.Circuit.Schedule
+public import CQRV.Circuit.GradeCompose
 public import CQRV.Circuit.Semantics
 public import CQRV.Circuit.UnitaryChannel
 public import CQRV.Circuit.Basis
@@ -14,7 +15,8 @@ public import CQRV.Circuit.QFTCorrect
 /-!
 # CQRV.Circuit
 
-Report §6, §9.1.1 — gate-level IR (`IR`), the depth scheduler (`Schedule`), the denotational
+Report §6, §9.1.1 — gate-level IR (`IR`), the depth scheduler (`Schedule`), grade composition
+(`GradeCompose`, Stage 19a), the denotational
 semantics into Physlib channels (`Semantics`: unitary fragment, Kraus channel, `Circuit.WF`)
 and ancilla restoration (`Restoration`: TempLogicalAND, MBU, `AncRestore`; `OracleBlocks`:
 the oracle blocks on basis vectors; `OracleCorrectXor`: `gather` / `prepare` / `symDiff` on

@@ -306,13 +306,16 @@ process below 8 GB, whatever machine measures it. The counting certificates ther
    iterate `k` are stated once. The generator refuses a block above 600 emitted instructions with
    a diagnostic; there is no flat fallback.
 2. *Composition of the grade.* New general theorems (Stage 19a), under the hypotheses the task
-   text fixes (the same data register; `C₁` frees every ancilla it allocates, which `WF` gives):
+   text fixes (the same data register; `C₁` ends with no live ancilla — `WF` does not check
+   `alloc` / `free`, so this is a hypothesis of its own; amended before Stage 19, see below):
    `Circuit.grade (C₁.append C₂) ≤ Circuit.grade C₁ + Circuit.grade C₂`. This is ⊕ of report
    §3.1.1, Table 3.1: width and ancillae as maxima, depth and T-count added. The T-count is in
    fact additive; the depth is a bound, because the scheduler may overlap two blocks. The
    theorems also give the n-fold form `≤ n • Circuit.grade C` for `n` copies (the `AddCommMonoid
    Grade` instance, §3.1.4) and the `GradeExt` analogue: `twoQ`, `rot`, `meas`, `ff` additive
-   (equalities), `tDepth` at most the sum. The whole circuit's grade in the certificate is the
+   (equalities), `tDepth` at most `tDepth C₁ + tCount C₂` (not the sum of the two T-depths,
+   which is false for the ASAP scheduler; amended before Stage 19, see below). The whole
+   circuit's grade in the certificate is the
    composed value `g`. It is **an upper bound in the budget order, not the measured grade**, and
    `certificate.json` and the run report say so: a field names the kind of grade, `measured` for
    every certificate before Stage 19 and `composed_bound` here; the schema bump belongs to Stage
@@ -327,6 +330,61 @@ process below 8 GB, whatever machine measures it. The counting certificates ther
    **not scheduled**. It is reconsidered only if a block that must be measured exceeds 600
    instructions, or a block's `grade_eq` exceeds 30 s under the certificate's metric. A layer
    witness from an untrusted scheduler (option (c)) is rejected.
+
+**Amendments before Stage 19 (reviewer, 2026-11-01; docs/tasks/STAGE19_TASK.md).** They replace
+the register layout, the renumbering and the formula for `U_count` above.
+
+(1) *Register layout.* The search register is `data 0..n−1`, as in every Grover builder
+(`Diffusion.onAll`, `treeNet`, `synthesizeOracle`, Lemma 6.3.2, all hard-wired to `data 0..`).
+The phase register is `data n..n+m−1`: phase qubit `j` is `data (n+j)`. Only the unitary,
+data-only blocks that touch the phase register are shifted, by a new `Gate.shiftData`: the
+initial Hadamard layer and the inverse (A)QFT. `Network.withControl N m j` keeps `N`'s input
+numbering, has `n + m` inputs, and its output is `and (input (n+j)) (out N)`.
+
+(2) *The phase fix.* The circuit's diffusion is `−U_s`: `diffusion_circuit_matrix`, decision 5,
+a global phase in Grover. Under a control the sign becomes a relative phase. The controlled
+diffusion applies `ctrl_j(−U_s)`, and without a correction the block would apply `ctrl_j(−G)`:
+the eigenphases `±θ/π` move to `1/2 ± θ/π` and the decoding reads `1 − a`. `controlledGrover`
+therefore ends with `z (data (n+j))`, so that each block applies exactly `ctrl_j(G)`, with
+`G = groverOp P = U_s U_P`. The global-phase lemma `AncRestore.congr` is never used inside a
+controlled block.
+
+(3) *Conjunction.* The controlled oracle's final conjunction is the AND node of `withControl`,
+which Lemma 6.3.2 covers unchanged. The `cz`-on-pivots optimization is not scheduled (§A.8
+item 4 resolved).
+
+(4) *The circuit.* `countingCircuit` consists of three parts, joined by `Circuit.append`:
+- `H` on all `n + m` data qubits (`Diffusion.onAll .h (n+m)`), which prepares `|s⟩` on the
+  search register as `groverCircuit` does;
+- for `j = 0..m−1`, `2^j` copies of `controlledGrover N n m j mode`;
+- the inverse (A)QFT `(adjointGates (qftGates m)).map (Gate.shiftData n)`, or the same with
+  `aqftGates m kmax`.
+
+Shapes `tree` and `chain` go through `synthesizeOracle`. The few-ancilla MCZ and Bennett budgets
+are refused (`unsupported_combination`).
+
+(5) *The unitary.* With `phase x : Reg m` and `search x : Reg n` the restrictions of
+`x : Reg (n+m)`, and `k(x) = (phase x).toNatLE`, so that phase qubit `j` has weight `2^j`:
+```
+countingCircuit_ancRestore : AncRestore (n+m) C.nAnc C U_count,
+U_count = liftP (QFT†_m) · ctrlPow G · H^{⊗(n+m)},
+(ctrlPow G) x y = [phase x = phase y] · (G ^ k(x)) (search x) (search y).
+```
+After `QFT† = (R·F)†` the amplitude of phase outcome `y` (read with `data n` as the MSB,
+`(phase x).toNat`) on an eigenvector of phase `φ` is `2^{−m} ∑_{j<2^m} e^{2πi j (φ − y/2^m)}`.
+The estimate is therefore `y/2^m` directly, with **no `bitRev`**; §A.4 is amended to match. The
+Stage 19b harness checks this numerically. If it shows another convention, the stage stops.
+
+(6) *Grade composition.* Two corrections to item 2:
+- **Width and ancillae.** `peakAncilla` counts live ancillae in program order, so for
+  `C₁.append C₂` it is `max` of the two exactly when `C₁` ends with no live ancilla
+  (`liveEnd C₁ = 0`, a new definition).
+- **T-depth.** The sum of the two T-depths is **not** a bound. A T gate of `C₂` on a qubit
+  that `C₁` keeps busy is delayed, while a T gate on an idle qubit is not, so two T gates in
+  one layer of `C₂` can land in two layers. The bound is `tDepth (C₁.append C₂) ≤ tDepth C₁ +
+  tCount C₂`.
+
+The depth bound `depth (C₁.append C₂) ≤ depth C₁ + depth C₂` needs no hypothesis.
 
 ### A.4 The amplitude-estimation parametric lemma (extends report §8.2, §2.2)
 
@@ -345,7 +403,9 @@ estimate.
 
 **Specification and decoding.** The POVM outcome type must be finite (Physlib `POVM X d`), while
 the ideal output `a = M/2ⁿ` is in general not an outcome. The output type is therefore
-`Y_m := Fin (2^m) ⊕ Unit`, with the estimate `ã : Y_m → ℚ`, `ã (inl y) = sin²(π·bitRev y / 2^m)`
+`Y_m := Fin (2^m) ⊕ Unit`, with the estimate `ã : Y_m → ℚ`, `ã (inl y) = sin²(π y / 2^m)`, where
+`y` is the phase register read with `data n` as the MSB. There is no `bitRev`: the inverse QFT
+of the circuit undoes the bit reversal of `qftGates` (amended before Stage 19, §A.3 (5)). The value is
 represented exactly as a rational by the Chebyshev route of `groverSuccess` where needed, and
 `ã (inr ()) = a`; the metric on `Y_m` is the pseudo-metric induced by `ã`
 (`PseudoMetricSpace.induced`). The specification is exact: `CountSpec a m : Spec Unit Y_m :=
@@ -451,8 +511,8 @@ M3 review decides; the obstacle is recorded either way.
    iterates); the harness also runs `m = 6`. The exact `ε` at `m = 4` is
    `2π·√(7/64)/16 + π²/256`, stated as a real in the certificate as `δ` is today.
 4. Still fixed in the task files: the convention for `ψ_±` and the sign of the eigenphase
-   (Stage 20a); whether the controlled oracle's final conjunction is an AND node or a `cz` on the
-   pivots (Stage 19, decision log).
+   (Stage 20a). Resolved before Stage 19: the controlled oracle's final conjunction is an AND
+   node (§A.3, amendment (3)).
 5. Certificate form of the counting certificates: compositional (§A.3), with blocks of at most 600
    instructions measured exactly and the whole grade a ⊕ bound labelled `composed_bound`. Every
    Lean process stays below 8 GB on the 16 GB machine (decided at the 18a review, 2026-11-01).
