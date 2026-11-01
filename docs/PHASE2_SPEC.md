@@ -386,6 +386,16 @@ Stage 19b harness checks this numerically. If it shows another convention, the s
 
 The depth bound `depth (C₁.append C₂) ≤ depth C₁ + depth C₂` needs no hypothesis.
 
+**19a done 2ec7298, accepted 2026-11-01** (CI 17 PASS, 0 FAIL, 4 n/a). Everything in (6) and
+item 2 as amended is proved with no `sorry`, in the Physlib-free `CQRV/Circuit/GradeCompose.lean`:
+`liveEnd`, `grade_append_le`, `grade_foldl_append_le`, `grade_replicate_le`, `depth_append_le`
+(through the scheduler invariant `SchedState.Dom`), the `GradeExt` equalities and
+`tDepth_append_le`. The counterexample is in the tests. On grover_pred_037 the iteration's
+measured grade `(15, 68, 36, 7)` equals oracle ⊕ diffusion. At r = 2 the measured grade is
+`(15, 134, 72, 7)` and the composed bound is `(15, 137, 72, 7)`: the scheduler overlaps the
+blocks by three layers, and width, T-count and ancillae are exact. The `oracle_plus_diffusion`
+grade of `cqr synthesize --grover` is now a proved bound.
+
 ### A.4 The amplitude-estimation parametric lemma (extends report §8.2, §2.2)
 
 **Eigenstructure.** With `ψ_g`, `ψ_b` and `θ` of `GroverParams` (`sin²θ = M/2ⁿ`), the vectors
