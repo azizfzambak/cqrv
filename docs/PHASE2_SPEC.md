@@ -295,7 +295,8 @@ The flat form of Stages 8–18 (`grade_eq` / `gradeExt_eq` by `decide +kernel` o
 `emitted` literal) is limited by memory to about 750 instructions on the 16 GB machine (Stage
 18a: the kernel's evaluation of the scheduler, quadratic in the gate count; 6.9 GB at 706
 instructions, above 8 GB at 838), while the committed counting certificate (`n = 8`, `m = 4`,
-§A.8.3) has about 10 000 gates. Every certificate must check on a 16 GB machine with each Lean
+§A.8.3) has 3 682 gates in MBU mode and 5 167 in coherent mode (measured at Stage 19b; the
+estimate here was about 10 000). Every certificate must check on a 16 GB machine with each Lean
 process below 8 GB, whatever machine measures it. The counting certificates therefore use the
 **compositional form**:
 
@@ -395,6 +396,30 @@ measured grade `(15, 68, 36, 7)` equals oracle ⊕ diffusion. At r = 2 the measu
 `(15, 134, 72, 7)` and the composed bound is `(15, 137, 72, 7)`: the scheduler overlaps the
 blocks by three layers, and width, T-count and ancillae are exact. The `oracle_plus_diffusion`
 grade of `cqr synthesize --grover` is now a proved bound.
+
+**19b done 35ea970, accepted 2026-11-05** (CI 18 PASS, 0 FAIL, 4 n/a). The builders are
+`CQRV/Synthesis/Counting.lean` (Physlib-free, in the `cqr` closure) and the restoration
+`countingCircuit_ancRestore_raw` is in `CQRV/Circuit/CountingCorrect.lean`, in the circuit's own
+factors, with no `sorry`. **The convention of (5) is confirmed numerically:** the phase-register
+distribution equals `½ (P_m(y; θ/π) + P_m(y; −θ/π))`, read with `data n` as the MSB, to 2·10⁻¹⁴
+(six predicates with M = 0, 1, 5, 8, 9, 16; m = 1..4). Without the phase fix of (2) it is the
+mixture at `½ ± θ/π` to the same accuracy, and the bit-reversed reading fails whenever M ≠ 0. The
+block probe (`docs/benchmarks/COUNTING_BLOCKS.md`) on grover_pred_037, m = 4:
+
+| | MBU | coherent |
+|---|---|---|
+| gates per controlled iterate | 244 | 343 |
+| `grade_eq` per block | 1.4 s | 2.9 s |
+| kernel, whole probe file | 14.7 s | 29.5 s |
+| peak memory | 2.5 GB | 3.2 GB |
+| gates, whole circuit | 3 682 | 5 167 |
+| measured depth ≤ composed | 1352 ≤ 1388 | 2040 ≤ 2048 |
+| measured `tDepth` ≤ composed | 402 ≤ 660 | 733 ≤ 1320 |
+
+Width, T-count and ancillae of the composed bound are exact in both modes. Item 4's condition for
+reopening the kernel-friendly evaluator is not met. In MBU mode the compositional form checks a
+circuit about five times the size at which the flat form stops (about 750 instructions), at
+under a third of the 8 GB limit.
 
 ### A.4 The amplitude-estimation parametric lemma (extends report §8.2, §2.2)
 
@@ -518,7 +543,8 @@ M3 review decides; the obstacle is recorded either way.
    precision (see §C)" (amended 2026-10-31); a
    Ross–Selinger estimate, if ever given, is a hardware-profile matter.
 3. Precision of the committed counting certificate: `n = 8, M = 32`, `m = 4` (15 controlled
-   iterates); the harness also runs `m = 6`. The exact `ε` at `m = 4` is
+   iterates); the harness of Stage 20b also runs `m = 6` (Stage 19b's runs m ≤ 4). The exact `ε`
+   at `m = 4` is
    `2π·√(7/64)/16 + π²/256`, stated as a real in the certificate as `δ` is today.
 4. Still fixed in the task files: the convention for `ψ_±` and the sign of the eigenphase
    (Stage 20a). Resolved before Stage 19: the controlled oracle's final conjunction is an AND

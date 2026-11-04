@@ -296,6 +296,33 @@ change; a block above 600 gates; a second `sorry`.
 
 ## 19c — The tensor form of `U_count` (after 19b is accepted; `CQRV/Circuit/CountingCorrect.lean`)
 
+**Notes added at the 19b review (2026-11-05).** They use the names 19b actually has; where they
+differ from the sections below, these notes win.
+
+(i) *The factors to rewrite.* `preU n m = flipUpToU (n+m) n * hUpToU (n+m) n _`, `postU n m =
+hUpToU (n+m) n _ * flipUpToU (n+m) n`, `cdiffU n m j shape = postU * phaseOracle (((diffusionNet
+shape n).withControl m j).pred (n+m)) * preU`, `zU n m j = dataMatU (n+m) [.z (.data (n+j))]`,
+`cgU N n m j shape = zU * cdiffU * phaseOracle ((N.withControl m j).pred (n+m))`, `qftInvU n m
+kmax = dataMatU (n+m) (countingInverse n m kmax).gates`, `powersUpTo` and `powersU N n m shape`
+(no `mode` argument). `countingCircuit_ancRestore_raw` stays as committed.
+
+(ii) *C2.* The X layer is `flipUpToMat (n+m) n`. Prove the entry formula of `zU` as a lemma about
+`dataMat`. The shift lemma may take `gs.all Gate.dataOnly = true` in addition to, or instead of,
+`qubitsOk m`, whichever the proof needs: the 19b correction to `unitaryDenote_dataOnly` showed
+that `qubitsOk` admits ancilla operands. Its client, `inverseGates`, satisfies both.
+
+(iii) *C4.* Prove the `ctrlPow` product through `powersUpTo` in a partial form: for `j ≤ m`,
+`powersUpTo … j = ` the matrix with `[phase x = phase y] · (G ^ (∑_{i<j} [phase x i] 2^i)) (search
+x) (search y)`; `j = m` is `ctrlPow G` by `toNatLE_eq_sum_range`.
+
+(iv) *C5.* `dataMat m (adjointGates gs) = star (dataMat m gs)` for a unitary `gs` is a small lemma
+from `unitaryDenote_adjoint` at `a = 0`. `kmax = none` is `qftGates m` and `kmax = some k` is
+`aqftGates m k`; `inverseGates m kmax` is already that case split.
+
+(v) *Types.* State every intermediate result in the form `Fin (n + m)` with `subst` of `N.nInputs =
+n` done first: the 19b tests found that an `example` writing `Fin 6` for `Fin (n4.nInputs + 2)`
+times out at `whnf`. Lemmas must not mention `Fin.cast` where `subst` avoids it.
+
 ### C1. Coordinates and matrices
 
 `search x : Reg n := fun i => x (Fin.castAdd m i)`, `phase x : Reg m := fun j => x (Fin.natAdd n
