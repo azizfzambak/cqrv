@@ -7,7 +7,8 @@
 # setup-python: the local toolchain and the .venv are used; apt install of llvm: only when
 # llvm-as is on PATH, otherwise the QIR check runs with llvmlite only). M2 acceptance is judged on
 # this output. Keep the step list in sync with ci.yml.
-# Pass mark since Stage 18b (the step "QFT / AQFT"): 17 PASS, 0 FAIL, 4 n/a (16 PASS before).
+# Pass mark since Stage 19b (the step "Counting circuit"): 18 PASS, 0 FAIL, 4 n/a (17 PASS since
+# Stage 18b, 16 before).
 #
 # Usage (from anywhere):  scripts/ci_local.sh
 #   PYTHON=<python> scripts/ci_local.sh   # default: .venv/Scripts/python.exe or .venv/bin/python
@@ -69,6 +70,7 @@ step "Synthesized circuits = golden file" scripts/check_oracle_json.sh
 step "Diffusion and Grover circuit" scripts/diff_grover.sh
 step "Few-ancilla MCZ (Stage 12b; few:log certified, 12d; every n, 13a)" scripts/diff_mcz.sh
 step "QFT / AQFT (Stage 18b)" scripts/diff_qft.sh
+step "Counting circuit (Stage 19b)" scripts/diff_counting.sh
 step "Second worked predicate simple_alu_x0_1 (Stage 9b)" scripts/diff_benchmark.sh
 if command -v llvm-as >/dev/null 2>&1; then
   step "Install llvm (llvm-as present)" llvm

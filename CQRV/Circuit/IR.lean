@@ -162,10 +162,54 @@ def shiftBits (k : Nat) : Gate → Gate
   | .ifBit j g => .ifBit (j + k) g
   | g => g
 
+/-- PHASE2_SPEC.md §A.3 amendment (1) (Stage 19b) — shift the index of a data qubit up by `k`
+(`x[i] ↦ x[i + k]`); an ancilla is unchanged. Used for the phase register of the counting
+circuit, which sits above the search register (`data n..n+m−1`). -/
+def _root_.CQRV.Qubit.shiftData (k : Nat) : Qubit → Qubit
+  | .data i => .data (i + k)
+  | .anc i => .anc i
+
+/-- PHASE2_SPEC.md §A.3 amendment (1) (Stage 19b) — `Qubit.shiftData k` on every qubit operand of
+a gate, recursively under `ifBit`; the classical bits are unchanged (`shiftBits` moves those).
+Applied only to the unitary data-only blocks that act on the phase register: the inverse (A)QFT of
+`countingCircuit` (`CQRV.Synthesis.Counting`). -/
+def shiftData (k : Nat) : Gate → Gate
+  | .h q => .h (q.shiftData k)
+  | .s q => .s (q.shiftData k)
+  | .sdg q => .sdg (q.shiftData k)
+  | .t q => .t (q.shiftData k)
+  | .tdg q => .tdg (q.shiftData k)
+  | .x q => .x (q.shiftData k)
+  | .z q => .z (q.shiftData k)
+  | .cnot c tgt => .cnot (c.shiftData k) (tgt.shiftData k)
+  | .cz a b => .cz (a.shiftData k) (b.shiftData k)
+  | .measure q c => .measure (q.shiftData k) c
+  | .ifBit c g => .ifBit c (g.shiftData k)
+  | .alloc q => .alloc (q.shiftData k)
+  | .free q => .free (q.shiftData k)
+  | .p a j q => .p a j (q.shiftData k)
+  | .cp a j c tg => .cp a j (c.shiftData k) (tg.shiftData k)
+
+/-- The operands of a shifted gate are the shifted operands. -/
+theorem qubits_shiftData (k : Nat) (g : Gate) :
+    (g.shiftData k).qubits = g.qubits.map (Qubit.shiftData k) := by
+  induction g with
+  | ifBit c g ih => simp only [shiftData, qubits, ih]
+  | _ => rfl
+
+/-- `shiftData` leaves the classical bits alone. -/
+theorem shiftBits_shiftData (k j : Nat) (g : Gate) :
+    (g.shiftData k).shiftBits j = (g.shiftBits j).shiftData k := by
+  cases g <;> rfl
+
 /-- The classical bits a gate writes (`measure q → j` writes `j`). -/
 def writes : Gate → List Nat
   | .measure _ j => [j]
   | _ => []
+
+/-- `shiftData` writes the same bits. -/
+theorem writes_shiftData (k : Nat) (g : Gate) : (g.shiftData k).writes = g.writes := by
+  cases g <;> rfl
 
 /-- Readable form, as in the §6.1.4 / §6.2.2 listings (used by the layer dump). `p` / `cp` print
 their angle as the fraction `a/2^k` of a full turn (`P(1/8) x[0]` is `T x[0]`), both numbers as

@@ -1,0 +1,3 @@
+fn all(x: Vec Bool 4) -> Bool {
+  true
+}

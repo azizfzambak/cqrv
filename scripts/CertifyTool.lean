@@ -1,5 +1,7 @@
 import CQRV.Certify.Basic
 import CQRV.Emit.Basic
+import CQRV.Synthesis.Counting
+import CQRV.Circuit.GradeCompose
 
 /-!
 # Test helper for the Stage 8a / 8b checks (report §8.4.2, §9.5.1, §9.5.3)
@@ -36,6 +38,19 @@ Run with `lake env lean --run scripts/CertifyTool.lean <command>` (after `lake b
   (`adjointGates`); `qft-sample --all <m-max>` prints one JSON object
   `{"m": {"qft", "adjoint", "aqft": {"kmax": …}}}` for `m = 1 .. m-max`, which is what
   `tests/diff/qft_diff.py` reads (one Lean start for the whole run).
+* `counting-sample <file.cqr> <m> [--kmax k] [--shape tree|chain] [--uncompute mbu|coherent]
+  [--lean <out.lean>]` (Stage 19b B5, PHASE2_SPEC.md §A.3): one JSON object for the counting
+  circuit of the predicate of `file.cqr` with `m` phase qubits — the circuit (`Circuit.toJson`),
+  the block table (every **distinct** block once: name, first gate, length, multiplicity, bits,
+  ancillae, `liveEnd`, T-count, grade, `GradeExt`, its own IR JSON), the measured grade and
+  `GradeExt` of the whole, and the composed bound of Stage 19a (`⊕` with the multiplicities;
+  `tDepth` as `tDepth(init) + Σ tCount`), plus the predicate's truth table (character `x` = the
+  value on input `x`, bit `k` of `x` = input bit `k`). `--lean` also writes the Stage 19b B6 probe
+  file: the distinct blocks as literals with their `… = .ok block` link and `grade_eq` /
+  `gradeExt_eq` by `decide +kernel` (report only, not a certificate). `counting-sample --all
+  <m-max> <file.cqr>…` prints `{"<file name>": {"name", "n", "m": {"<m>": {"mbu", "coherent",
+  "aqft": {"<kmax>": …}}}}}` for `m = 1 .. m-max` (the AQFT variants in mode `coherent`,
+  `kmax = 1 .. m − 1`), which `tests/diff/counting_diff.py` reads (one Lean start).
 * `command-output <timeout-ms> <cmd> <args…>` (Stage 18b B0): run `CQRV.Certify.runCommand` —
   the guarded command runner of the machine detection — and print its trimmed stdout, or `none`
   (`none (timed out after T ms)` when the child was killed at the timeout), then `wall_ms: N`.
@@ -44,6 +59,158 @@ Run with `lake env lean --run scripts/CertifyTool.lean <command>` (after `lake b
 -/
 
 open CQRV CQRV.Synthesis CQRV.Certify
+
+/-! ## Stage 19b B5 / B6 — `counting-sample` -/
+
+structure CountingOpts where
+  pos : List String := []
+  all : Bool := false
+  kmax : Option Nat := none
+  shape : DiffusionShape := .tree
+  mode : UncomputeMode := .mbu
+  lean : Option String := none
+
+def parseCountingOpts : List String → CountingOpts → Option CountingOpts
+  | [], o => some o
+  | "--all" :: xs, o => parseCountingOpts xs { o with all := true }
+  | "--kmax" :: k :: xs, o => k.toNat?.bind fun k => parseCountingOpts xs { o with kmax := some k }
+  | "--shape" :: "tree" :: xs, o => parseCountingOpts xs { o with shape := .tree }
+  | "--shape" :: "chain" :: xs, o => parseCountingOpts xs { o with shape := .chain }
+  | "--uncompute" :: "mbu" :: xs, o => parseCountingOpts xs { o with mode := .mbu }
+  | "--uncompute" :: "coherent" :: xs, o => parseCountingOpts xs { o with mode := .coherent }
+  | "--lean" :: f :: xs, o => parseCountingOpts xs { o with lean := some f }
+  | x :: xs, o =>
+    if x.startsWith "--" then none else parseCountingOpts xs { o with pos := o.pos ++ [x] }
+
+def shapeStr : DiffusionShape → String
+  | .tree => "tree"
+  | .chain => "chain"
+
+def modeStr : UncomputeMode → String
+  | .mbu => "mbu"
+  | .coherent => "coherent"
+
+def gradeJ (g : Grade) : Lean.Json :=
+  Lean.Json.mkObj [("w", Lean.toJson g.w), ("d", Lean.toJson g.d), ("t", Lean.toJson g.t),
+    ("a", Lean.toJson g.a)]
+
+def gradeExtJ (g : GradeExt) : Lean.Json :=
+  Lean.Json.mkObj [("two_qubit", Lean.toJson g.twoQ), ("t_depth", Lean.toJson g.tDepth),
+    ("rot", Lean.toJson g.rot), ("meas", Lean.toJson g.meas), ("ff", Lean.toJson g.ff)]
+
+/-- The distinct blocks of `countingCircuit` in program order: name, the block, its multiplicity
+and (for a controlled iterate) its phase qubit. -/
+def countingBlocks (N : Network) (n m : Nat) (kmax : Option Nat) (shape : DiffusionShape)
+    (mode : UncomputeMode) : Except DSL.Diagnostic (List (String × Circuit × Nat × Option Nat)) := do
+  let cgs ← (List.range m).mapM fun j => controlledGrover N n m j shape mode
+  return [("h_layer", countingHLayer n m, 1, none)] ++
+    (cgs.zipIdx.map fun (b, j) => (s!"cg_{j}", b, 2 ^ j, some j)) ++
+    [("inverse", countingInverse n m kmax, 1, none)]
+
+/-- The composed bound of Stage 19a: `init ⊕ Σ mult • block` (`grade_foldl_append_le`,
+`grade_replicate_le`). -/
+def composedGrade : List (String × Circuit × Nat × Option Nat) → Grade
+  | [] => ⟨0, 0, 0, 0⟩
+  | (_, b, _, _) :: rest => rest.foldl (fun g (_, c, mult, _) => g + mult • c.grade) b.grade
+
+/-- The composed `GradeExt`: the sums (`gradeExt_*_foldl_append`) and the T-depth bound
+`tDepth(init) + Σ mult · tCount` (`gradeExt_tDepth_foldl_append_le`). -/
+def composedGradeExt : List (String × Circuit × Nat × Option Nat) → GradeExt
+  | [] => ⟨0, 0, 0, 0, 0⟩
+  | (_, b, _, _) :: rest => rest.foldl (fun g (_, c, mult, _) =>
+      ⟨g.twoQ + mult * c.gradeExt.twoQ, g.tDepth + mult * c.tCount, g.rot + mult * c.gradeExt.rot,
+       g.meas + mult * c.gradeExt.meas, g.ff + mult * c.gradeExt.ff⟩) b.gradeExt
+
+def blockRow (nm : String) (b : Circuit) (mult first : Nat) : Lean.Json :=
+  Lean.Json.mkObj [("name", Lean.toJson nm), ("first", Lean.toJson first),
+    ("length", Lean.toJson b.gates.length), ("multiplicity", Lean.toJson mult),
+    ("n_bits", Lean.toJson b.nBits), ("n_anc", Lean.toJson b.nAnc),
+    ("live_end", Lean.toJson b.liveEnd), ("t_count", Lean.toJson b.tCount),
+    ("grade", gradeJ b.grade), ("grade_ext", gradeExtJ b.gradeExt), ("circuit", b.toJson)]
+
+/-- The `counting-sample` JSON object. -/
+def countingSampleJson (name : String) (N : Network) (n m : Nat) (kmax : Option Nat)
+    (shape : DiffusionShape) (mode : UncomputeMode) : Except DSL.Diagnostic Lean.Json := do
+  let C ← countingCircuit N n m kmax shape mode
+  let tbl ← countingBlocks N n m kmax shape mode
+  let rows := (tbl.foldl (fun (acc, pos) (nm, b, mult, _) =>
+    (acc ++ [blockRow nm b mult pos], pos + mult * b.gates.length)) (([] : List Lean.Json), 0)).1
+  return Lean.Json.mkObj [("name", Lean.toJson name), ("n", Lean.toJson n), ("m", Lean.toJson m),
+    ("kmax", match kmax with | some k => Lean.toJson k | none => Lean.Json.null),
+    ("shape", Lean.toJson (shapeStr shape)), ("uncompute", Lean.toJson (modeStr mode)),
+    ("truth_table", Lean.toJson (truthTable n (N.pred n))), ("circuit", C.toJson),
+    ("blocks", Lean.Json.arr rows.toArray),
+    ("measured", Lean.Json.mkObj [("gates", Lean.toJson C.gates.length),
+      ("n_anc", Lean.toJson C.nAnc), ("n_bits", Lean.toJson C.nBits),
+      ("live_end", Lean.toJson C.liveEnd), ("grade", gradeJ C.grade),
+      ("grade_ext", gradeExtJ C.gradeExt)]),
+    ("composed", Lean.Json.mkObj [("grade", gradeJ (composedGrade tbl)),
+      ("grade_ext", gradeExtJ (composedGradeExt tbl))])]
+
+/-- The Stage 19b B6 probe file: every distinct block as a literal with its link to the builder
+and its exact `grade_eq` / `gradeExt_eq` by `decide +kernel` (as `emitted_ok` / `grade_eq` of a
+certificate; report only). Every declaration starts at column 0 (the per-declaration profiler of
+`scripts/kernel_forms.py` inserts its markers before top-level `theorem` / `def` lines). -/
+def countingBlocksLean (name file : String) (N : Network) (n m : Nat) (kmax : Option Nat)
+    (shape : DiffusionShape) (mode : UncomputeMode) : Except DSL.Diagnostic String := do
+  let C ← countingCircuit N n m kmax shape mode
+  let tbl ← countingBlocks N n m kmax shape mode
+  let kmaxLit := match kmax with | some k => s!"(some {k})" | none => "none"
+  let decl (nm : String) (b : Circuit) (mult : Nat) (j : Option Nat) : List String :=
+    let g := b.grade
+    let e := b.gradeExt
+    let link := match j with
+      | some j => [s!"theorem {nm}_ok : controlledGrover net {n} {m} {j} .{shapeStr shape} \
+          .{modeStr mode} = .ok {nm} :=", "  except_ok_of_check _ _ (by decide +kernel)"]
+      | none =>
+        if nm == "h_layer" then
+          [s!"theorem {nm}_ok : countingHLayer {n} {m} = {nm} := by decide +kernel"]
+        else [s!"theorem {nm}_ok : countingInverse {n} {m} {kmaxLit} = {nm} := by decide +kernel"]
+    [s!"/-- Block `{nm}`: {b.gates.length} gates, multiplicity {mult}, `liveEnd` {b.liveEnd}. -/",
+     s!"def {nm} : Circuit := {circuitLit b}", "",
+     "/-- The link to the builder (as `emitted_ok`). -/"] ++ link ++ ["",
+     s!"/-- The measured grade of `{nm}` (as `grade_eq`). -/",
+     s!"theorem {nm}_grade_eq : Synthesis.grade {nm} = ⟨{g.w}, {g.d}, {g.t}, {g.a}⟩ := \
+       by decide +kernel", "",
+     s!"/-- The measured `GradeExt` of `{nm}` (as `gradeExt_eq`). -/",
+     s!"theorem {nm}_gradeExt_eq : Synthesis.gradeExt {nm} = \
+       ⟨{e.twoQ}, {e.tDepth}, {e.rot}, {e.meas}, {e.ff}⟩ := by decide +kernel", ""]
+  let gc := composedGrade tbl
+  let gm := C.grade
+  let ec := composedGradeExt tbl
+  let em := C.gradeExt
+  let header : List String := [
+    "import CQRV", "",
+    "/-! Stage 19b B6 probe (docs/tasks/STAGE19_TASK.md; PHASE2_SPEC.md §A.3, the compositional",
+    s!"certificate form): the distinct blocks of `countingCircuit` for `{name}` ({file}),",
+    s!"n = {n}, m = {m}, shape {shapeStr shape}, uncomputation mode {modeStr mode}, each as a \
+      literal with its",
+    "`… = .ok block` link and its exact `grade_eq` / `gradeExt_eq` by `decide +kernel`. Generated by",
+    "`scripts/CertifyTool.lean counting-sample … --lean`; measured per declaration by",
+    "`scripts/counting_blocks.sh` (docs/benchmarks/COUNTING_BLOCKS.md). Report only: not a certificate.",
+    s!"The whole circuit has {C.gates.length} gates; measured grade (compiled evaluation) \
+      ({gm.w}, {gm.d}, {gm.t}, {gm.a}),",
+    s!"composed bound ({gc.w}, {gc.d}, {gc.t}, {gc.a}); measured `GradeExt` \
+      ({em.twoQ}, {em.tDepth}, {em.rot}, {em.meas}, {em.ff}),",
+    s!"composed ({ec.twoQ}, {ec.tDepth}, {ec.rot}, {ec.meas}, {ec.ff}). -/", "",
+    s!"namespace CQRV.CountingBlocks.«{name}_{modeStr mode}»", "",
+    "open CQRV CQRV.Synthesis CQRV.Certify", "",
+    s!"/-- The Boolean network of `{name}` (`toNetwork`, §6.1.2). -/",
+    s!"def net : Network := {networkLit N}", ""]
+  let body := tbl.flatMap fun (nm, b, mult, j) => decl nm b mult j
+  return "\n".intercalate (header ++ body ++
+    [s!"end CQRV.CountingBlocks.«{name}_{modeStr mode}»", ""])
+
+/-- Parse, check and translate a `.cqr` file: its name, arity and (well-formed) network. -/
+def readNetwork (file : String) : IO (Except DSL.Diagnostic (String × Nat × Network)) := do
+  let src ← IO.FS.readFile file
+  return do
+    let tp ← CQRV.DSL.parse src >>= CQRV.DSL.check
+    let net ← toNetwork tp
+    if !net.wf then
+      throw (DSL.Diagnostic.at .synthesis .unsupportedNetwork ⟨1, 1⟩
+        s!"the network of {tp.name} is not well formed")
+    return (tp.name, tp.arity, net)
 
 /-- Decode a hex string (even length, `0-9a-f`). -/
 def unhex (s : String) : Option ByteArray := do
@@ -148,6 +315,61 @@ def main (args : List String) : IO UInt32 := do
       | some m, some k => IO.println (circuitOf m (some k)).toJson.compress; return 0
       | _, _ => usage
     | _ => usage
+  | "counting-sample" :: rest =>
+    -- Stage 19b B5 / B6 (PHASE2_SPEC.md §A.3): the counting circuit of a predicate with its
+    -- block table, measured grade and composed bound; `--all` for the harness; `--lean` for
+    -- the B6 probe file.
+    let usage : IO UInt32 := do
+      IO.eprintln "usage: CertifyTool counting-sample (<file.cqr> <m> [--kmax k] [--shape tree|chain] \
+        [--uncompute mbu|coherent] [--lean <out.lean>] | --all <m-max> <file.cqr>…)"
+      return 2
+    let some o := parseCountingOpts rest {} | usage
+    if o.all then
+      match o.pos with
+      | mStr :: files =>
+        let some mMax := mStr.toNat? | usage
+        if files.isEmpty then usage else
+        let mut entries : List (String × Lean.Json) := []
+        for file in files do
+          match ← readNetwork file with
+          | .error d => IO.println d.toJson.compress; return 1
+          | .ok (name, n, net) =>
+            let perM : Except DSL.Diagnostic (List (String × Lean.Json)) :=
+              (List.range mMax).mapM fun i => do
+                let m := i + 1
+                let mbu ← countingSampleJson name net n m none o.shape .mbu
+                let coh ← countingSampleJson name net n m none o.shape .coherent
+                let aq ← (List.range (m - 1)).mapM fun k => do
+                  let j ← countingSampleJson name net n m (some (k + 1)) o.shape .coherent
+                  return (toString (k + 1), j)
+                return (toString m, Lean.Json.mkObj [("mbu", mbu), ("coherent", coh),
+                  ("aqft", Lean.Json.mkObj aq)])
+            match perM with
+            | .error d => IO.println d.toJson.compress; return 1
+            | .ok ms =>
+              let key := (System.FilePath.mk file).fileName.getD file
+              entries := entries ++ [(key, Lean.Json.mkObj [("name", Lean.toJson name),
+                ("n", Lean.toJson n), ("m", Lean.Json.mkObj ms)])]
+        IO.println (Lean.Json.mkObj entries).compress
+        return 0
+      | _ => usage
+    else
+      match o.pos with
+      | [file, mStr] =>
+        let some m := mStr.toNat? | usage
+        match ← readNetwork file with
+        | .error d => IO.println d.toJson.compress; return 1
+        | .ok (name, n, net) =>
+          match countingSampleJson name net n m o.kmax o.shape o.mode with
+          | .error d => IO.println d.toJson.compress; return 1
+          | .ok j =>
+            if let some out := o.lean then
+              match countingBlocksLean name file net n m o.kmax o.shape o.mode with
+              | .error d => IO.println d.toJson.compress; return 1
+              | .ok text => IO.FS.writeFile out text
+            IO.println j.compress
+            return 0
+      | _ => usage
   | "command-output" :: timeoutStr :: cmd :: cmdArgs =>
     -- Stage 18b B0: exercise `runCommand` (the timeout of the machine-detection commands)
     let some timeoutMs := timeoutStr.toNat?
@@ -194,6 +416,7 @@ end CQRV.Forms.«{tp.name}»
         return 0
   | _ => IO.eprintln "usage: CertifyTool (sha3 | sample <file.cqr> | audit <Cert.lean> <theorem> \
       [<theorem> …] | emit-sample <json|qasm|qir> [--decompose-cp] [--if-cp] | front-end <file.cqr> \
-      <out.lean> | qft-sample (<m> [<kmax>] [--adjoint] | --all <m-max>) | command-output \
-      <timeout-ms> <cmd> <args…>)"
+      <out.lean> | qft-sample (<m> [<kmax>] [--adjoint] | --all <m-max>) | counting-sample \
+      (<file.cqr> <m> [--kmax k] [--shape tree|chain] [--uncompute mbu|coherent] [--lean <out.lean>] \
+      | --all <m-max> <file.cqr>…) | command-output <timeout-ms> <cmd> <args…>)"
          return 2

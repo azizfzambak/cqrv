@@ -1,0 +1,189 @@
+module
+
+import CQRV.Synthesis.Counting
+import CQRV.Circuit.CountingCorrect
+import CQRV.Circuit.GradeCompose
+meta import CQRV.Synthesis.Counting
+meta import CQRV.Circuit.CountingCorrect
+meta import CQRV.Circuit.GradeCompose
+
+/-!
+# The counting circuit (Stage 19b, PHASE2_SPEC.md §A.3 as amended; docs/tasks/STAGE19_TASK.md
+B1–B4)
+
+* `Network.withControl` on the network of `x₀ ∧ x₁ ∧ x₂ ∧ x₃` (`n = 4`, `M = 1`) and on the
+  Grover network of `grover_pred_037`: the two appended nodes, well-formedness, and the predicate
+  as the conjunction on all 64 inputs of the 6-input network (bit `k` of `x` = input `k`).
+* `Gate.shiftData` on sample gates; the inverse (A)QFT block at `n = 4`, `m = 2`.
+* The builders at `n = 4`, `m = 2`: the shape of §A.3 (4) (the Hadamard layer, one copy of
+  block 0, two copies of block 1, the inverse), the phase fix at the end of every block, the
+  measured values (gate counts, grades, `GradeExt`, `nAnc`, `liveEnd`, `nBits`), `validate` in
+  both modes, the composed bound of 19a, the diagnostics (existing codes only), and the block
+  sizes of the probe instance `grover_pred_037` at `m = 4` (244 / 343 gates, below 600).
+* `example` instances of the theorems of B1, B2, B4 and the axiom lines.
+-/
+
+namespace CQRV.Tests.Counting
+
+open CQRV CQRV.Synthesis CQRV.Counting CQRV.Grover Matrix
+open scoped Kronecker
+
+/-- The network of `grover_pred_037` (`x0 ∧ x3 ∧ x7`), the literal of `groverNet`. -/
+def groverNet037 : Network :=
+  ⟨8, #[.input 0, .input 1, .input 2, .input 3, .input 4, .input 5, .input 6, .input 7,
+        .and 0 3, .and 8 7], [9]⟩
+
+/-- `x₀ ∧ x₁ ∧ x₂ ∧ x₃` on four inputs (`M = 1`). -/
+def n4 : Network :=
+  ⟨4, #[.input 0, .input 1, .input 2, .input 3, .and 0 1, .and 4 2, .and 5 3], [6]⟩
+
+/-! ## B1 — `withControl` -/
+
+#guard n4.withControl 2 0 ==
+  ⟨6, #[.input 0, .input 1, .input 2, .input 3, .and 0 1, .and 4 2, .and 5 3, .input 4, .and 6 7],
+    [8]⟩
+#guard (groverNet037.withControl 4 1).nInputs == 12
+#guard (groverNet037.withControl 4 1).outputs == [11]
+#guard (groverNet037.withControl 4 1).nodes.size == 12
+#guard (n4.withControl 2 0).wf && (n4.withControl 2 1).wf && (groverNet037.withControl 4 3).wf
+-- the predicate is `c ∧ P`: control qubit `4` (phase qubit 0) resp. `5` (phase qubit 1)
+#guard (List.range 64).all fun x =>
+  (n4.withControl 2 0).pred 6 (fun i => (x >>> i.val) % 2 == 1) ==
+    (((x >>> 4) % 2 == 1) && (x % 16 == 15))
+#guard (List.range 64).all fun x =>
+  (n4.withControl 2 1).pred 6 (fun i => (x >>> i.val) % 2 == 1) ==
+    (((x >>> 5) % 2 == 1) && (x % 16 == 15))
+
+/-! ## B2 — `shiftData` -/
+
+#guard (Gate.cp 1 3 (.data 1) (.data 0)).shiftData 4 == .cp 1 3 (.data 5) (.data 4)
+#guard (Gate.ifBit 2 (.cz (.data 0) (.anc 1))).shiftData 4 == .ifBit 2 (.cz (.data 4) (.anc 1))
+#guard (Gate.measure (.anc 0) 3).shiftData 4 == .measure (.anc 0) 3
+#guard (Gate.h (.data 2)).shiftData 0 == .h (.data 2)
+#guard (countingInverse 4 2 none).gates ==
+  [.h (.data 5), .cp (-1) 2 (.data 5) (.data 4), .h (.data 4)]
+#guard (countingInverse 4 2 (some 1)).gates == [.h (.data 5), .h (.data 4)]
+#guard (countingHLayer 4 2).gates == Diffusion.onAll .h 6
+
+/-! ## B3 — the builders at `n = 4`, `m = 2` -/
+
+def cg0 : Circuit := (controlledGrover n4 4 2 0).toOption.getD default
+def cg1 : Circuit := (controlledGrover n4 4 2 1).toOption.getD default
+def cd0 : Circuit := (controlledDiffusion 4 2 0).toOption.getD default
+def cc : Circuit := (countingCircuit n4 4 2).toOption.getD default
+def ccCoh : Circuit := (countingCircuit n4 4 2 none .tree .coherent).toOption.getD default
+
+#guard (controlledGrover n4 4 2 0).toBool && (controlledGrover n4 4 2 1).toBool &&
+  (controlledDiffusion 4 2 0).toBool && (countingCircuit n4 4 2).toBool &&
+  (countingCircuit n4 4 2 none .tree .coherent).toBool
+-- the shape of §A.3 (4): the Hadamard layer, `2^0` copies of block 0, `2^1` copies of block 1,
+-- the inverse QFT on the phase register
+#guard cc == ((List.replicate 2 cg1).foldl Circuit.append
+  ((List.replicate 1 cg0).foldl Circuit.append (countingHLayer 4 2))).append
+    (countingInverse 4 2 none)
+-- every controlled iterate ends with the phase fix on its control (amendment (2))
+#guard cg0.gates.getLast? == some (.z (.data 4))
+#guard cg1.gates.getLast? == some (.z (.data 5))
+-- the controlled diffusion is `H X ; MCZ ; X H` on the search register, `nData = n + m`
+#guard cd0.nData == 6 && cd0.gates.take 8 == Diffusion.onAll .h 4 ++ Diffusion.onAll .x 4
+#guard cd0.gates.reverse.take 8 == (Diffusion.onAll .x 4 ++ Diffusion.onAll .h 4).reverse
+-- measured values
+#guard cg0.gates.length == 171 && cg1.gates.length == 171
+#guard cg0.grade == ⟨10, 92, 32, 4⟩ && cg1.grade == ⟨10, 92, 32, 4⟩
+#guard cg0.gradeExt == ⟨56, 21, 0, 8, 16⟩
+#guard (cg0.nAnc, cg0.liveEnd, cg0.nBits) == (4, 0, 8)
+#guard cc.gates.length == 522
+#guard cc.grade == ⟨10, 272, 96, 4⟩
+#guard cc.gradeExt == ⟨169, 67, 1, 24, 48⟩
+#guard (cc.nAnc, cc.liveEnd, cc.nBits) == (4, 0, 24)
+#guard cc.validate.toBool && ccCoh.validate.toBool
+#guard ccCoh.nBits == 0 && ccCoh.gradeExt.meas == 0 && ccCoh.gradeExt.ff == 0
+-- the composed bound of 19a (`grade_foldl_append_le`, `grade_replicate_le`)
+#guard cc.grade ≤ ((countingHLayer 4 2).grade + 1 • cg0.grade + 2 • cg1.grade) +
+  (countingInverse 4 2 none).grade
+#guard cc.gradeExt.tDepth ≤ (countingHLayer 4 2).gradeExt.tDepth + 1 * cg0.tCount +
+  2 * cg1.tCount + (countingInverse 4 2 none).tCount
+
+/-- The diagnostic code of a refused build. -/
+def codeOf (r : Except DSL.Diagnostic Circuit) : String :=
+  match r with
+  | .error d => d.code.name
+  | .ok _ => "ok"
+
+#guard codeOf (controlledGrover n4 3 2 0) == "unsupported_network"
+#guard codeOf (controlledGrover ⟨4, #[.input 0], []⟩ 4 2 0) == "unsupported_network"
+#guard codeOf (controlledGrover n4 4 2 2) == "unsupported_combination"
+#guard codeOf (controlledGrover ⟨0, #[.const true], [0]⟩ 0 2 0) == "unsupported_network"
+#guard codeOf (countingCircuit n4 4 0) == "unsupported_network"
+#guard codeOf (countingCircuit n4 4 2) == "ok"
+
+-- the probe instance (B6): `grover_pred_037`, `m = 4`, both modes — every block below 600 gates
+def cg037 (j : Nat) (mode : UncomputeMode) : Circuit :=
+  (controlledGrover groverNet037 8 4 j .tree mode).toOption.getD default
+
+#guard (cg037 0 .mbu).gates.length == 244 && (cg037 3 .mbu).gates.length == 244
+#guard (cg037 0 .coherent).gates.length == 343 && (cg037 3 .coherent).gates.length == 343
+#guard (cg037 0 .coherent).grade == ⟨20, 136, 88, 8⟩
+#guard (countingHLayer 8 4).gates.length == 12 && (countingInverse 8 4 none).gates.length == 10
+
+/-! ## Instances of the theorems -/
+
+-- B1
+example (x : Fin (n4.nInputs + 2) → Bool) :
+    (n4.withControl 2 0).pred (n4.nInputs + 2) x =
+      (x ⟨n4.nInputs + 0, by omega⟩ && n4.pred n4.nInputs (fun i => x (Fin.castAdd 2 i))) :=
+  Network.withControl_pred (by decide +kernel) rfl (by decide) x
+example : (n4.withControl 2 0).WF :=
+  Network.withControl_WF (by decide +kernel) rfl (by decide)
+
+-- B2
+example : ((Gate.cp 1 3 (.data 1) (.data 0)).shiftData 4).qubitsOk (4 + 2) = true :=
+  Gate.qubitsOk_shiftData 4 (by decide)
+example : ((Gate.cp 1 3 (.data 1) (.data 0)).shiftData 4).isUnitary = true :=
+  Gate.isUnitary_shiftData 4 _
+
+-- B4
+example (h : controlledDiffusion 4 2 0 = .ok cd0) :
+    cd0.WF ∧ ∀ a, cd0.nAnc ≤ a → AncRestore 6 a cd0 (cdiffU 4 2 0 .tree) :=
+  controlledDiffusion_ancRestore h (by decide) (by decide)
+example (h : controlledGrover n4 4 2 0 = .ok cg0) :
+    cg0.WF ∧ ∀ a, cg0.nAnc ≤ a → AncRestore 6 a cg0 (cgU n4 4 2 0 .tree) :=
+  controlledGrover_ancRestore h (by decide +kernel)
+example (h : countingCircuit n4 4 2 = .ok cc) :
+    cc.WF ∧ AncRestore 6 cc.nAnc cc (qftInvU 4 2 none * powersU n4 4 2 .tree * hadamardU 6) :=
+  countingCircuit_ancRestore_raw h (by decide +kernel) rfl rfl
+example (a : ℕ) : unitaryDenote 6 a [.z (.data 4)] =
+    dataMat 6 [.z (.data 4)] ⊗ₖ (1 : Matrix (Reg a) (Reg a) ℂ) :=
+  unitaryDenote_dataOnly _ rfl rfl
+
+/-! ## Axioms (CLAUDE.md rule 10) -/
+
+/-- info: 'CQRV.Synthesis.Network.withControl_pred' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Network.withControl_pred
+
+/-- info: 'CQRV.Synthesis.Network.withControl_WF' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Network.withControl_WF
+
+/-- info: 'CQRV.Gate.qubitsOk_shiftData' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms Gate.qubitsOk_shiftData
+
+/-- info: 'CQRV.Counting.unitaryDenote_dataOnly' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms unitaryDenote_dataOnly
+
+/-- info: 'CQRV.Counting.controlledDiffusion_ancRestore' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms controlledDiffusion_ancRestore
+
+/-- info: 'CQRV.Counting.controlledGrover_ancRestore' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms controlledGrover_ancRestore
+
+/-- info: 'CQRV.Counting.countingCircuit_ancRestore_raw' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms countingCircuit_ancRestore_raw
+
+end CQRV.Tests.Counting

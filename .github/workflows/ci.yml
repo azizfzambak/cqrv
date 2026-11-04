@@ -78,6 +78,9 @@ jobs:
       - name: QFT / AQFT (Stage 18b; qftCircuit = R F, adjoint = inverse, both AQFT bounds, negative control)
         run: scripts/diff_qft.sh
 
+      - name: Counting circuit (Stage 19b; phase-register distribution = the closed form, MBU = coherent, negative controls, grades vs composed bound, block replay, AQFT)
+        run: scripts/diff_counting.sh
+
       - name: Second worked predicate simple_alu_x0_1 (Stage 9b; oracle every branch, Grover circuit 512 sampled branches; exact delta)
         run: scripts/diff_benchmark.sh
 

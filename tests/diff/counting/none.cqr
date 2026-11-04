@@ -1,0 +1,3 @@
+fn none(x: Vec Bool 4) -> Bool {
+  false
+}

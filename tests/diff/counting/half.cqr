@@ -1,0 +1,3 @@
+fn half(x: Vec Bool 4) -> Bool {
+  idx(x, 0)
+}
