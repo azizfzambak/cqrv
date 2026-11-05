@@ -522,6 +522,14 @@ with `a = M/2ⁿ`. The two neighbours `⌊2^m φ⌋` and `⌊2^m φ⌋ + 1` carr
 `|sin²(θ+Δ) − sin²θ| ≤ |sin 2θ| |Δ| + Δ²` with `|Δ| ≤ π/2^m`, and it is the same for both signs of
 `θ`. Stage 20b works from `qpe_success`.
 
+**20a1 done 19b575d, accepted 2026-11-05** (CI 18 PASS, 0 FAIL, 4 n/a). The analysis of (3)–(4) is
+proved in `CQRV/Grover/QPEBound.lean` with no `sorry`, and its import closure is Mathlib only. It
+contains `two_point_bound` (on `(0, ¼]` by concavity of `sin`; on `[¼, ½]` by the cosine bound
+with `π < 3.15` and a polynomial inequality), `qpeProb_two_neighbours`, `CircleNear`,
+`qpe_near_sum_ge` and `decode_close`. The outcome is an integer (`y : ℤ`), so periodicity is a
+lemma. On the harness grid the minimum of the two-point inequality is exactly 8, at `t = ½`, and
+`ae_eps` is almost tight (largest error / `ae_eps` 0.99995).
+
 ### A.5 The second library entry, the request, decidability (report §4.1–4.2, §9.3.2, §7.2)
 
 **Request.** `cqr certify f.cqr --problem count --precision m [--aqft kmax] [--uncompute coherent]`;
