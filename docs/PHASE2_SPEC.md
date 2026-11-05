@@ -421,6 +421,17 @@ reopening the kernel-friendly evaluator is not met. In MBU mode the compositiona
 circuit about five times the size at which the flat form stops (about 750 instructions), at
 under a third of the 8 GB limit.
 
+**19c done 47ab45d, accepted 2026-11-05** (CI 18 PASS, 0 FAIL, 4 n/a). `countingCircuit_ancRestore`
+and `U_count` of (5) are proved in `CQRV/Circuit/CountingCorrect.lean`, with no `sorry` and nothing
+tracked: the shift lemma `dataMat_shiftData` and the product `powersU_val` are proved too. The
+matrices of (5) are functions on matrices, block diagonal along `Reg (n+m) ≃ Reg n × Reg m`
+(`blockD`, Mathlib's `Matrix.blockDiagonal`, `blockD_eq_submatrix`), and the control of `ctrlU j`
+is a natural number read through `Reg.bit`. The phase fix of (2) is now a theorem:
+`cdiffU_val : cdiffU j = ctrlU j (−U_s)` and `cgU_val : cgU j = ctrlU j G`. `raw_eq_U_count` is an
+equality of unitaries, so no global-phase argument enters. In the definition of `U_count` the
+inverse QFT is written `star (dataMat m (inverseGates m kmax))`, where `inverseGates` is the
+forward list (`qftGates m` or `aqftGates m k`). **Stage 19 complete.**
+
 ### A.4 The amplitude-estimation parametric lemma (extends report §8.2, §2.2)
 
 **Eigenstructure.** With `ψ_g`, `ψ_b` and `θ` of `GroverParams` (`sin²θ = M/2ⁿ`), the vectors
