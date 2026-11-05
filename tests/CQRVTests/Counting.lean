@@ -21,6 +21,12 @@ B1–B4)
   both modes, the composed bound of 19a, the diagnostics (existing codes only), and the block
   sizes of the probe instance `grover_pred_037` at `m = 4` (244 / 343 gates, below 600).
 * `example` instances of the theorems of B1, B2, B4 and the axiom lines.
+* Stage 19c (C1–C5): `example` instances at `n = 2`, `m = 2` (types written `Reg (2 + 2)`, the
+  form of the theorems) — the entries of `liftS` / `liftP` / `ctrlU` / `ctrlPow`, the layers, the
+  shift lemma on `qftGates 2`, the controlled oracle, the algebra, `cgU = ctrlU j G`, the product
+  `powersU = ctrlPow G`, and `countingCircuit_ancRestore` with `U_count` for the exact and the
+  approximate inverse QFT — and the axiom lines of `countingCircuit_ancRestore`, the C4 product
+  lemma `powersU_val`, the shift lemma and `raw_eq_U_count`.
 -/
 
 namespace CQRV.Tests.Counting
@@ -156,6 +162,73 @@ example (a : ℕ) : unitaryDenote 6 a [.z (.data 4)] =
     dataMat 6 [.z (.data 4)] ⊗ₖ (1 : Matrix (Reg a) (Reg a) ℂ) :=
   unitaryDenote_dataOnly _ rfl rfl
 
+/-! ## Stage 19c — the tensor form of `U_count`, at `n = 2`, `m = 2` -/
+
+/-- `x₀ ∧ x₁` on two inputs (`M = 1`). -/
+def n2 : Network := ⟨2, #[.input 0, .input 1, .and 0 1], [2]⟩
+
+def cc2 : Circuit := (countingCircuit n2 2 2).toOption.getD default
+def cc2a : Circuit := (countingCircuit n2 2 2 (some 1)).toOption.getD default
+
+#guard (countingCircuit n2 2 2).toBool && cc2.validate.toBool && cc2.nData == 4
+#guard (countingCircuit n2 2 2 (some 1)).toBool && cc2a.validate.toBool
+
+-- C1: the entries and unitarity
+example (A : Matrix (Reg 2) (Reg 2) ℂ) (x y : Reg (2 + 2)) :
+    liftS A x y = if phase x = phase y then A (search x) (search y) else 0 := liftS_apply A x y
+example (B : Matrix (Reg 2) (Reg 2) ℂ) (x y : Reg (2 + 2)) :
+    liftP B x y = if search x = search y then B (phase x) (phase y) else 0 := liftP_apply B x y
+example (V : Matrix (Reg 2) (Reg 2) ℂ) (x y : Reg (2 + 2)) :
+    ctrlU 1 V x y =
+      if phase x = phase y then (if (phase x).bit 1 then V else 1) (search x) (search y) else 0 :=
+  ctrlU_apply 1 V x y
+example (V : Matrix (Reg 2) (Reg 2) ℂ) (x y : Reg (2 + 2)) :
+    ctrlPow V x y =
+      if phase x = phase y then (V ^ (phase x).toNatLE) (search x) (search y) else 0 :=
+  ctrlPow_apply V x y
+example (V : Matrix (Reg 2) (Reg 2) ℂ) (hV : V ∈ 𝐔[Reg 2]) :
+    (ctrlPow V : Matrix (Reg (2 + 2)) (Reg (2 + 2)) ℂ) ∈ 𝐔[Reg (2 + 2)] := ctrlPow_mem hV
+example (B : Matrix (Reg 2) (Reg 2) ℂ) (hB : B ∈ 𝐔[Reg 2]) :
+    (liftP B : Matrix (Reg (2 + 2)) (Reg (2 + 2)) ℂ) ∈ 𝐔[Reg (2 + 2)] := liftP_mem hB
+
+-- C2: the layers and the shift lemma
+example : hUpTo (2 + 2) 2 = liftS (hadamardMat 2) := hUpTo_eq_liftS 2 2
+example : flipUpToMat (2 + 2) 2 = liftS (xAllMat 2) := flipUpToMat_eq_liftS 2 2
+example : (zU 2 2 1).val = ctrlU 1 (-1) := zU_val 2 2 1
+example : dataMat (2 + 2) ((qftGates 2).map (Gate.shiftData 2)) = liftP (dataMat 2 (qftGates 2)) :=
+  dataMat_shiftData 2 _ (List.all_eq_true.mpr (qftGates_unitary 2))
+    (List.all_eq_true.mpr fun _ hg => qftGates_dataOnly hg)
+example : (qftInvU 2 2 none).val = liftP (star (dataMat 2 (qftGates 2))) := qftInvU_val 2 2 none
+
+-- C3: the controlled oracle
+example : (phaseOracle ((n2.withControl 2 1).pred (2 + 2))).val =
+    ctrlU 1 (phaseOracle (n2.pred 2)).val :=
+  phaseOracle_withControl (by decide +kernel) rfl rfl (by decide)
+
+-- C4: the algebra
+example (A B : Matrix (Reg 2) (Reg 2) ℂ) :
+    (ctrlU 0 A * ctrlU 0 B : Matrix (Reg (2 + 2)) (Reg (2 + 2)) ℂ) = ctrlU 0 (A * B) :=
+  ctrlU_mul 0 A B
+example (V : Matrix (Reg 2) (Reg 2) ℂ) : (zU 2 2 0).val * ctrlU 0 (-V) = ctrlU 0 V :=
+  zU_mul_ctrlU_neg 2 2 0 V
+example : (cdiffU 2 2 1 .tree).val = ctrlU 1 (-(diffU 2).val) :=
+  cdiffU_val .tree (by decide) (by decide)
+example : (cgU n2 2 2 1 .tree).val = ctrlU 1 (groverOp (n2.pred 2)).val :=
+  cgU_val .tree (by decide +kernel) rfl rfl (by decide) (by decide)
+example : (powersU n2 2 2 .tree).val = ctrlPow (groverOp (n2.pred 2)).val :=
+  powersU_val .tree (by decide +kernel) rfl rfl (by decide)
+
+-- C5: the theorem, exact and approximate inverse QFT
+example (h : countingCircuit n2 2 2 = .ok cc2) :
+    cc2.WF ∧ AncRestore (2 + 2) cc2.nAnc cc2 (U_count (n2.pred 2) 2 none) :=
+  countingCircuit_ancRestore h (by decide +kernel) rfl rfl
+example (h : countingCircuit n2 2 2 (some 1) = .ok cc2a) :
+    cc2a.WF ∧ AncRestore (2 + 2) cc2a.nAnc cc2a (U_count (n2.pred 2) 2 (some 1)) :=
+  countingCircuit_ancRestore h (by decide +kernel) rfl rfl
+example : (U_count (n2.pred 2) 2 none).val =
+    liftP (star (dataMat 2 (qftGates 2))) * ctrlPow (groverOp (n2.pred 2)).val *
+      hadamardMat (2 + 2) := rfl
+
 /-! ## Axioms (CLAUDE.md rule 10) -/
 
 /-- info: 'CQRV.Synthesis.Network.withControl_pred' depends on axioms: [propext, Classical.choice, Quot.sound] -/
@@ -185,5 +258,21 @@ example (a : ℕ) : unitaryDenote 6 a [.z (.data 4)] =
 /-- info: 'CQRV.Counting.countingCircuit_ancRestore_raw' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms countingCircuit_ancRestore_raw
+
+/-- info: 'CQRV.Counting.countingCircuit_ancRestore' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms countingCircuit_ancRestore
+
+/-- info: 'CQRV.Counting.powersU_val' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms powersU_val
+
+/-- info: 'CQRV.Counting.dataMat_shiftData' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms dataMat_shiftData
+
+/-- info: 'CQRV.Counting.raw_eq_U_count' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms raw_eq_U_count
 
 end CQRV.Tests.Counting
