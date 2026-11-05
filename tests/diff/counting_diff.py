@@ -34,6 +34,15 @@ bit k); M = Σ P. With sin²θ = M/2ⁿ:
       gates with k > kmax (all in the inverse block); the total-variation distance to the exact
       distribution is printed, no bound asserted (η_aqft ≥ 2 for m ≤ 4, as in Stage 18c).
 
+  (f) Stage 20a1 (PHASE2_SPEC §A.4 "Amendments before Stage 20a"; CQRV/Grover/QPEBound.lean), pure
+      numbers, no circuit: on a grid of t the inequality `two_point_bound`, 8 ≤ sin²(πt) (1/t² +
+      1/(1−t)²), attained at t = ½ (the grid minimum is printed); the two simpler bounds one tries
+      first fail at t = ¼ (negative controls): sin(πt) ≥ 4t(1−t), and sinc t + sinc(1−t) ≥ 4/π;
+      for m = 1..8 and a grid of φ: the closed form of `qpeProb` against the sum, its period 2^m
+      in y, ∑_y qpeProb = 1, the two neighbours ⌊2^m φ⌋, ⌊2^m φ⌋ + 1 carry ≥ 8/π²
+      (`qpeProb_two_neighbours`), the near set carries ≥ 8/π² (`qpe_near_sum_ge`), and every near
+      outcome decodes within ae_eps (`decode_close`, for a grid of θ in [0, π/2], both signs).
+
 If (a) fails, the harness reports which of the four conventions (phases ±θ/π or ½ ± θ/π, the
 register read naturally or bit-reversed) the data fit, and fails: that is the stop condition of
 §A.3 (5) — neither the harness nor the circuit is to be changed.
@@ -182,6 +191,101 @@ def conventions(P, m, theta):
     return out
 
 
+def qpe_prob(m, phi, y):
+    """qpeProb m phi y = |2^-m sum_{k<2^m} e^{2 pi i k (phi - y/2^m)}|^2 (the sum, not the closed form)."""
+    k = np.arange(2**m)
+    return abs(np.exp(2j * np.pi * k * (phi - y / 2**m)).sum() / 2**m) ** 2
+
+
+def circle_near(m, phi, y):
+    """CircleNear m phi y: the circle distance of y/2^m and phi is at most 2^-m."""
+    d = (y / 2**m - phi) % 1.0
+    return min(d, 1.0 - d) <= 2.0**-m + 1e-12
+
+
+def two_point(t):
+    return math.sin(math.pi * t) ** 2 * (1 / t**2 + 1 / (1 - t) ** 2)
+
+
+def ae_eps(a, m):
+    return 2 * math.pi * math.sqrt(max(a * (1 - a), 0.0)) / 2**m + math.pi**2 / 4**m
+
+
+def part_f():
+    """(f) Stage 20a1: the analysis of CQRV/Grover/QPEBound.lean on grids; pure numbers."""
+    # A2: the inequality on a grid, attained at t = 1/2
+    grid = [i / 2000 for i in range(1, 2000)]
+    vals = [two_point(t) for t in grid]
+    gmin = min(vals)
+    tmin = grid[vals.index(gmin)]
+    assert gmin >= 8 - 1e-12, f"two_point_bound fails on the grid: {gmin} at t = {tmin}"
+    assert tmin == 0.5 and abs(two_point(0.5) - 8) < 1e-12, (tmin, two_point(0.5))
+    second = min(v for t, v in zip(grid, vals) if t != 0.5)
+    # negative controls: the two simpler bounds fail at t = 1/4
+    t = 0.25
+    c1 = math.sin(math.pi * t) - 4 * t * (1 - t)
+    sinc = lambda u: math.sin(math.pi * u) / (math.pi * u)  # noqa: E731
+    c2 = sinc(t) + sinc(1 - t) - 4 / math.pi
+    assert c1 < -0.01, f"sin(pi t) >= 4 t (1 - t) holds at t = 1/4 ({c1})"
+    assert c2 < -0.01, f"sinc t + sinc (1 - t) >= 4/pi holds at t = 1/4 ({c2})"
+    # A1, A3: closed form, period, normalisation, the two neighbours, the near set
+    bound = 8 / math.pi**2
+    max_closed, max_norm, max_period = 0.0, 0.0, 0.0
+    min_two, min_near, arg_two = None, None, None
+    for m in range(1, 9):
+        N = 2**m
+        phis = [-1 + 0.0437 * i + 0.0123 for i in range(46)] + [(k + 0.5) / N for k in (-1, 0, 3)] \
+            + [k / N for k in (0, 1, N - 1)]
+        for phi in phis:
+            P = [qpe_prob(m, phi, y) for y in range(N)]
+            max_norm = max(max_norm, abs(sum(P) - 1))
+            for y in range(N):
+                delta = phi - y / N
+                s = math.sin(math.pi * delta)
+                if abs(s) > 1e-6:
+                    closed = math.sin(math.pi * N * delta) ** 2 / (N**2 * s**2)
+                    max_closed = max(max_closed, abs(closed - P[y]))
+            max_period = max(max_period, abs(qpe_prob(m, phi, 1 + N) - P[1 % N]),
+                             abs(qpe_prob(m, phi, -3) - P[-3 % N]))
+            F = math.floor(N * phi)
+            two = P[F % N] + P[(F + 1) % N]
+            assert F % N != (F + 1) % N
+            assert two >= bound - 1e-12, f"m = {m}, phi = {phi}: two neighbours carry {two} < 8/pi^2"
+            near = [y for y in range(N) if circle_near(m, phi, y)]
+            assert F % N in near and (F + 1) % N in near, (m, phi, near)
+            s_near = sum(P[y] for y in near)
+            assert s_near >= bound - 1e-12
+            if min_two is None or two < min_two:
+                min_two, arg_two = two, (m, phi)
+            min_near = s_near if min_near is None else min(min_near, s_near)
+    assert max_closed < EPS and max_norm < EPS and max_period < EPS, (max_closed, max_norm, max_period)
+    # A4: every near outcome decodes within ae_eps, both signs
+    max_ratio, checked = 0.0, 0
+    for m in range(1, 9):
+        N = 2**m
+        for i in range(0, 41):
+            theta = (math.pi / 2) * i / 40
+            a = math.sin(theta) ** 2
+            for sign in (1, -1):
+                for y in range(N):
+                    if circle_near(m, sign * theta / math.pi, y):
+                        err = abs(math.sin(math.pi * y / N) ** 2 - a)
+                        eps = ae_eps(a, m)
+                        assert err <= eps + 1e-12, f"decode_close fails: m = {m}, theta = {theta}, y = {y}"
+                        max_ratio = max(max_ratio, err / eps)
+                        checked += 1
+    print(f"ok:   (f) two_point_bound on the grid t = i/2000: minimum {gmin:.12f} at t = {tmin} "
+          f"(= 8, attained); next grid value {second:.9f}")
+    print(f"ok:   (f) negative controls at t = 1/4: sin(pi t) - 4t(1-t) = {c1:.4f} < 0; "
+          f"sinc t + sinc(1-t) - 4/pi = {c2:.4f} < 0 (both simpler bounds are false)")
+    print(f"ok:   (f) qpeProb, m = 1..8: closed form vs sum {max_closed:.1e}, period 2^m {max_period:.1e}, "
+          f"|sum_y - 1| {max_norm:.1e}; two neighbours >= 8/pi^2 = {bound:.6f}, minimum {min_two:.6f} "
+          f"(m = {arg_two[0]}, phi = {arg_two[1]:.6f}); near set minimum {min_near:.6f}")
+    print(f"ok:   (f) decode_close: {checked} near outcomes within ae_eps, largest error/ae_eps "
+          f"{max_ratio:.3f}")
+    return gmin
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
@@ -315,10 +419,12 @@ def main():
         eta = 4 * math.pi * m / 2**kmax
         tvs.append(f"kmax = {kmax}: {dropped} cp dropped, TV distance {tv:.4f} (eta_aqft = {eta:.2f} >= 2, vacuous)")
     print(f"ok:   (e) {AQFT_PRED}, m = {m}: " + "; ".join(tvs))
+    # (f) Stage 20a1: the analysis behind the QPE bound (pure numbers)
+    part_f()
     print(f"counting_diff: PASS — {len(PREDS)} predicates (n = 4 and 6; M = 0, 1, 5, 8, 9, 16), "
           f"m = 1..{args.m_max}: the convention of §A.3 (5) (y read with data n the MSB, phases "
           f"±θ/π with the fix present), MBU = coherent, both negative controls, grades vs the "
-          "composed bound, block replay, AQFT")
+          "composed bound, block replay, AQFT; the QPE analysis of Stage 20a1 on grids")
 
 
 if __name__ == "__main__":

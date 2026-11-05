@@ -435,8 +435,10 @@ forward list (`qftGates m` or `aqftGates m k`). **Stage 19 complete.**
 ### A.4 The amplitude-estimation parametric lemma (extends report §8.2, §2.2)
 
 **Eigenstructure.** With `ψ_g`, `ψ_b` and `θ` of `GroverParams` (`sin²θ = M/2ⁿ`), the vectors
-`ψ_± = (ψ_g ∓ i ψ_b)/√2` satisfy `G ψ_± = e^{±2iθ} ψ_±` (from `reflection_geometry`), and
-`ketS = (e^{iθ} ψ_+ + e^{−iθ} ψ_−)/√2` up to the convention fixed in the task file.
+`ψ_± = (ψ_g ± i ψ_b)/√2` satisfy `G ψ_± = e^{±2iθ} ψ_±` (from `reflection_geometry`), and
+`ketS = (−i e^{iθ} ψ_+ + i e^{−iθ} ψ_−)/√2`. (Labels and coefficient corrected before Stage 20a.
+This paragraph explains the two phases; the proof does not use the vectors, see the amendments
+below.)
 
 **The QPE lemma** (`qpe_two_phase_bound`), pure linear algebra on `Fin (2^m)`: for a unitary `G`
 with an eigenvector `ψ` of eigenphase `φ ∈ [0,1)` (`G ψ = e^{2πiφ} ψ`), the measurement
@@ -486,6 +488,39 @@ certificate in which the diamond distance of Stage 13b appears. The `GroverParam
 `hM_card` is still needed *in the lemma* (it fixes `a`); the point of the pattern is that the
 certificate's *output* is an estimate of `M`, see §A.5. The estimate's error in `M` units is
 `2ⁿ · ae_eps`, and the stretch goal §A.7 turns it into an exact `M` for `m` large enough.
+
+**Amendments before Stage 20a (reviewer, 2026-11-05; docs/tasks/STAGE20A_TASK.md).** They replace
+the statement of "The QPE lemma" above. The rest of this section stands.
+
+(1) *No eigenvectors in the proof.* `iteration_induction` already gives `G^k ketS = sin((2k+1)θ)
+ψ_g + cos((2k+1)θ) ψ_b`, and writing sine and cosine as exponentials produces the two phases
+`±θ/π` directly. The case `M = 2ⁿ`, where `ψ_b = 0` and `ψ_±` are not unit vectors, needs no
+separate eigenstructure. A QPE lemma for an arbitrary unitary and eigenvector is not proved: no
+client needs it in Phase 2. It can be added when the library has a second QPE-based pattern.
+
+(2) *The amplitude.* With `U_count` of §A.3 (5), for `x : Reg (n+m)`, `y = (phase x).toNat`:
+```
+(U_count P m none *ᵥ |0…0⟩) x =
+  2^{−m} ∑_{k<2^m} e^{−2πi y k / 2^m} (G^k ketS)(search x).
+```
+
+(3) *The distribution.* `qpeAmp m δ = 2^{−m} ∑_{k<2^m} e^{2πi k δ}`, `qpeProb m φ y = |qpeAmp m
+(φ − y/2^m)|²`, and `phaseDist gp m y = ∑_{s : Reg n} |(U_count … *ᵥ |0…0⟩) (s, y)|²`. For every
+`GroverData` (so `M ≥ 1`, including `M = 2ⁿ`):
+```
+phaseDist gp m y = ½ (qpeProb m (θ/π) y.toNat + qpeProb m (−θ/π) y.toNat).
+```
+
+(4) *The bound.* `CircleNear m φ y := ∃ z : ℤ, |y/2^m − φ − z| ≤ 2^{−m}`, which is `‖y/2^m − φ‖ ≤
+2^{−m}` on the circle without a new distance. For `m ≥ 1`:
+```
+qpe_two_phase_bound : 8/π² ≤ ∑_{y : near θ/π or near −θ/π} phaseDist gp m y,
+qpe_success         : 8/π² ≤ ∑_{y : |sin²(π y/2^m) − a| ≤ ae_eps a m} phaseDist gp m y,
+```
+with `a = M/2ⁿ`. The two neighbours `⌊2^m φ⌋` and `⌊2^m φ⌋ + 1` carry the bound. It reduces to
+`8 ≤ sin²(πt) (1/t² + 1/(1−t)²)` for `0 < t < 1`; equality holds at `t = ½`. The `|ã − a|` bound is
+`|sin²(θ+Δ) − sin²θ| ≤ |sin 2θ| |Δ| + Δ²` with `|Δ| ≤ π/2^m`, and it is the same for both signs of
+`θ`. Stage 20b works from `qpe_success`.
 
 ### A.5 The second library entry, the request, decidability (report §4.1–4.2, §9.3.2, §7.2)
 
@@ -557,9 +592,8 @@ M3 review decides; the obstacle is recorded either way.
    iterates); the harness of Stage 20b also runs `m = 6` (Stage 19b's runs m ≤ 4). The exact `ε`
    at `m = 4` is
    `2π·√(7/64)/16 + π²/256`, stated as a real in the certificate as `δ` is today.
-4. Still fixed in the task files: the convention for `ψ_±` and the sign of the eigenphase
-   (Stage 20a). Resolved before Stage 19: the controlled oracle's final conjunction is an AND
-   node (§A.3, amendment (3)).
+4. Resolved: the controlled oracle's final conjunction is an AND node (§A.3, amendment (3));
+   `ψ_± = (ψ_g ± i ψ_b)/√2`, and the proof does not use them (§A.4, amendment (1)).
 5. Certificate form of the counting certificates: compositional (§A.3), with blocks of at most 600
    instructions measured exactly and the whole grade a ⊕ bound labelled `composed_bound`. Every
    Lean process stays below 8 GB on the 16 GB machine (decided at the 18a review, 2026-11-01).
