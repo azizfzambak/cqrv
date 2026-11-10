@@ -7,6 +7,7 @@ public import CQRV.Grover.Instance
 public import CQRV.Grover.MczFew
 public import CQRV.Grover.MczFewAll
 public import CQRV.Grover.QPEBound
+public import CQRV.Grover.Counting
 
 /-!
 # CQRV.Grover

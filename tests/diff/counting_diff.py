@@ -43,6 +43,13 @@ bit k); M = Σ P. With sin²θ = M/2ⁿ:
       (`qpeProb_two_neighbours`), the near set carries ≥ 8/π² (`qpe_near_sum_ge`), and every near
       outcome decodes within ae_eps (`decode_close`, for a grid of θ in [0, π/2], both signs).
 
+  (g) Stage 20a2 (PHASE2_SPEC §A.4 (3)–(4); CQRV/Grover/Counting.lean), on the coherent circuits
+      of part (a) for every predicate with M ≥ 1: the near set {y : y/2^m within 2^-m of θ/π or
+      of −θ/π on the circle} carries at least 8/π² (`qpe_two_phase_bound`), the decoding set
+      {y : |sin²(π y/2^m) − M/2ⁿ| ≤ ae_eps (M/2ⁿ) m} contains it and carries at least 8/π²
+      (`qpe_success`); both margins are printed per predicate (the minimum over m). M = 0 is
+      outside `GroverData` (`hM_pos`): it stays in part (a) and is skipped here, with a note.
+
 If (a) fails, the harness reports which of the four conventions (phases ±θ/π or ½ ± θ/π, the
 register read naturally or bit-reversed) the data fit, and fails: that is the stop condition of
 §A.3 (5) — neither the harness nor the circuit is to be changed.
@@ -304,6 +311,8 @@ def main():
     branches = 0
     rev_results = {}
     seps = {}               # (c) separations of the fix-less circuit from (a), per predicate
+    g_margins = {}          # (g) (margin of the near set, margin of the decoding set), per predicate
+    bound_g = 8 / math.pi**2
     for f, n, pred, M_want in PREDS:
         entry = data[f]
         assert entry["n"] == n, (f, entry["n"])
@@ -337,6 +346,18 @@ def main():
                     f"not ½(P_m(θ/π) + P_m(−θ/π)) read with data n the MSB (error {err:.3g}); the "
                     f"four conventions:\n{lines}")
             max_err = max(max_err, err)
+            # (g) Stage 20a2: the near set and the decoding set carry at least 8/pi^2 (M >= 1)
+            if M >= 1:
+                a_g = M / 2**n
+                near_g = [y for y in range(2**m)
+                          if circle_near(m, theta / math.pi, y) or circle_near(m, -theta / math.pi, y)]
+                dec_g = [y for y in range(2**m)
+                         if abs(math.sin(math.pi * y / 2**m) ** 2 - a_g) <= ae_eps(a_g, m) + 1e-12]
+                assert set(near_g) <= set(dec_g), f"{f}, m = {m}: a near outcome decodes badly"
+                s_near, s_dec = float(sum(P[y] for y in near_g)), float(sum(P[y] for y in dec_g))
+                assert s_near >= bound_g - 1e-12, f"{f}, m = {m}: near set carries {s_near} < 8/pi^2"
+                assert s_dec >= bound_g - 1e-12, f"{f}, m = {m}: decoding set carries {s_dec} < 8/pi^2"
+                g_margins.setdefault(f, []).append((m, s_near - bound_g, s_dec - bound_g))
             # (b) MBU: sampled branches equal the coherent state
             v_c = data_vector(st, n_anc)
             e0 = np.zeros(2 ** (n + m), dtype=complex)
@@ -419,12 +440,24 @@ def main():
         eta = 4 * math.pi * m / 2**kmax
         tvs.append(f"kmax = {kmax}: {dropped} cp dropped, TV distance {tv:.4f} (eta_aqft = {eta:.2f} >= 2, vacuous)")
     print(f"ok:   (e) {AQFT_PRED}, m = {m}: " + "; ".join(tvs))
+    # (g) Stage 20a2: qpe_two_phase_bound / qpe_success on the coherent circuits (M >= 1)
+    for f, _, _, M_want in PREDS:
+        if M_want == 0:
+            print(f"ok:   (g) {f}: skipped (M = 0 is outside GroverData, hM_pos; checked in part (a))")
+            continue
+        rows = g_margins[f]
+        mn = min(r[1] for r in rows)
+        md = min(r[2] for r in rows)
+        print(f"ok:   (g) {f}: near set >= 8/pi^2 = {bound_g:.6f}, margin at least {mn:.6f}; decoding set "
+              f"(qpe_success) margin at least {md:.6f} (over m = 1..{args.m_max}: "
+              + ", ".join(f"m{r[0]}: +{r[1]:.4f}/+{r[2]:.4f}" for r in rows) + ")")
     # (f) Stage 20a1: the analysis behind the QPE bound (pure numbers)
     part_f()
     print(f"counting_diff: PASS — {len(PREDS)} predicates (n = 4 and 6; M = 0, 1, 5, 8, 9, 16), "
           f"m = 1..{args.m_max}: the convention of §A.3 (5) (y read with data n the MSB, phases "
           f"±θ/π with the fix present), MBU = coherent, both negative controls, grades vs the "
-          "composed bound, block replay, AQFT; the QPE analysis of Stage 20a1 on grids")
+          "composed bound, block replay, AQFT; the QPE analysis of Stage 20a1 on grids; the QPE "
+          "bound of Stage 20a2 on the circuits")
 
 
 if __name__ == "__main__":

@@ -232,6 +232,27 @@ theorem Reg.toNat_bitRev {m : ℕ} (s : Reg m) : (bitRev s).toNat = s.toNatLE :=
   have : m - 1 - (j : ℕ) = m - ((j : ℕ) + 1) := by omega
   rw [this]
 
+/-! ## Sums over a register indexed by its encodings (Stage 20a2, PHASE2_SPEC.md §A.4) -/
+
+/-- A sum over `Reg m` indexed by `toNat` is a sum over `range (2^m)`: `toNat` is a bijection onto
+`range (2^m)` with inverse `ofNat m`. -/
+theorem Reg.sum_toNat {M : Type} [AddCommMonoid M] (m : ℕ) (f : ℕ → M) :
+    ∑ s : Reg m, f s.toNat = ∑ k ∈ Finset.range (2 ^ m), f k :=
+  Finset.sum_nbij' (fun s : Reg m => s.toNat) (fun k => Reg.ofNat m k)
+    (fun s _ => Finset.mem_range.mpr s.toNat_lt) (fun _ _ => Finset.mem_univ _)
+    (fun s _ => Reg.ofNat_toNat s) (fun _ hk => Reg.toNat_ofNat (Finset.mem_range.mp hk))
+    (fun _ _ => rfl)
+
+/-- The same for `toNatLE` (`toNat ∘ bitRev`, with inverse `bitRev ∘ ofNat m`). -/
+theorem Reg.sum_toNatLE {M : Type} [AddCommMonoid M] (m : ℕ) (f : ℕ → M) :
+    ∑ s : Reg m, f s.toNatLE = ∑ k ∈ Finset.range (2 ^ m), f k :=
+  Finset.sum_nbij' (fun s : Reg m => s.toNatLE) (fun k => bitRev (Reg.ofNat m k))
+    (fun s _ => by rw [← Reg.toNat_bitRev]; exact Finset.mem_range.mpr (bitRev s).toNat_lt)
+    (fun _ _ => Finset.mem_univ _)
+    (fun s _ => by rw [← Reg.toNat_bitRev, Reg.ofNat_toNat, bitRev_bitRev])
+    (fun k hk => by rw [← Reg.toNat_bitRev, bitRev_bitRev, Reg.toNat_ofNat (Finset.mem_range.mp hk)])
+    (fun _ _ => rfl)
+
 end CQRV
 
 end

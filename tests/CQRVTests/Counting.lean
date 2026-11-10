@@ -3,6 +3,7 @@ module
 import CQRV.Synthesis.Counting
 import CQRV.Circuit.CountingCorrect
 import CQRV.Circuit.GradeCompose
+import CQRV.Grover.Counting
 meta import CQRV.Synthesis.Counting
 meta import CQRV.Circuit.CountingCorrect
 meta import CQRV.Circuit.GradeCompose
@@ -27,11 +28,15 @@ B1–B4)
   `powersU = ctrlPow G`, and `countingCircuit_ancRestore` with `U_count` for the exact and the
   approximate inverse QFT — and the axiom lines of `countingCircuit_ancRestore`, the C4 product
   lemma `powersU_val`, the shift lemma and `raw_eq_U_count`.
+* Stage 20a2 (B1–B4): `example` instances at `n = 2`, `m = 2` on the Grover data of `x₀ ∧ x₁`
+  (`M = 1`) and of `true` (`M = 2ⁿ = 4`, where `ψ_b = 0` and `θ = π/2`) — the amplitude of `U_count`
+  on `|0…0⟩`, its two-phase form, `phaseDist_eq`, `qpe_two_phase_bound`, `qpe_success` — and the
+  axiom lines of `U_count_zero_apply`, `phaseDist_eq`, `qpe_two_phase_bound`, `qpe_success`.
 -/
 
 namespace CQRV.Tests.Counting
 
-open CQRV CQRV.Synthesis CQRV.Counting CQRV.Grover Matrix
+open CQRV CQRV.Synthesis CQRV.Counting CQRV.Grover Matrix Real
 open scoped Kronecker
 
 /-- The network of `grover_pred_037` (`x0 ∧ x3 ∧ x7`), the literal of `groverNet`. -/
@@ -229,6 +234,61 @@ example : (U_count (n2.pred 2) 2 none).val =
     liftP (star (dataMat 2 (qftGates 2))) * ctrlPow (groverOp (n2.pred 2)).val *
       hadamardMat (2 + 2) := rfl
 
+/-! ## Stage 20a2 — the distribution of the counting circuit, at `n = 2`, `m = 2` -/
+
+/-- The Grover data of `x₀ ∧ x₁` on two qubits: `M = 1`. -/
+def gp22 : GroverData := ⟨2, 1, le_rfl, fun x => x 0 && x 1, by decide⟩
+
+/-- The Grover data of `true` on two qubits: `M = 2ⁿ = 4`, the case `ψ_b = 0`. -/
+def gpAll : GroverData := ⟨2, 4, by norm_num, fun _ => true, by decide⟩
+
+-- B1
+example (x : Reg (gp22.n + 2)) :
+    ((U_count gp22.P 2 none).val *ᵥ basisVec (zeroReg _)) x =
+      ((2 ^ 2 : ℕ) : ℂ)⁻¹ * ∑ k ∈ Finset.range (2 ^ 2),
+        Complex.exp (-(2 * π * Complex.I * (phase x).toNat * k / 2 ^ 2)) *
+          ((groverOp gp22.P ^ k).val *ᵥ ketS gp22.n) (search x) :=
+  U_count_zero_apply gp22 2 x
+
+-- B2
+example (x : Reg (gp22.n + 2)) :
+    ((U_count gp22.P 2 none).val *ᵥ basisVec (zeroReg _)) x =
+      ampA gp22 2 (phase x).toNat * gp22.psiGood (search x) +
+        ampB gp22 2 (phase x).toNat * gp22.psiBad (search x) :=
+  U_count_zero_apply_eq gp22 2 x
+example (y : ℕ) : ‖ampA gp22 2 y‖ ^ 2 + ‖ampB gp22 2 y‖ ^ 2 =
+    (‖qpeAmp 2 (gp22.θ / π - y / 2 ^ 2)‖ ^ 2 + ‖qpeAmp 2 (-gp22.θ / π - y / 2 ^ 2)‖ ^ 2) / 2 :=
+  norm_sq_ampA_add_ampB gp22 2 y
+
+-- B3, both for `M = 1` and for `M = 2ⁿ`
+example (y : Reg 2) : phaseDist gp22 2 y =
+    (qpeProb 2 (gp22.θ / π) y.toNat + qpeProb 2 (-gp22.θ / π) y.toNat) / 2 :=
+  phaseDist_eq gp22 2 y
+example (y : Reg 2) : phaseDist gpAll 2 y =
+    (qpeProb 2 (gpAll.θ / π) y.toNat + qpeProb 2 (-gpAll.θ / π) y.toNat) / 2 :=
+  phaseDist_eq gpAll 2 y
+example : gpAll.psiBad = 0 := by
+  funext x
+  simp [GroverData.psiBad, gpAll]
+example : gpAll.θ = π / 2 :=
+  θ_eq_pi_div_two_of_psiBad gpAll (by funext x; simp [GroverData.psiBad, gpAll])
+
+-- B4
+open Classical in
+example : 8 / π ^ 2 ≤ ∑ y ∈ Finset.univ.filter (fun y : Reg 2 =>
+    CircleNear 2 (gp22.θ / π) y.toNat ∨ CircleNear 2 (-gp22.θ / π) y.toNat), phaseDist gp22 2 y :=
+  qpe_two_phase_bound gp22 (by norm_num)
+open Classical in
+example : 8 / π ^ 2 ≤ ∑ y ∈ Finset.univ.filter (fun y : Reg 2 =>
+    |Real.sin (π * y.toNat / 2 ^ 2) ^ 2 - gp22.M / 2 ^ gp22.n| ≤ ae_eps (gp22.M / 2 ^ gp22.n) 2),
+      phaseDist gp22 2 y :=
+  qpe_success gp22 (by norm_num)
+open Classical in
+example : 8 / π ^ 2 ≤ ∑ y ∈ Finset.univ.filter (fun y : Reg 2 =>
+    |Real.sin (π * y.toNat / 2 ^ 2) ^ 2 - gpAll.M / 2 ^ gpAll.n| ≤ ae_eps (gpAll.M / 2 ^ gpAll.n) 2),
+      phaseDist gpAll 2 y :=
+  qpe_success gpAll (by norm_num)
+
 /-! ## Axioms (CLAUDE.md rule 10) -/
 
 /-- info: 'CQRV.Synthesis.Network.withControl_pred' depends on axioms: [propext, Classical.choice, Quot.sound] -/
@@ -274,5 +334,21 @@ example : (U_count (n2.pred 2) 2 none).val =
 /-- info: 'CQRV.Counting.raw_eq_U_count' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms raw_eq_U_count
+
+/-- info: 'CQRV.Grover.U_count_zero_apply' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms U_count_zero_apply
+
+/-- info: 'CQRV.Grover.phaseDist_eq' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms phaseDist_eq
+
+/-- info: 'CQRV.Grover.qpe_two_phase_bound' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms qpe_two_phase_bound
+
+/-- info: 'CQRV.Grover.qpe_success' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms qpe_success
 
 end CQRV.Tests.Counting
