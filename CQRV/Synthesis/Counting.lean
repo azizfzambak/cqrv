@@ -356,6 +356,16 @@ theorem countingCircuit_ok {N : Network} {n m : Nat} {kmax : Option Nat} {shape 
     simp [hb, bind, Except.bind, pure, Except.pure] at h
     exact h.symm
 
+/-- The converse of `countingCircuit_ok` (Stage 20b2, PHASE2_SPEC.md §A.4 (4)): for `m ≠ 0`, from
+the powers `body`, `countingCircuit` is the body followed by the shifted inverse (A)QFT — for every
+`kmax`, so the exact and the approximate circuits share their `body`. -/
+theorem countingCircuit_of_body {N : Network} {n m : Nat} (kmax : Option Nat)
+    {shape : DiffusionShape} {mode : UncomputeMode} {body : Circuit} (hm : m ≠ 0)
+    (hb : countingPowers N n m shape mode (countingHLayer n m) m = .ok body) :
+    countingCircuit N n m kmax shape mode = .ok (body.append (countingInverse n m kmax)) := by
+  unfold countingCircuit
+  simp [hm, hb, bind, Except.bind, pure, Except.pure]
+
 end CQRV.Synthesis
 
 end

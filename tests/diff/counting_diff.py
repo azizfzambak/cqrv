@@ -50,6 +50,13 @@ bit k); M = Σ P. With sin²θ = M/2ⁿ:
       (`qpe_success`); both margins are printed per predicate (the minimum over m). M = 0 is
       outside `GroverData` (`hM_pos`): it stays in part (a) and is skipped here, with a note.
 
+  (h) Stage 20b2 (PHASE2_SPEC §A.4 (3)–(4); ae_parametric_lemma_aqft), one n = 4 predicate in
+      coherent mode (each circuit is a separate Lean start of 10–19 s, so one predicate keeps the
+      step near its budget; the second predicate is left out, as the task text allows): at m = 5, 6
+      the realized probability of |countEst y − a| ≤ ae_eps a m against 1 − ae_delta = 8/π²; at
+      m = 6, kmax = 4, 5, the AQFT circuit's realized probability next to the lemma's bound
+      8/π² − eta_aqft/2, which is vacuous for m ≤ 6 (eta_aqft ≥ 2, as in 18c).
+
 If (a) fails, the harness reports which of the four conventions (phases ±θ/π or ½ ± θ/π, the
 register read naturally or bit-reversed) the data fit, and fails: that is the stop condition of
 §A.3 (5) — neither the harness nor the circuit is to be changed.
@@ -293,6 +300,49 @@ def part_f():
     return gmin
 
 
+H_PRED = "all_four.cqr"
+
+
+def part_h(bound):
+    """(h) Stage 20b2: one predicate, coherent mode, m = 5, 6; the AQFT variant at m = 6."""
+    f, n, pred, M_want = next(p for p in PREDS if p[0] == H_PRED)
+    M = table_of(pred, n).count("1")
+    assert M == M_want and M >= 1
+    a = M / 2**n
+    path = os.path.join(PRED_DIR, f)
+
+    def realized(obj, m):
+        c = obj["circuit"]
+        assert obj["m"] == m and obj["uncompute"] == "coherent" and c["n_data"] == n + m
+        P = phase_dist(coherent_state(c), n, m, c["n_anc"])
+        dec = [y for y in range(2**m)
+               if abs(math.sin(math.pi * y / 2**m) ** 2 - a) <= ae_eps(a, m) + 1e-12]
+        return float(sum(P[y] for y in dec)), P
+
+    lines, P6 = [], None
+    for m in (5, 6):
+        obj = json.loads(certify_tool(["counting-sample", path, str(m), "--uncompute", "coherent"]))
+        assert obj["kmax"] is None
+        p, P = realized(obj, m)
+        assert p >= bound - 1e-12, f"{f}, m = {m}: realized probability {p} < 8/pi^2"
+        lines.append(f"m = {m} exact: realized {p:.6f} >= 8/pi^2 (margin +{p - bound:.4f})")
+        if m == 6:
+            P6 = P
+    for kmax in (4, 5):
+        obj = json.loads(certify_tool(["counting-sample", path, "6", "--kmax", str(kmax),
+                                       "--uncompute", "coherent"]))
+        assert obj["kmax"] == kmax
+        p, P = realized(obj, 6)
+        eta = 4 * math.pi * 6 / 2**kmax
+        lemma_bound = bound - eta / 2
+        assert p >= lemma_bound, f"{f}, m = 6, kmax = {kmax}: realized {p} below the lemma's bound"
+        tv = 0.5 * float(np.sum(np.abs(P - P6)))
+        lines.append(f"m = 6, kmax = {kmax} AQFT: realized {p:.6f} (TV to exact {tv:.4f}) vs the "
+                     f"lemma's 8/pi^2 - eta_aqft/2 = {lemma_bound:.3f} (eta_aqft = {eta:.2f} >= 2: "
+                     "vacuous, as in 18c)")
+    print(f"ok:   (h) {f} (n = {n}, M = {M}, a = {a}), coherent mode: " + "; ".join(lines))
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
@@ -451,13 +501,16 @@ def main():
         print(f"ok:   (g) {f}: near set >= 8/pi^2 = {bound_g:.6f}, margin at least {mn:.6f}; decoding set "
               f"(qpe_success) margin at least {md:.6f} (over m = 1..{args.m_max}: "
               + ", ".join(f"m{r[0]}: +{r[1]:.4f}/+{r[2]:.4f}" for r in rows) + ")")
+    # (h) Stage 20b2: the realized probability at m = 5, 6 and the AQFT variant at m = 6
+    part_h(bound_g)
     # (f) Stage 20a1: the analysis behind the QPE bound (pure numbers)
     part_f()
     print(f"counting_diff: PASS — {len(PREDS)} predicates (n = 4 and 6; M = 0, 1, 5, 8, 9, 16), "
           f"m = 1..{args.m_max}: the convention of §A.3 (5) (y read with data n the MSB, phases "
           f"±θ/π with the fix present), MBU = coherent, both negative controls, grades vs the "
           "composed bound, block replay, AQFT; the QPE analysis of Stage 20a1 on grids; the QPE "
-          "bound of Stage 20a2 on the circuits")
+          "bound of Stage 20a2 on the circuits; the realized probability at m = 5, 6 and the AQFT "
+          "variant of Stage 20b2")
 
 
 if __name__ == "__main__":

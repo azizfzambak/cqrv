@@ -252,6 +252,61 @@ theorem diamondDist_ofUnitary_le (U V : 𝐔[d]) :
       _ = ‖W₁ - W₂‖ := one_mul _
   linarith
 
+/-! ### Stage 20b2 (PHASE2_SPEC.md §A.4 "Amendments before Stage 20b" (4)) — the operator norm
+under reindexing, and `‖A ⊗ₖ 1‖ ≤ ‖A‖` for an identity on a second index type. -/
+
+/-- `‖A.submatrix e e‖ ≤ ‖A‖` for an equivalence `e` (a reindexing): `(A.submatrix e e) x =
+(A (x ∘ e.symm)) ∘ e`, and both sums of squares are reindexed by `e`. -/
+theorem l2_opNorm_submatrix_equiv_le {d' : Type} [Fintype d'] [DecidableEq d'] (A : Matrix d d ℂ)
+    (e : d' ≃ d) : ‖A.submatrix e e‖ ≤ ‖A‖ := by
+  rw [← Matrix.l2_opNorm_toEuclideanCLM]
+  refine ContinuousLinearMap.opNorm_le_bound _ (norm_nonneg A) fun x => ?_
+  refine (sq_le_sq₀ (norm_nonneg _) (by positivity)).mp ?_
+  rw [EuclideanSpace.norm_sq_eq, mul_pow, EuclideanSpace.norm_sq_eq x]
+  simp only [Matrix.ofLp_toEuclideanCLM, Matrix.submatrix_mulVec_equiv, Function.comp_apply]
+  rw [Equiv.sum_comp e (fun j => ‖(A *ᵥ (WithLp.ofLp x ∘ e.symm)) j‖ ^ 2)]
+  refine (sum_norm_sq_mulVec_le A _).trans (le_of_eq ?_)
+  congr 1
+  exact Equiv.sum_comp e.symm (fun k => ‖WithLp.ofLp x k‖ ^ 2)
+
+/-- PHASE2_SPEC.md §A.4 (4) — **the L2 operator norm is invariant under reindexing**:
+`‖A.submatrix e e‖ = ‖A‖` for an equivalence `e` (both directions of
+`l2_opNorm_submatrix_equiv_le`, since `A = (A.submatrix e e).submatrix e.symm e.symm`). Not in
+Mathlib (searched: `Matrix.l2_opNorm_*`, `reindex`). -/
+theorem l2_opNorm_submatrix_equiv {d' : Type} [Fintype d'] [DecidableEq d'] (A : Matrix d d ℂ)
+    (e : d' ≃ d) : ‖A.submatrix e e‖ = ‖A‖ := by
+  refine le_antisymm (l2_opNorm_submatrix_equiv_le A e) ?_
+  have h := l2_opNorm_submatrix_equiv_le (A.submatrix e e) e.symm
+  rwa [Matrix.submatrix_submatrix, Equiv.self_comp_symm, Matrix.submatrix_id_id] at h
+
+omit [DecidableEq d] in
+theorem mulVec_kronecker_one' {e : Type} [Fintype e] [DecidableEq e] (A : Matrix d d ℂ)
+    (x : d × e → ℂ) (i : d) (j : e) :
+    ((A ⊗ₖ (1 : Matrix e e ℂ)) *ᵥ x) (i, j) = (A *ᵥ fun k => x (k, j)) i := by
+  simp only [Matrix.mulVec, dotProduct, Fintype.sum_prod_type, Matrix.kronecker_apply,
+    Matrix.one_apply, mul_ite, mul_one, mul_zero, ite_mul, zero_mul, Finset.sum_ite_eq,
+    Finset.mem_univ, ↓reduceIte]
+
+/-- `l2_opNorm_kronecker_one_le` with the identity on a second index type `e` (the proof of the
+18c lemma, verbatim; the 18c statement is kept). -/
+theorem l2_opNorm_kronecker_one_le' {e : Type} [Fintype e] [DecidableEq e] (A : Matrix d d ℂ) :
+    ‖A ⊗ₖ (1 : Matrix e e ℂ)‖ ≤ ‖A‖ := by
+  rw [← Matrix.l2_opNorm_toEuclideanCLM]
+  refine ContinuousLinearMap.opNorm_le_bound _ (norm_nonneg A) fun x => ?_
+  refine (sq_le_sq₀ (norm_nonneg _) (by positivity)).mp ?_
+  rw [EuclideanSpace.norm_sq_eq, mul_pow, EuclideanSpace.norm_sq_eq x, Fintype.sum_prod_type_right,
+    Fintype.sum_prod_type_right, Finset.mul_sum]
+  refine Finset.sum_le_sum fun j _ => ?_
+  simp only [Matrix.ofLp_toEuclideanCLM, mulVec_kronecker_one']
+  exact sum_norm_sq_mulVec_le A _
+
+omit [Fintype d] [DecidableEq d] in
+/-- `sub_kronecker_one` with the identity on a second index type `e`. -/
+theorem sub_kronecker_one' {e : Type} [DecidableEq e] (A B : Matrix d d ℂ) :
+    (A - B) ⊗ₖ (1 : Matrix e e ℂ) = A ⊗ₖ 1 - B ⊗ₖ 1 := by
+  ext ⟨i, j⟩ ⟨k, l⟩
+  simp [sub_mul]
+
 end Unitary
 
 end CQRV

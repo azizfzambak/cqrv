@@ -10,7 +10,9 @@
 # distribution of the coherent circuit equals ½(P_m(θ/π) + P_m(−θ/π)) read with data n the MSB,
 # the sampled MBU branches equal the coherent state, the negative controls (phase fix removed:
 # the shifted mixture; bit-reversed reading: fails), the measured grades against the composed
-# bound of Stage 19a, the block table replays to the circuit, and the AQFT variants at m = 4.
+# bound of Stage 19a, the block table replays to the circuit, and the AQFT variants at m = 4;
+# parts (f), (g) (Stage 20a) and (h) (Stage 20b2: one predicate at m = 5, 6 in coherent mode and
+# the AQFT variant at m = 6, four single-circuit `counting-sample` calls, about 70 s).
 #
 # Usage (after `lake build`):  scripts/diff_counting.sh [--m-max 4] [--seed S] [--samples 2]
 #   PYTHON=.venv/Scripts/python.exe scripts/diff_counting.sh   # local Windows venv

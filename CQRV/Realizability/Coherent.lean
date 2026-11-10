@@ -86,6 +86,55 @@ theorem coherent_composition_diamond
   coherent_composition (fun Λ₁ Λ₂ => diamondDist Λ₁ Λ₂)
     (fun Λ₁ Λ₂ ρ => diamond_dominates Λ₁ Λ₂ ρ) hideal hΦ hΨ hr hs
 
+set_option linter.unusedSectionVars false in
+/-- PHASE2_SPEC.md §A.4 ("Amendments before Stage 20b" (3)), report §2.3.2, Theorem 3.3b —
+`coherent_composition` on a **pseudo-metric** output space: the statement with
+`[PseudoMetricSpace Z]`, the same proof (it uses only what `Spec.relax` needs: the distance, never
+that distinct points are at positive distance). The existing theorem keeps `MetricSpace`; the
+output type of amplitude estimation (`CountOut`, Stage 20b1) is only a pseudo-metric space. -/
+theorem coherent_composition_pseudo
+    (distD : ∀ {A B : Type} [Fintype A] [DecidableEq A] [Fintype B] [DecidableEq B],
+      CPTPMap A B → CPTPMap A B → ℝ)
+    (hdistD : ∀ {A B : Type} [Fintype A] [DecidableEq A] [Fintype B] [DecidableEq B]
+      (Λ₁ Λ₂ : CPTPMap A B) (ρ : MState A), 2 * TrDistance (Λ₁ ρ) (Λ₂ ρ) ≤ distD Λ₁ Λ₂)
+    [PseudoMetricSpace Z] {S_f : Spec X Y} {S_g : Spec Y Z} {dec : POVM Z dZ}
+    {Φ₁ : CPTPMap X dY} {Ψ₁ : CPTPMap dY dZ} {Φ₂ : GradedChannel X dY}
+    {Ψ₂ : GradedChannel dY dZ} {ε₀ δ₀ η_f η_g : ℝ} {r s : Grade}
+    (hideal : Realizes (S_g.comp S_f) dec ⟨Ψ₁ ∘ₘ Φ₁, 0⟩ ε₀ δ₀ 0)
+    (hΦ : distD Φ₂.chan Φ₁ ≤ η_f) (hΨ : distD Ψ₂.chan Ψ₁ ≤ η_g)
+    (hr : Φ₂.grade ≤ r) (hs : Ψ₂.grade ≤ s) :
+    Realizes (S_g.comp S_f) dec ⟨Ψ₂.chan ∘ₘ Φ₂.chan, Φ₂.grade + Ψ₂.grade⟩ ε₀
+      (δ₀ + (η_f + η_g) / 2) (r + s) := by
+  refine ⟨Grade.seqComp_mono hr hs, fun x hx => ?_⟩
+  have hid := hideal.2 x hx
+  simp only [CPTPMap.compose_eq] at hid ⊢
+  set ρ := encode x
+  have htri := trDistance_triangle (Ψ₁ (Φ₁ ρ)) (Ψ₂.chan (Φ₁ ρ)) (Ψ₂.chan (Φ₂.chan ρ))
+  have hdp := trDistance_cptp_le Ψ₂.chan (Φ₁ ρ) (Φ₂.chan ρ)
+  have hg := hdistD Ψ₂.chan Ψ₁ (Φ₁ ρ)
+  have hf := hdistD Φ₂.chan Φ₁ ρ
+  rw [trDistance_symm] at hg hf
+  have hm := prob_sub_le_trDistance_of dec (Ψ₁ (Φ₁ ρ)) (Ψ₂.chan (Φ₂.chan ρ))
+    ((S_g.comp S_f).relax ε₀ x)
+  linarith
+
+set_option linter.unusedSectionVars false in
+/-- PHASE2_SPEC.md §A.4 ("Amendments before Stage 20b" (3)), report §2.3.2 — Theorem 3.3b with
+the diamond distance on a pseudo-metric output space: `coherent_composition_diamond` with
+`[PseudoMetricSpace Z]`, from `coherent_composition_pseudo` and `diamond_dominates`. The client
+is `ae_parametric_lemma_aqft` (Stage 20b2). -/
+theorem coherent_composition_diamond_pseudo
+    [PseudoMetricSpace Z] {S_f : Spec X Y} {S_g : Spec Y Z} {dec : POVM Z dZ}
+    {Φ₁ : CPTPMap X dY} {Ψ₁ : CPTPMap dY dZ} {Φ₂ : GradedChannel X dY}
+    {Ψ₂ : GradedChannel dY dZ} {ε₀ δ₀ η_f η_g : ℝ} {r s : Grade}
+    (hideal : Realizes (S_g.comp S_f) dec ⟨Ψ₁ ∘ₘ Φ₁, 0⟩ ε₀ δ₀ 0)
+    (hΦ : diamondDist Φ₂.chan Φ₁ ≤ η_f) (hΨ : diamondDist Ψ₂.chan Ψ₁ ≤ η_g)
+    (hr : Φ₂.grade ≤ r) (hs : Ψ₂.grade ≤ s) :
+    Realizes (S_g.comp S_f) dec ⟨Ψ₂.chan ∘ₘ Φ₂.chan, Φ₂.grade + Ψ₂.grade⟩ ε₀
+      (δ₀ + (η_f + η_g) / 2) (r + s) :=
+  coherent_composition_pseudo (fun Λ₁ Λ₂ => diamondDist Λ₁ Λ₂)
+    (fun Λ₁ Λ₂ ρ => diamond_dominates Λ₁ Λ₂ ρ) hideal hΦ hΨ hr hs
+
 end CQRV
 
 end

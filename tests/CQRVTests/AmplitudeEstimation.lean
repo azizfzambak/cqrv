@@ -13,12 +13,18 @@ decoding POVM on the state of `U_count` (`countPOVM_measure`, the value `0` at `
 network of the 19c tests with its `GroverData` — and the axiom lines of `countPOVM_measure`,
 `ae_realizes` and `ae_parametric_lemma`. No harness change in 20b1: `phaseDist` and the success
 sets are checked by part (g) of `tests/diff/counting_diff.py`.
+
+Stage 20b2 (B5): at `n = 2`, `m = 2`, `kmax = 1` — the reindexing lemmas, `inverse_diamond_le`
+and its traced form, `countingCircuit_of_body`, `countingInverse_nAnc`, and
+`ae_parametric_lemma_aqft` on the AND network — and the axiom lines of
+`coherent_composition_diamond_pseudo`, `inverse_diamond_le`, `ae_parametric_lemma_aqft`. The
+realized probabilities at `m = 5, 6` and the AQFT variant at `m = 6` are part (h) of the harness.
 -/
 
 namespace CQRV.Tests.AmplitudeEstimation
 
 open CQRV CQRV.Synthesis CQRV.Counting CQRV.Grover Matrix Real
-open scoped MState
+open scoped MState Matrix.Norms.L2Operator Kronecker
 
 /-- The Grover data of `x₀ ∧ x₁` on two qubits: `M = 1`, `a = 1/4`. -/
 def gp22 : GroverData := ⟨2, 1, le_rfl, fun x => x 0 && x 1, by decide⟩
@@ -98,6 +104,55 @@ example (h : countingCircuit n2 2 2 = .ok cc2) :
       AncRestore (gp22.n + 2) cc2.nAnc cc2 (U_count gp22.P 2 none) :=
   ae_parametric_lemma gp22 (by norm_num) (by decide +kernel) rfl rfl (by decide +kernel) h _ le_rfl
 
+/-! ## Stage 20b2 — the AQFT variant, at `n = 2`, `m = 2`, `kmax = 1` -/
+
+-- B2: the operator norm under reindexing
+example (A : Matrix (Reg 2) (Reg 2) ℂ) :
+    ‖A.submatrix (Equiv.refl (Reg 2)) (Equiv.refl (Reg 2))‖ = ‖A‖ :=
+  l2_opNorm_submatrix_equiv A (Equiv.refl _)
+example (A : Matrix (Reg 2) (Reg 2) ℂ) : ‖A ⊗ₖ (1 : Matrix (Reg 0) (Reg 0) ℂ)‖ = ‖A‖ :=
+  l2_opNorm_kronecker_one_reg0 A
+example (B : Matrix (Reg 2) (Reg 2) ℂ) :
+    ‖(liftP B : Matrix (Reg (2 + 2)) (Reg (2 + 2)) ℂ)‖ ≤ ‖B‖ :=
+  l2_opNorm_liftP_le B
+example (A : Matrix (Reg 2) (Reg 2) ℂ) : ‖A ⊗ₖ (1 : Matrix (Reg 3) (Reg 3) ℂ)‖ ≤ ‖A‖ :=
+  l2_opNorm_kronecker_one_le' A
+
+-- B3: the inverse block, exact against `kmax = 1`
+example : ‖(qftInvU 2 2 none).val - (qftInvU 2 2 (some 1)).val‖ ≤ 2 * π * 2 / 2 ^ 1 :=
+  inverse_opNorm_le 2 2 1
+example : diamondDist (channelDenote (2 + 2) 1 (countingInverse 2 2 none))
+    (channelDenote (2 + 2) 1 (countingInverse 2 2 (some 1))) ≤ eta_aqft 2 1 :=
+  inverse_diamond_le 2 2 1 1
+example : diamondDist (CPTPMap.traceRight ∘ₘ channelDenote (2 + 2) 1 (countingInverse 2 2 none))
+    (CPTPMap.traceRight ∘ₘ channelDenote (2 + 2) 1 (countingInverse 2 2 (some 1))) ≤
+      eta_aqft 2 1 :=
+  inverse_traced_diamond_le 2 2 1 1
+example : (countingInverse 2 2 (some 1)).nAnc = 0 := countingInverse_nAnc 2 2 (some 1)
+example : (countingInverse 2 2 none).nAnc = 0 := countingInverse_nAnc 2 2 none
+
+-- B4: the converse constructor and the lemma
+def cc2a : Circuit := (countingCircuit n2 2 2 (some 1)).toOption.getD default
+
+example {body : Circuit} (hb : countingPowers n2 2 2 .tree .mbu (countingHLayer 2 2) 2 = .ok body) :
+    countingCircuit n2 2 2 (some 1) = .ok (body.append (countingInverse 2 2 (some 1))) :=
+  countingCircuit_of_body (some 1) (by norm_num) hb
+
+example (h : countingCircuit n2 2 2 (some 1) = .ok cc2a) :
+    Realizes (CountSpec 2 (gpN2.M / 2 ^ gpN2.n : ℝ)) (countPOVM gpN2.n 2 (gpN2.M / 2 ^ gpN2.n : ℝ))
+      (groverChannel (gpN2.n + 2) cc2a) (ae_eps (gpN2.M / 2 ^ gpN2.n : ℝ) 2)
+      (ae_delta + eta_aqft 2 1 / 2) (Synthesis.grade cc2a) :=
+  ae_parametric_lemma_aqft gpN2 (by norm_num) (by decide +kernel) rfl rfl rfl 1 h _ le_rfl
+
+-- the same with the data of `x₀ ∧ x₁`, and with a looser grade
+example (h : countingCircuit n2 2 2 (some 1) = .ok cc2a) (g : Grade)
+    (hg : Synthesis.grade cc2a ≤ g) :
+    Realizes (CountSpec 2 (gp22.M / 2 ^ gp22.n : ℝ)) (countPOVM gp22.n 2 (gp22.M / 2 ^ gp22.n : ℝ))
+      (groverChannel (gp22.n + 2) cc2a) (ae_eps (gp22.M / 2 ^ gp22.n : ℝ) 2)
+      (ae_delta + eta_aqft 2 1 / 2) g :=
+  ae_parametric_lemma_aqft gp22 (by norm_num) (by decide +kernel) rfl rfl (by decide +kernel) 1 h
+    g hg
+
 /-! ## Axioms (CLAUDE.md rule 10) -/
 
 /-- info: 'CQRV.Grover.countPOVM_measure' depends on axioms: [propext, Classical.choice, Quot.sound] -/
@@ -111,5 +166,17 @@ example (h : countingCircuit n2 2 2 = .ok cc2) :
 /-- info: 'CQRV.Grover.ae_parametric_lemma' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms ae_parametric_lemma
+
+/-- info: 'CQRV.coherent_composition_diamond_pseudo' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms coherent_composition_diamond_pseudo
+
+/-- info: 'CQRV.Grover.inverse_diamond_le' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms inverse_diamond_le
+
+/-- info: 'CQRV.Grover.ae_parametric_lemma_aqft' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms ae_parametric_lemma_aqft
 
 end CQRV.Tests.AmplitudeEstimation

@@ -2,6 +2,7 @@ module
 
 public import CQRV.Grover.Counting
 public import CQRV.Realizability.Composition
+public import CQRV.Realizability.Coherent
 
 /-!
 # CQRV.Grover.AmplitudeEstimation
@@ -19,6 +20,14 @@ from `countingCircuit_ancRestore` (Stage 19c) and `qpe_success` (Stage 20a2).
 
 Imports `CQRV.Grover.Counting` (hence Physlib) and `CQRV.Realizability.Composition` (for
 `measure_eq_re_trace`); not in the `cqr` closure (PHASE2_SPEC §A.8 item 6).
+
+Stage 20b2 (PHASE2_SPEC §A.4 "Amendments before Stage 20b" (3)–(4); STAGE20B_TASK.md 20b2
+B2–B4) adds **the AQFT variant through Theorem 3.3b**: the operator norm of `liftP` and of
+`A ⊗ₖ 1_{Reg 0}` (B2), the diamond distance of the exact and the approximate inverse blocks
+`inverse_diamond_le ≤ eta_aqft m kmax` (B3), and `ae_parametric_lemma_aqft` (B4): the counting
+circuit with the approximate inverse QFT realizes `CountSpec` with
+`δ = ae_delta + eta_aqft m kmax / 2`, by `coherent_composition_diamond_pseudo` with the exact
+circuit as the ideal composite (`η_f = 0` on the shared body, `η_g = eta_aqft` on the inverse).
 -/
 
 @[expose] public section
@@ -225,6 +234,246 @@ theorem ae_parametric_lemma (gp : GroverData) {m : ℕ} (hm : 1 ≤ m) {N : Netw
   have hR := (countingCircuit_ancRestore hC hN hn h1).2
   rw [hP] at hR
   exact ⟨ae_realizes gp hm hR g hg, hR⟩
+
+/-! ## Stage 20b2 — the AQFT variant through Theorem 3.3b (PHASE2_SPEC §A.4 (3)–(4)) -/
+
+section AQFT
+
+open scoped Matrix.Norms.L2Operator Kronecker
+
+/-! ### B2 — the operator norm under reindexing -/
+
+/-- `1 ⊗ₖ B` is `B ⊗ₖ 1` with the Kronecker factors swapped (`Equiv.prodComm`). -/
+theorem one_kronecker_eq_submatrix {d e : Type} [DecidableEq d] [DecidableEq e]
+    (B : Matrix e e ℂ) :
+    ((1 : Matrix d d ℂ) ⊗ₖ B) =
+      (B ⊗ₖ (1 : Matrix d d ℂ)).submatrix (Equiv.prodComm d e) (Equiv.prodComm d e) := by
+  ext ⟨i, j⟩ ⟨k, l⟩
+  simp [Matrix.kroneckerMap_apply, mul_comm]
+
+/-- PHASE2_SPEC §A.4 (4) — `‖liftP B‖ ≤ ‖B‖`: `liftP B = (1 ⊗ₖ B).submatrix splitEquiv`
+(`liftP_eq_submatrix`), the reindexing invariance twice (`splitEquiv`, then the swap of the
+Kronecker factors), and `‖B ⊗ₖ 1‖ ≤ ‖B‖`. -/
+theorem l2_opNorm_liftP_le {n m : ℕ} (B : Matrix (Reg m) (Reg m) ℂ) :
+    ‖(liftP B : Matrix (Reg (n + m)) (Reg (n + m)) ℂ)‖ ≤ ‖B‖ := by
+  rw [liftP_eq_submatrix, l2_opNorm_submatrix_equiv, one_kronecker_eq_submatrix,
+    l2_opNorm_submatrix_equiv]
+  exact l2_opNorm_kronecker_one_le' B
+
+/-- `A ⊗ₖ 1_{Reg 0}` is `A` reindexed by `d × Reg 0 ≃ d` (`Reg 0` is one point). -/
+theorem kronecker_one_reg0_eq_submatrix {d : Type} (A : Matrix d d ℂ) :
+    A ⊗ₖ (1 : Matrix (Reg 0) (Reg 0) ℂ) =
+      A.submatrix (Equiv.prodUnique d (Reg 0)) (Equiv.prodUnique d (Reg 0)) := by
+  ext ⟨i, u⟩ ⟨j, v⟩
+  obtain rfl := reg0_unique u
+  obtain rfl := reg0_unique v
+  simp [Matrix.kroneckerMap_apply]
+
+/-- PHASE2_SPEC §A.4 (4) — `‖A ⊗ₖ 1_{Reg 0}‖ = ‖A‖`. -/
+theorem l2_opNorm_kronecker_one_reg0 {d : Type} [Fintype d] [DecidableEq d] (A : Matrix d d ℂ) :
+    ‖A ⊗ₖ (1 : Matrix (Reg 0) (Reg 0) ℂ)‖ = ‖A‖ := by
+  rw [kronecker_one_reg0_eq_submatrix, l2_opNorm_submatrix_equiv]
+
+/-! ### B3 — the inverse block -/
+
+theorem liftP_sub {n m : ℕ} (A B : Matrix (Reg m) (Reg m) ℂ) :
+    (liftP (A - B) : Matrix (Reg (n + m)) (Reg (n + m)) ℂ) = liftP A - liftP B := by
+  ext x y
+  simp only [liftP, Matrix.of_apply, Matrix.sub_apply]
+  split_ifs <;> simp
+
+theorem countingInverse_WF (n m : ℕ) (kmax : Option ℕ) : (countingInverse n m kmax).WF :=
+  (block_inverse n m kmax).2.1
+
+theorem countingInverse_all_unitary (n m : ℕ) (kmax : Option ℕ) :
+    (countingInverse n m kmax).gates.all Gate.isUnitary = true := by
+  show ((adjointGates (inverseGates m kmax)).map (Gate.shiftData n)).all Gate.isUnitary = true
+  rw [List.all_map]
+  exact List.all_eq_true.mpr fun g hg => by
+    rw [Function.comp_apply, Gate.isUnitary_shiftData]
+    exact adjointGates_unitary (inverseGates_unitary m kmax) g hg
+
+theorem countingInverse_all_dataOnly (n m : ℕ) (kmax : Option ℕ) :
+    (countingInverse n m kmax).gates.all Gate.dataOnly = true := by
+  show ((adjointGates (inverseGates m kmax)).map (Gate.shiftData n)).all Gate.dataOnly = true
+  rw [List.all_map]
+  exact List.all_eq_true.mpr fun g hg => by
+    rw [Function.comp_apply, Gate.dataOnly_shiftData]
+    exact adjointGates_dataOnly (inverseGates_dataOnly m kmax) g hg
+
+/-- The inverse block on any ancilla register is `qftInvU ⊗ 1` (`unitaryDenote_dataOnly`). -/
+theorem unitaryDenote_countingInverse (n m a : ℕ) (kmax : Option ℕ) :
+    unitaryDenote (n + m) a (countingInverse n m kmax).gates =
+      (qftInvU n m kmax).val ⊗ₖ (1 : Matrix (Reg a) (Reg a) ℂ) :=
+  unitaryDenote_dataOnly _ (countingInverse_all_unitary n m kmax)
+    (countingInverse_all_dataOnly n m kmax)
+
+/-- PHASE2_SPEC §A.4 (4) — the operator norm of the difference of the exact and the approximate
+inverse blocks: `qftInvU_val` for both, the linearity of `liftP`, `‖liftP X‖ ≤ ‖X‖`, the adjoint,
+and `aqft_opNorm_le` read through `unitaryDenote_zero_eq` and `‖A ⊗ₖ 1_{Reg 0}‖ = ‖A‖`. -/
+theorem inverse_opNorm_le (n m kmax : ℕ) :
+    ‖(qftInvU n m none).val - (qftInvU n m (some kmax)).val‖ ≤ 2 * Real.pi * m / 2 ^ kmax := by
+  rw [qftInvU_val, qftInvU_val, ← liftP_sub]
+  refine (l2_opNorm_liftP_le _).trans ?_
+  rw [Matrix.star_eq_conjTranspose, Matrix.star_eq_conjTranspose, ← Matrix.conjTranspose_sub,
+    Matrix.l2_opNorm_conjTranspose]
+  have h := aqft_opNorm_le m kmax
+  rw [unitaryDenote_zero_eq, unitaryDenote_zero_eq, ← sub_kronecker_one' (e := Reg 0),
+    l2_opNorm_kronecker_one_reg0] at h
+  exact h
+
+/-- PHASE2_SPEC §A.4 (4), report §2.3.2 — **the diamond distance of the exact and the
+approximate inverse blocks** on any ancilla register `a`: `‖Ψ_exact − Ψ_aqft‖⋄ ≤ 2 ‖U_exact −
+U_aqft‖ ≤ eta_aqft m kmax` (`channelDenote_of_unitary`, `diamondDist_ofUnitary_le`,
+`unitaryDenote_countingInverse`, `‖X ⊗ₖ 1‖ ≤ ‖X‖`, `inverse_opNorm_le`). -/
+theorem inverse_diamond_le (n m kmax a : ℕ) :
+    diamondDist (channelDenote (n + m) a (countingInverse n m none))
+      (channelDenote (n + m) a (countingInverse n m (some kmax))) ≤ eta_aqft m kmax := by
+  rw [channelDenote_of_unitary (n + m) a (countingInverse_WF n m none)
+      (countingInverse_all_unitary n m none),
+    channelDenote_of_unitary (n + m) a (countingInverse_WF n m (some kmax))
+      (countingInverse_all_unitary n m (some kmax))]
+  refine (diamondDist_ofUnitary_le _ _).trans ?_
+  change 2 * ‖unitaryDenote (n + m) a (countingInverse n m none).gates -
+    unitaryDenote (n + m) a (countingInverse n m (some kmax)).gates‖ ≤ _
+  rw [unitaryDenote_countingInverse, unitaryDenote_countingInverse,
+    ← sub_kronecker_one' (e := Reg a)]
+  have h := (l2_opNorm_kronecker_one_le' (e := Reg a) _).trans (inverse_opNorm_le n m kmax)
+  have e : eta_aqft m kmax = 2 * (2 * Real.pi * m / 2 ^ kmax) := by
+    unfold eta_aqft
+    ring
+  rw [e]
+  linarith
+
+/-- The traced form: the ancillae traced out after the inverse block (`diamondDist_compose_le`),
+the `Ψ_k` of PHASE2_SPEC §A.4 (4). -/
+theorem inverse_traced_diamond_le (n m kmax a : ℕ) :
+    diamondDist (CPTPMap.traceRight ∘ₘ channelDenote (n + m) a (countingInverse n m none))
+      (CPTPMap.traceRight ∘ₘ channelDenote (n + m) a (countingInverse n m (some kmax))) ≤
+        eta_aqft m kmax :=
+  (diamondDist_compose_le _ _ _).trans (inverse_diamond_le n m kmax a)
+
+/-! ### B4 — the lemma -/
+
+theorem ancStep_dataOnly {g : Gate} (hg : g.dataOnly = true) (k : ℕ) : ancStep k g = k := by
+  unfold ancStep
+  unfold Gate.dataOnly at hg
+  generalize g.qubits = qs at hg
+  induction qs generalizing k with
+  | nil => rfl
+  | cons q qs ih =>
+    rw [List.all_cons, Bool.and_eq_true] at hg
+    cases q with
+    | data i => exact ih k hg.2
+    | anc i => simp at hg
+
+/-- The inverse block has no ancilla (its gates are data-only). -/
+theorem countingInverse_nAnc (n m : ℕ) (kmax : Option ℕ) : (countingInverse n m kmax).nAnc = 0 := by
+  rw [nAnc_eq]
+  have hd := countingInverse_all_dataOnly n m kmax
+  generalize (countingInverse n m kmax).gates = gs at hd
+  induction gs with
+  | nil => rfl
+  | cons g gs ih =>
+    rw [List.all_cons, Bool.and_eq_true] at hd
+    rw [List.foldl_cons, ancStep_dataOnly hd.1, ih hd.2]
+
+/-- PHASE2_SPEC §A.4 (4), step 3 — the channel of an appended circuit factors through the
+ancilla register of the whole: `Ψ ∘ Φ` with `Φ` the preparation and the first circuit and `Ψ` the
+second circuit and the trace over the ancillae (`channelDenote_append`). -/
+theorem groverChannel_chan_append (n : ℕ) {C₁ C₂ : Circuit} (h₁ : C₁.bitsOk = true)
+    (h₂ : C₂.bitsOk = true) :
+    (groverChannel n (C₁.append C₂)).chan =
+      (CPTPMap.traceRight ∘ₘ channelDenote n (C₁.append C₂).nAnc C₂) ∘ₘ
+        (channelDenote n (C₁.append C₂).nAnc C₁ ∘ₘ
+          CPTPMap.replacement (ancZero n ⊗ᴹ ancZero (C₁.append C₂).nAnc)) := by
+  have h := channelDenote_append n (C₁.append C₂).nAnc h₁ h₂
+  show CPTPMap.traceRight ∘ₘ (channelDenote n (C₁.append C₂).nAnc (C₁.append C₂) ∘ₘ
+    CPTPMap.replacement (ancZero n ⊗ᴹ ancZero (C₁.append C₂).nAnc)) = _
+  rw [h]
+  apply CPTPMap.funext
+  intro ρ
+  simp only [CPTPMap.compose_eq]
+
+/-- Report §2.3.2 (Theorem 3.3b), §5.2.4, §8.2; PHASE2_SPEC §A.4 (3)–(4) — **the
+amplitude-estimation parametric lemma with the approximate inverse QFT**: the synthesized
+counting circuit `C` with `aqft m kmax` realizes `CountSpec m a` with `ε = ae_eps a m` and
+`δ = ae_delta + eta_aqft m kmax / 2` within any grade `g ≥ Synthesis.grade C`. The five steps of
+the task text: (1) the exact circuit `C₀ = body.append (countingInverse n m none)` from the same
+`body` (`countingCircuit_ok`, `countingCircuit_of_body`); (2) `C.nAnc = C₀.nAnc` (the inverse
+blocks have no ancilla, `countingInverse_nAnc`); (3) `(groverChannel (n+m) C).chan = Ψ_kmax ∘ Φ`
+and the same for `C₀` with `Ψ_none` (`groverChannel_chan_append`); (4) the ideal composite is
+`ae_realizes` on `C₀`, its probability part at grade `0`, `CountSpec` written as `Spec.comp S_g S_f`;
+(5) `coherent_composition_diamond_pseudo` with `η_f = 0` (`diamondDist_self`) and
+`η_g = eta_aqft m kmax` (`inverse_traced_diamond_le`). For `m ≤ 6` the bound is vacuous
+(`eta_aqft ≥ 2`, Stage 18c), but the statement holds for every `m ≥ 1` and `kmax`. -/
+theorem ae_parametric_lemma_aqft (gp : GroverData) {m : ℕ} (hm : 1 ≤ m) {N : Network}
+    (hN : N.WF) (hn : N.nInputs = gp.n) (h1 : N.outputs.length = 1) (hP : N.pred gp.n = gp.P)
+    {shape : DiffusionShape} {mode : UncomputeMode} (kmax : ℕ) {C : Circuit}
+    (hC : countingCircuit N gp.n m (some kmax) shape mode = .ok C) (g : Grade)
+    (hg : Synthesis.grade C ≤ g) :
+    Realizes (CountSpec m (gp.M / 2 ^ gp.n : ℝ)) (countPOVM gp.n m (gp.M / 2 ^ gp.n : ℝ))
+      (groverChannel (gp.n + m) C) (ae_eps (gp.M / 2 ^ gp.n : ℝ) m)
+      (ae_delta + eta_aqft m kmax / 2) g := by
+  -- step 1: the exact circuit `C₀`, from the same body
+  obtain ⟨hm0, body, hb, rfl⟩ := countingCircuit_ok hC
+  have hC₀ := countingCircuit_of_body none hm0 hb
+  set C₀ := body.append (countingInverse gp.n m none) with hC₀def
+  -- step 2: the ancilla registers agree
+  have hbody : body.bitsOk = true :=
+    (countingPowers_block hN (block_hLayer gp.n m) hb).2.1.bitsOk
+  set a := (body.append (countingInverse gp.n m (some kmax))).nAnc with ha
+  have hA : C₀.nAnc = a := by
+    rw [hC₀def, ha, nAnc_append, nAnc_append, countingInverse_nAnc, countingInverse_nAnc]
+  -- step 3: the channel factorization, for both inverse blocks, on the shared register `a`
+  set Φ : CPTPMap Unit (Reg (gp.n + m) × Reg a) :=
+    channelDenote (gp.n + m) a body ∘ₘ CPTPMap.replacement (ancZero (gp.n + m) ⊗ᴹ ancZero a)
+    with hΦ
+  have hfac : ∀ (k : Option ℕ) (C' : Circuit) (a' : ℕ),
+      C' = body.append (countingInverse gp.n m k) → C'.nAnc = a' →
+      (groverChannel (gp.n + m) C').chan =
+        (CPTPMap.traceRight ∘ₘ channelDenote (gp.n + m) a' (countingInverse gp.n m k)) ∘ₘ
+          (channelDenote (gp.n + m) a' body ∘ₘ
+            CPTPMap.replacement (ancZero (gp.n + m) ⊗ᴹ ancZero a')) := by
+    intro k C' a' hC' hA'
+    subst hC'
+    subst hA'
+    exact groverChannel_chan_append _ hbody (countingInverse_WF gp.n m k).bitsOk
+  have hfacC := hfac (some kmax) _ a rfl rfl
+  have hfac0 := hfac none C₀ a rfl hA
+  -- step 4: the ideal composite, `ae_realizes` on `C₀`
+  have hR₀ : AncRestore (gp.n + m) C₀.nAnc C₀ (U_count gp.P m none) := by
+    have h := (countingCircuit_ancRestore hC₀ hN hn h1).2
+    rwa [hP] at h
+  have hid := (ae_realizes gp hm hR₀ (Synthesis.grade C₀) le_rfl).2
+  rw [hfac0] at hid
+  have hspec : Spec.comp (fun (_ : Unit) => CountSpec m (gp.M / 2 ^ gp.n : ℝ) ())
+      (fun (_ _ : Unit) => True) = CountSpec m (gp.M / 2 ^ gp.n : ℝ) := by
+    funext x z
+    cases x
+    apply propext
+    simp only [Spec.comp, true_and, exists_const]
+  have hideal : Realizes (Spec.comp (fun (_ : Unit) => CountSpec m (gp.M / 2 ^ gp.n : ℝ) ())
+      (fun (_ _ : Unit) => True)) (countPOVM gp.n m (gp.M / 2 ^ gp.n : ℝ))
+      ⟨(CPTPMap.traceRight ∘ₘ channelDenote (gp.n + m) a (countingInverse gp.n m none)) ∘ₘ Φ, 0⟩
+      (ae_eps (gp.M / 2 ^ gp.n : ℝ) m) ae_delta 0 := by
+    rw [hspec]
+    exact ⟨le_rfl, hid⟩
+  -- step 5: Theorem 3.3b on the pseudo-metric, `η_f = 0`, `η_g = eta_aqft m kmax`
+  have hres := coherent_composition_diamond_pseudo (η_f := 0) (η_g := eta_aqft m kmax)
+    (r := 0) (s := 0) (Φ₂ := ⟨Φ, 0⟩)
+    (Ψ₂ := ⟨CPTPMap.traceRight ∘ₘ channelDenote (gp.n + m) a (countingInverse gp.n m (some kmax)),
+      0⟩)
+    hideal (diamondDist_self Φ).le
+    (by rw [diamondDist_comm]; exact inverse_traced_diamond_le gp.n m kmax a) le_rfl le_rfl
+  rw [hspec] at hres
+  refine ⟨hg, fun x hx => ?_⟩
+  have h := hres.2 x hx
+  rw [hfacC]
+  rw [zero_add] at h
+  exact h
+
+end AQFT
 
 end CQRV.Grover
 
