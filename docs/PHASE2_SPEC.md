@@ -584,6 +584,13 @@ vacuous (`η_aqft ≥ 2`; Stage 18c notes), but the statement holds for every `m
 bump) is the third task of Stage 20b. Its task text is written after the realization lemmas are
 accepted, because it builds on their final form.
 
+**20b1 done fa95373, accepted 2026-11-10** (CI 18 PASS, 0 FAIL, 4 n/a). (1)–(2) are proved in
+`CQRV/Grover/AmplitudeEstimation.lean` with no `sorry`: `CountOut`, `countEst`, `CountSpec`,
+`countPOVM` (through `phaseProj`), `countPOVM_measure` (`= phaseDist`), `ae_realizes` and
+`ae_parametric_lemma`. The induced pseudo-metric worked in Lean, so the fallback of §A.8 item 1 is
+not needed. A point `inr ()` of `CountOut` has to be written `(Sum.inr () : CountOut m a)`: the
+lemmas about `CountOut` are applied as terms, because `rw` does not see through the type synonym.
+
 ### A.5 The second library entry, the request, decidability (report §4.1–4.2, §9.3.2, §7.2)
 
 **Request.** `cqr certify f.cqr --problem count --precision m [--aqft kmax] [--uncompute coherent]`;

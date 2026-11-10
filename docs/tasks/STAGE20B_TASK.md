@@ -134,6 +134,14 @@ obstacle and do not switch on your own. Also stop if a statement needs a hypothe
 
 ## 20b2 — The AQFT variant through Theorem 3.3b (after 20b1 is accepted)
 
+**Notes added at the 20b1 review (2026-11-10).** (i) 20b1 is in
+`CQRV/Grover/AmplitudeEstimation.lean`; put 20b2's lemmas there too (B1 and the generic norm lemma
+of B2 go where B1 and B2 say). (ii) Write the ideal point as `(Sum.inr () : CountOut m a)`, and
+apply the lemmas about `CountOut` (`dist_countOut`, `countSpec_relax`) as terms, since `rw` does not
+see through the type synonym. (iii) For step 4 of B4, `ae_realizes` gives a `Realizes` for
+`groverChannel (gp.n + m) C₀`. Take `.2` on `encode ()` and rewrite the channel by the
+factorization of step 3. Do not re-prove the probability.
+
 ### B1. Theorem 3.3b on a pseudo-metric (`CQRV/Realizability/Coherent.lean`)
 
 `coherent_composition_pseudo` and `coherent_composition_diamond_pseudo`: the two statements with
