@@ -544,6 +544,46 @@ than `8/π²`, the smallest margin being +0.049. Notes for Stage 20b:
 
 **Stage 20a complete** (912 lines of library Lean over 20a1 and 20a2).
 
+**Amendments before Stage 20b (reviewer, 2026-11-10; docs/tasks/STAGE20B_TASK.md).** They replace
+the output type, the decoding POVM and the channel of "Specification and decoding" and of the
+statement sketch above. The induced-metric route of §A.8 item 1 stays the primary one.
+
+(1) *Output type and metric.* `CountOut m a := Reg m ⊕ Unit`, carrying the pseudo-metric induced
+by `countEst m a`, where `countEst (inl y) = sin²(π y.toNat / 2^m)` and `countEst (inr ()) = a`.
+The estimate is **real-valued**, not rational: `sin²(π y/2^m)` is in general irrational
+(`sin²(π/8) = (2 − √2)/4`), so the Chebyshev route of `groverSuccess` does not apply. `Reg m` is used
+in place of `Fin (2^m)`: the whole development is indexed by `Reg`. The metric depends on `a`, so
+`a` is a parameter of the type. The specification is `CountSpec m a : Spec Unit (CountOut m a) :=
+fun _ y => y = inr ()`, and `relax ε` holds exactly when `|countEst y − a| ≤ ε`.
+
+(2) *Decoding and channel.* The POVM acts on the whole data register: `countPOVM n m a : POVM
+(CountOut m a) (Reg (n+m))` sends `inl y` to the projector onto "phase = y" (summed over the search
+register) and `inr ()` to `0`. The channel is `groverChannel (n+m) C`: prepare `|0…0⟩`, run
+`channelDenote`, trace out the ancillae. The search register is never traced, and the probability
+of `inl y` is `phaseDist gp m y` (20a2).
+
+(3) *Composition with a pseudo-metric.* `coherent_composition` and `coherent_composition_diamond`
+state `[MetricSpace Z]`, but their proofs use only the pseudo-metric that `relax` needs. Stage 20b
+adds `coherent_composition_pseudo` and `coherent_composition_diamond_pseudo` with
+`[PseudoMetricSpace Z]` and the same proofs. The existing statements stay as they are.
+
+(4) *The AQFT variant.* `countingCircuit` is `body.append (countingInverse n m kmax)` (19b,
+`countingCircuit_ok`). `body` does not depend on `kmax`, and the inverse block is data-only, so the
+exact and the approximate circuits have the same ancilla register. With `Φ` the channel of
+`body` (preparation included) and `Ψ_k = traceRight ∘ channelDenote (countingInverse n m k)`:
+- `diamondDist Φ Φ = 0`, so `η_f = 0`;
+- `diamondDist Ψ_exact Ψ_aqft ≤ 2 ‖U_exact − U_aqft‖ ≤ η_aqft m kmax`, by
+  `diamondDist_compose_le`, `channelDenote_of_unitary`, `diamondDist_ofUnitary_le`, `qftInvU_val`,
+  a reindexing-invariance lemma for the L2 operator norm (which gives `‖liftP B‖ ≤ ‖B‖` and
+  `‖A ⊗ₖ 1_{Reg 0}‖ = ‖A‖`), and `aqft_opNorm_le`.
+
+Then `δ = ae_delta + η_aqft m kmax / 2`, with `ae_delta = 1 − 8/π²`. For m ≤ 6 the bound is
+vacuous (`η_aqft ≥ 2`; Stage 18c notes), but the statement holds for every `m` and `kmax`.
+
+(5) *The certificate* (n = 8, M = 32, m = 4; compositional; grade labelled `composed_bound`; schema
+bump) is the third task of Stage 20b. Its task text is written after the realization lemmas are
+accepted, because it builds on their final form.
+
 ### A.5 The second library entry, the request, decidability (report §4.1–4.2, §9.3.2, §7.2)
 
 **Request.** `cqr certify f.cqr --problem count --precision m [--aqft kmax] [--uncompute coherent]`;
@@ -605,7 +645,8 @@ M3 review decides; the obstacle is recorded either way.
 
 1. Output type and metric: `Y_m = Fin (2^m) ⊕ Unit` with the metric induced by `ã` (§A.4) is the
    primary route; the tolerance-carrying specification is the fallback, used only if the Stage 20b
-   implementer reports the induced metric as an obstacle.
+   implementer reports the induced metric as an obstacle. Amended before Stage 20b: `CountOut m a
+   = Reg m ⊕ Unit` with a real-valued estimate (§A.4, amendments before Stage 20b (1)).
 2. `rot` gates carry no T-estimate in the grade or the certificate. The run report prints the
    rotation count and, when it is positive, the note "Clifford+T cost depends on the synthesis
    precision (see §C)" (amended 2026-10-31); a

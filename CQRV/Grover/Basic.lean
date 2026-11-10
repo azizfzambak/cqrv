@@ -8,6 +8,7 @@ public import CQRV.Grover.MczFew
 public import CQRV.Grover.MczFewAll
 public import CQRV.Grover.QPEBound
 public import CQRV.Grover.Counting
+public import CQRV.Grover.AmplitudeEstimation
 
 /-!
 # CQRV.Grover
