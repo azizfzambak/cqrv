@@ -591,6 +591,27 @@ accepted, because it builds on their final form.
 not needed. A point `inr ()` of `CountOut` has to be written `(Sum.inr () : CountOut m a)`: the
 lemmas about `CountOut` are applied as terms, because `rw` does not see through the type synonym.
 
+**20b2 done 4300cf2, accepted 2026-11-10** (CI 18 PASS, 0 FAIL, 4 n/a; the step "Counting circuit"
+now takes 136 s, accepted). (3)–(4) are proved with no `sorry`:
+- `coherent_composition_pseudo` and `coherent_composition_diamond_pseudo` (the existing statements
+  are kept);
+- `l2_opNorm_submatrix_equiv`, which is not in Mathlib;
+- `inverse_diamond_le` (`≤ eta_aqft m kmax`, by the unitary route);
+- `ae_parametric_lemma_aqft`, with `η_f = 0`.
+
+The factorization of the channel works because the inverse block has no ancilla
+(`countingInverse_nAnc`). This is the first statement in which the diamond distance enters a
+realization of the counting pattern.
+
+On the harness (all_four, n = 4, M = 1, coherent mode) the realized probability is 0.876 at m = 5
+and 0.974 at m = 6 against `8/π²`. The AQFT variants at m = 6 give 0.955 (kmax = 4) and 0.972
+(kmax = 5), at total-variation distance 0.021 and 0.003 from the exact circuit, while the lemma's
+bound `8/π² − η_aqft/2` is vacuous there (−1.55 and −0.37). The proved AQFT bound is far from the
+measured loss in this range: report it as such, not as a tight bound.
+
+`ae_parametric_lemma_aqft` has no restoration conjunct; `countingCircuit_ancRestore` gives it with
+`U_count gp.P m (some kmax)`.
+
 ### A.5 The second library entry, the request, decidability (report §4.1–4.2, §9.3.2, §7.2)
 
 **Request.** `cqr certify f.cqr --problem count --precision m [--aqft kmax] [--uncompute coherent]`;
