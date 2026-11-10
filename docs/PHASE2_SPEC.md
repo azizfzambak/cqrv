@@ -530,6 +530,20 @@ with `π < 3.15` and a polynomial inequality), `qpeProb_two_neighbours`, `Circle
 lemma. On the harness grid the minimum of the two-point inequality is exactly 8, at `t = ½`, and
 `ae_eps` is almost tight (largest error / `ae_eps` 0.99995).
 
+**20a2 done 6d5d195, accepted 2026-11-10** (CI 18 PASS, 0 FAIL, 4 n/a). (2)–(4) are proved in
+`CQRV/Grover/Counting.lean` with no `sorry`: `U_count_zero_apply`, `phaseDist_eq` for every
+`GroverData` (at `M = 2ⁿ` through `ampB = 0`, with no hypothesis `M < 2ⁿ`), `qpe_two_phase_bound`
+and `qpe_success`. Two expected steps were not needed: the split of the Hadamard layer (the
+existing `hadamardMat_mulVec_zero` gives the constant `ketS (n+m)`) and any eigenvector. On the
+counting circuits of the harness (n = 4, 6; M = 1, 5, 8, 9, 16; m = 1..4) both sets carry more
+than `8/π²`, the smallest margin being +0.049. Notes for Stage 20b:
+- `qpe_success` filters `Finset.univ : Finset (Reg m)` under `open Classical in`; the decoding is
+  `sin²(π y.toNat / 2^m)`, with no `bitRev`.
+- `phaseDist` is defined for `kmax = none` only. The AQFT variant goes through Theorem 3.3b.
+- The plane lemma to cite is `GroverData.iteration_induction`.
+
+**Stage 20a complete** (912 lines of library Lean over 20a1 and 20a2).
+
 ### A.5 The second library entry, the request, decidability (report §4.1–4.2, §9.3.2, §7.2)
 
 **Request.** `cqr certify f.cqr --problem count --precision m [--aqft kmax] [--uncompute coherent]`;
