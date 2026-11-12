@@ -664,6 +664,36 @@ regenerated. They move to 1.10.0 with `grade_kind: "measured"` in Stage 21, when
 diamond distance enters a counting realization as the proved lemma `ae_parametric_lemma_aqft`. A
 certified AQFT instance waits for a size where `η_aqft < 2`, which needs m ≥ 7.
 
+**20b3 done ba9bb6c, accepted 2026-11-13** (CI 18 PASS, 0 FAIL, 4 n/a; the step "cqr certify" now
+takes 632 s, 467 s before, accepted). **Stage 20b is complete, and with it Stage 20.**
+(1)–(6) hold as written, with no `sorry`:
+- the six blocks are 244 gates or fewer, and each `grade_eq` takes about 1.5 s;
+- the composed bound is the probe's (20, 1388, 660, 8), and `grade_ext` is (1161, ≤ 660, 6, 165,
+  330);
+- the kernel check of `Cert.lean` takes 18 s kernel and 29 s wall, at 2.6 GB;
+- the axioms of `front_end`, `cert` and `cert_count` are the standard three;
+- the four Grover certificates are byte-identical at 1.9.0;
+- the `cqr` closure is still Lean core + Mathlib (48 modules, `CountCert` included).
+
+Two deviations from the task text are accepted:
+- `cert` is proved through `ae_parametric_lemma_mk`, the 20b1 lemma stated over the fields
+  `n, M, P, hcard` instead of the `GroverData` record. With the record, the elaborator unfolds
+  `Network.pred` before it reduces the projection, about 2.5 s per occurrence, which exceeds the
+  heartbeat limit of a generated file. No statement changed.
+- The C1 lambdas use the projections `p.1`, `p.2` in place of `fun (b, j) =>`. A pattern-matching
+  lambda elaborates to its own matcher at each occurrence, and `rw` does not identify them.
+
+*For Stage 21* (wiring `cqr certify --problem count`):
+- Call `CountRequest.ofProgram`, `renderCountCert`, `CountCertificate.ofRequest` and
+  `CountRunData`, in the order `count-certify` uses them, and `ae_parametric_lemma_mk`.
+- Refuse `M = 0` up front with a diagnostic. Today the generator writes `Cert.lean` and fails at
+  `cert_count` in the kernel check (exit 1, no JSON). That is safe, but the error comes late.
+- Add a `--count-limit` policy. The counting certificate always decides the count in the kernel.
+- The hardware object and `--profile` are not written for Count.
+- Move the Grover certificates to 1.10.0 with `grade_kind: "measured"` (amendment (5)). Then
+  reword the schema's top-level description of `grade` ("Measured grade"), which the Count branch
+  uses for a composed bound.
+
 ### A.5 The second library entry, the request, decidability (report §4.1–4.2, §9.3.2, §7.2)
 
 **Request.** `cqr certify f.cqr --problem count --precision m [--aqft kmax] [--uncompute coherent]`;

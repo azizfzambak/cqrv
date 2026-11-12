@@ -336,6 +336,17 @@ certificate above 8 GB or 10 minutes; a change needed anywhere in the Grover pip
 of C1 that needs a hypothesis not listed; the composed bound differing from the probe's
 `(20, 1388, 660, 8)` (report both, do not adjust).
 
+**Notes added at the 20b3 review (2026-11-13).** 20b3 is accepted as implemented (ba9bb6c). No stop
+condition was hit: blocks of 244 gates, `grade_eq` about 1.5 s, the kernel check of `Cert.lean`
+18 s at 2.6 GB, the composed bound equal to the probe's. Two deviations are accepted:
+- `cert` goes through `ae_parametric_lemma_mk`, which avoids an elaboration cost of the record
+  form;
+- the C1 lambdas use projections.
+
+Both are recorded in DECISIONS.md. The items Stage 21 inherits are listed in PHASE2_SPEC §A.4
+under "20b3 done": the early refusal of `M = 0`, a `--count-limit` policy, the Grover certificates
+at 1.10.0, and the wording of the schema's `grade` description.
+
 ## Closing reply (each task)
 
 Per CLAUDE.md: (a) files, (b) build tail, (c) tests — CI summary, the axiom lines, for 20b2 the
