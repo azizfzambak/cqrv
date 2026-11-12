@@ -46,7 +46,13 @@
 #                                committed files = the 16b files, git 7f46857, + that theorem),
 #                                the committed .qir / .qasm = the 16b files; measured grade_ext
 #                                (126, 39, 0, 18, 36) / (137, 28, 0, 15, 30) /
-#                                (106, 77, 0, 8, 16) / (216, 74, 0, 0, 0)
+#                                (106, 77, 0, 8, 16) / (216, 74, 0, 0, 0);
+#                                Stage 20b3: the counting certificate (CertifyTool count-certify
+#                                grover_pred_037 m = 4, schema v1.10.0 pattern Count, the
+#                                committed examples/certs/grover_pred_037_count, the circuit hash
+#                                by replaying the six block literals, QASM / QIR re-parse with
+#                                decomposeCp, the composed grade (20, 1388, 660, 8) recomputed,
+#                                two negative kernel tests)
 #   tests/diff/profile_schema.py profiles/*.json against docs/profile.schema.json;
 #                                illustrative_sc = report Table 3.5 / §3.3.3 (renamed from
 #                                ibm_kyiv in Stage 14a, no alias); mutated profiles rejected by

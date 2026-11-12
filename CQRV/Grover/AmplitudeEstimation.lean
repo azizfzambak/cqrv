@@ -235,6 +235,24 @@ theorem ae_parametric_lemma (gp : GroverData) {m : ℕ} (hm : 1 ≤ m) {N : Netw
   rw [hP] at hR
   exact ⟨ae_realizes gp hm hR g hg, hR⟩
 
+/-- Stage 20b3 (PHASE2_SPEC §A.4 "Amendments before Stage 20b3" (3)) — `ae_parametric_lemma` over
+the fields of the Grover data instead of the record: the form a certificate instantiates. With
+the record form, every unification of `gp.P` against the predicate literal makes the elaborator
+unfold `Network.pred` (a large definition) before it reduces the projection of the constructed
+record, which costs seconds per occurrence and exceeds the heartbeat limit of a generated
+`Cert.lean`; here every argument is syntactic (`hP` is `rfl` on identical terms, the
+conclusion names `P`, `n`, `M` directly). -/
+theorem ae_parametric_lemma_mk (n M : ℕ) (hpos : 1 ≤ M) (P : Reg n → Bool)
+    (hcard : (Finset.univ.filter fun x => P x = true).card = M) {m : ℕ} (hm : 1 ≤ m)
+    {N : Network} (hN : N.WF) (hn : N.nInputs = n) (h1 : N.outputs.length = 1)
+    (hP : N.pred n = P) {shape : DiffusionShape} {mode : UncomputeMode} {C : Circuit}
+    (hC : countingCircuit N n m none shape mode = .ok C) (g : Grade)
+    (hg : Synthesis.grade C ≤ g) :
+    Realizes (CountSpec m (M / 2 ^ n : ℝ)) (countPOVM n m (M / 2 ^ n : ℝ))
+        (groverChannel (n + m) C) (ae_eps (M / 2 ^ n : ℝ) m) ae_delta g ∧
+      AncRestore (n + m) C.nAnc C (U_count P m none) :=
+  ae_parametric_lemma ⟨n, M, hpos, P, hcard⟩ hm hN hn h1 hP hC g hg
+
 /-! ## Stage 20b2 — the AQFT variant through Theorem 3.3b (PHASE2_SPEC §A.4 (3)–(4)) -/
 
 section AQFT

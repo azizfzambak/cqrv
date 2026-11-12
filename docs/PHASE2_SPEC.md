@@ -612,6 +612,58 @@ measured loss in this range: report it as such, not as a tight bound.
 `ae_parametric_lemma_aqft` has no restoration conjunct; `countingCircuit_ancRestore` gives it with
 `U_count gp.P m (some kmax)`.
 
+**Amendments before Stage 20b3 (reviewer, 2026-11-10; docs/tasks/STAGE20B_TASK.md, section
+20b3).** They fix the counting certificate. Amendment (5) above said its text would come here.
+
+(1) *A separate generator.* The Grover pipeline is Grover-only, and it stays unchanged:
+- `groverInstance` refuses every other pattern;
+- `Certificate.build` requires `C.nData = n` and a measured grade;
+- the schema closes `instance` to `{n, M, r}` and fixes `epsilon = "0"`.
+
+The counting certificate gets its own Physlib-free generator `CQRV/Certify/CountCert.lean` (its
+own request record, renderer, JSON record and run report), called by a new `CertifyTool`
+subcommand. The `cqr` executable is unchanged; Stage 21 wires the same functions to
+`cqr certify --problem count`.
+
+(2) *Cert.lean in the compositional form.* There is no flat literal. It contains:
+- the six distinct blocks (`h_layer`, `cg_0`–`cg_3`, `inverse`) as literals, each with its link to
+  the builder and its `grade_eq` / `gradeExt_eq` by `decide +kernel` (the Stage 19b probe form);
+- `emitted := assembleCounting h_layer [cg_0, …] inverse`, a library definition;
+- `emitted_ok : countingCircuit net 8 4 none .tree .mbu = .ok emitted` by the library theorem
+  `countingCircuit_of_blocks` and the four block links, so no kernel evaluation of the whole
+  circuit;
+- the composed grade `grade_le : Synthesis.grade emitted ≤ g` by a library lemma
+  (`grade_assembleCounting_le`) over the block grades, with each block's `liveEnd = 0` decided.
+
+(3) *The statement is universal in M.* The circuit does not depend on M, and neither does `g`:
+```
+cert : ∀ M, (univ.filter (net.pred 8 · = true)).card = M → 1 ≤ M →
+  Realizes (CountSpec 4 (M/2^8)) (countPOVM 8 4 (M/2^8)) (groverChannel 12 emitted)
+    (ae_eps (M/2^8) 4) ae_delta g ∧ AncRestore 12 emitted.nAnc emitted (U_count (net.pred 8) 4 none)
+```
+"For whatever the true solution count is, the output estimates it." It needs no count and is the
+statement a counting application can use. The kernel-decided instance at M = 32 is a corollary,
+`cert_count`, kept for the comparison with the Grover certificate of the same predicate. For
+M = 0 the certificate makes no claim (`GroverData.hM_pos`), and it says so.
+
+(4) *ε and δ are real.* `ε = 2π√(7/64)/16 + π²/256 ≈ 0.1684` and `δ = 1 − 8/π² ≈ 0.1894`. The JSON
+gives each as an expression string and a decimal marked approximate, never as a rational. In M
+units the guarantee at m = 4 is M within about ±43 with probability ≥ 8/π², and the decoding set
+`{0, 1, 2, 14, 15}` contains the estimate 0. This is the weak instance §A.8 item 3 chose for
+size. The run report states it, and states that the precision grows with m.
+
+(5) *Schema 1.10.0.* A `pattern: "Count"` branch is added to `docs/certificate.schema.json`:
+- `instance {n, M, m, kmax}`, `spec.epsilon` / `spec.delta` as `{expr, approx}`;
+- `grade_kind: "composed_bound"`, with `grade_ext.t_depth` a bound;
+- `blocks` (name, gates, multiplicity, grade, grade_ext, live_end).
+
+The four committed Grover certificates stay at ≤ 1.9.0 and validate unchanged, so none is
+regenerated. They move to 1.10.0 with `grade_kind: "measured"` in Stage 21, when the CLI changes.
+
+(6) *No AQFT certificate at m = 4.* `δ + η_aqft/2 ≥ 1` there, so it would certify nothing. The
+diamond distance enters a counting realization as the proved lemma `ae_parametric_lemma_aqft`. A
+certified AQFT instance waits for a size where `η_aqft < 2`, which needs m ≥ 7.
+
 ### A.5 The second library entry, the request, decidability (report §4.1–4.2, §9.3.2, §7.2)
 
 **Request.** `cqr certify f.cqr --problem count --precision m [--aqft kmax] [--uncompute coherent]`;

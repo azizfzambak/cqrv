@@ -46,6 +46,15 @@ Builds the Stage 8a certificate of examples/grover_pred_037.cqr in Lean (scripts
     diffusion_shape validates; "1.9.0" without grade_ext or without uncompute, grade_ext under
     "1.8.0", a negative, missing or non-integer component and an extra key are rejected
     (39.0 is an integer to JSON Schema).
+  * Stage 20b3 (schema v1.10.0, PHASE2_SPEC.md §A.4 "Amendments before Stage 20b3" (5)): the
+    committed counting certificate examples/certs/grover_pred_037_count/certificate.json
+    (pattern "Count", instance {n, M, m, kmax}, spec.epsilon / delta as {expr, approx}, grade_kind
+    "composed_bound", grade_ext with t_depth_kind "bound", blocks) validates; the sample and every
+    legacy Grover envelope still validate; rejected: a Count envelope without grade_kind, with
+    grade_kind "measured", with spec.epsilon a bare number or a rational string, with an extra key
+    in instance, with a blocks entry without multiplicity, under "1.9.0", without blocks, with
+    solution_count.status "hypothesis"; and a Grover envelope with grade_kind, with blocks, or
+    under "1.10.0".
 
 Usage: python -I tests/diff/cert_schema.py --cqr <path to cqr>   (after `lake build`)
 """
@@ -65,6 +74,7 @@ from lean_tool import ROOT, certify_tool  # noqa: E402
 
 SRC = os.path.join("examples", "grover_pred_037.cqr")
 SCHEMA = os.path.join(ROOT, "docs", "certificate.schema.json")
+COUNT_CERT = os.path.join(ROOT, "examples", "certs", "grover_pred_037_count", "certificate.json")
 
 # the three front_end wordings (Stage 8b for n > 16; Stage 9b after the exhaustive validation;
 # Stage 16b, the proved front end)
@@ -352,10 +362,49 @@ def main():
                                                   diffusion_shape="few:log")))
     print("ok:   schema v1.9.0: uncompute coherent validates (audited too); hardware and "
           "diffusion_shape under 1.9.0 validate")
+    # Stage 20b3: the Count branch of 1.10.0 on the committed counting certificate
+    with open(COUNT_CERT, encoding="utf-8") as f:
+        count = json.load(f)
+    validator.validate(count)
+    assert count["schema_version"] == "1.10.0" and count["pattern"] == "Count", count["pattern"]
+    assert count["grade_kind"] == "composed_bound" and count["grade_ext"]["t_depth_kind"] == "bound"
+    assert set(count["instance"]) == {"n", "M", "m", "kmax"} and count["instance"]["kmax"] is None
+    assert set(count["spec"]) == {"epsilon", "delta", "estimate"}
+    assert all(set(count["spec"][k]) == {"expr", "approx"} and isinstance(count["spec"][k]["approx"], float)
+               for k in ("epsilon", "delta")), count["spec"]
+    assert [b["name"] for b in count["blocks"]] == ["h_layer", "cg_0", "cg_1", "cg_2", "cg_3", "inverse"]
+    print("ok:   schema v1.10.0: the committed counting certificate (pattern Count, instance {n, M, m, "
+          "kmax}, real epsilon / delta as {expr, approx}, grade_kind composed_bound, t_depth a bound, "
+          "6 blocks) validates")
+
+    def mutated_count(f):
+        c = copy.deepcopy(count)
+        f(c)
+        return c
+
+    bad.update({
+        "Count without grade_kind": mutated_count(lambda c: c.pop("grade_kind")),
+        "Count with grade_kind measured": mutated_count(lambda c: c.update(grade_kind="measured")),
+        "Count epsilon a bare number": mutated_count(lambda c: c["spec"].update(epsilon=0.168426)),
+        "Count epsilon a rational string": mutated_count(lambda c: c["spec"].update(epsilon="7/128")),
+        "Count extra key in instance": mutated_count(lambda c: c["instance"].update(r=2)),
+        "Count block without multiplicity": mutated_count(lambda c: c["blocks"][1].pop("multiplicity")),
+        "Count under 1.9.0": mutated_count(lambda c: c.update(schema_version="1.9.0")),
+        "Count without blocks": mutated_count(lambda c: c.pop("blocks")),
+        "Count with solution_count hypothesis":
+            mutated_count(lambda c: c["solution_count"].update(status="hypothesis")),
+        "Count without t_depth_kind": mutated_count(lambda c: c["grade_ext"].pop("t_depth_kind")),
+        "Count delta as rational string": mutated_count(lambda c: c["spec"].update(delta="7/128")),
+        "Grover with grade_kind": mutated(lambda c: c.update(grade_kind="measured")),
+        "Grover with blocks": mutated(lambda c: c.update(blocks=[])),
+        "Grover under 1.10.0": mutated(lambda c: c.update(schema_version="1.10.0")),
+        "Grover 1.10.0 with the Count fields but pattern Grover":
+            mutated_count(lambda c: c.update(pattern="Grover")),
+    })
     for label, c in bad.items():
         if validator.is_valid(c):
             raise AssertionError(f"schema accepts a bad envelope: {label}")
-    print(f"ok:   {len(bad)} mutated envelopes rejected")
+    print(f"ok:   {len(bad)} mutated envelopes rejected (15 of them the Count branch of Stage 20b3)")
     print("cert_schema: all checks passed")
 
 

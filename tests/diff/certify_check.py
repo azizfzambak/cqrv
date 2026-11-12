@@ -105,6 +105,17 @@ Runs the built `cqr` from the project root and checks
     phase gate in a synthesized circuit, so no `rz`); the measured values: grover_pred_037
     (126, 39, 0, 18, 36), simple_alu_x0_1 (137, 28, 0, 15, 30), grover_pred_037_few
     (106, 77, 0, 8, 16), grover_pred_037_coh (216, 74, 0, 0, 0); run report row 4 prints them.
+  * Stage 20b3 (PHASE2_SPEC.md §A.4 "Amendments before Stage 20b3"): `CertifyTool count-certify
+    examples/grover_pred_037.cqr 4` twice — Cert.lean / .qir / .qasm byte-identical, the JSON equal
+    outside the machine fields — and the committed examples/certs/grover_pred_037_count (JSON
+    outside reference_configuration); schema v1.10.0 (pattern Count); the predicate hash; the
+    circuit hash recomputed by replaying the six block literals of Cert.lean with their
+    multiplicities and bit shifts; proof_hash; the QASM re-parsed equal to the assembled circuit,
+    the QIR equal to it after decomposeCp (six cp in the inverse QFT); the JSON's composed grade
+    (20, 1388, 660, 8) equal to the sum the Python recomputes from the blocks' grades; theorem,
+    axioms, status; the run report; negative tests on temporary copies through `CertifyTool
+    audit`: a mutated gate in the block literal cg_0 and grade_le with d lowered by one, both
+    rejected by the kernel.
   * Stage 18a: the committed Cert.lean / .qir / .qasm files are the Stage 17b files (git 9fc909b)
     byte for byte (the scheduler state became a cons list; no measured value changed).
 
@@ -114,6 +125,7 @@ Usage: python -I tests/diff/certify_check.py --cqr <path to cqr>   (after `lake 
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -135,6 +147,9 @@ SCHEMA = os.path.join(ROOT, "docs", "certificate.schema.json")
 EXAMPLE = os.path.join(ROOT, "examples", "certs", "grover_pred_037")
 EXAMPLE_FEW = os.path.join(ROOT, "examples", "certs", "grover_pred_037_few")
 EXAMPLE_COH = os.path.join(ROOT, "examples", "certs", "grover_pred_037_coh")
+EXAMPLE_COUNT = os.path.join(ROOT, "examples", "certs", "grover_pred_037_count")
+COUNT_THEOREM = "CQRV.Cert.grover_pred_037_count.cert"
+COUNT_BLOCKS = ["h_layer", "cg_0", "cg_1", "cg_2", "cg_3", "inverse"]
 NAME = "grover_pred_037"
 THEOREM = "CQRV.Cert.grover_pred_037.cert"
 STANDARD = ["propext", "Classical.choice", "Quot.sound"]
@@ -424,6 +439,258 @@ def proof_hash(cert_text):
     parts = [cert_text.replace("\r\n", "\n"), "lean-toolchain=" + toolchain,
              "mathlib=" + revs["mathlib"], "physlib=" + revs["Physlib"]]
     return sha3(b"\x00".join(p.encode("utf-8") for p in parts))
+
+
+# --- Stage 20b3: the counting certificate (PHASE2_SPEC.md §A.4 "Amendments before Stage 20b3") --
+
+def block_circuit(cert_text, name):
+    """The literal `def <name> : Circuit := ⟨n, [...]⟩` of Cert.lean (as `emitted_circuit`)."""
+    m = re.search(r"def " + re.escape(name) + r" : Circuit := ⟨(\d+), \[(.*?)\]⟩", cert_text, re.S)
+    if not m:
+        raise AssertionError(f"no `def {name} : Circuit := ⟨n, [...]⟩` in Cert.lean")
+    n = int(m.group(1))
+    return n, [parse_gate(item, n) for item in split_top(m.group(2))]
+
+
+def replay_blocks(cert_text, blocks):
+    """The assembled circuit from the six block literals of Cert.lean with their multiplicities and
+    classical-bit shifts (`Circuit.append` shifts the bits of the appended block by the bits
+    written so far; `counting_diff.py`'s `replay`): the circuit `circuit_hash` is of."""
+    out, offset, n_data = [], 0, None
+    for row in blocks:
+        n, gates = block_circuit(cert_text, row["name"])
+        n_data = n if n_data is None else n_data
+        assert n == n_data, (row["name"], n, n_data)
+        assert row["gates"] == len(gates), (row["name"], row["gates"], len(gates))
+        n_bits = sum(1 for g in gates if g["op"] == "measure")
+        for _ in range(row["multiplicity"]):
+            for g in gates:
+                g2 = dict(g)
+                if "c" in g2:
+                    g2["c"] += offset
+                if "if" in g2:
+                    g2["if"] += offset
+                out.append(g2)
+            offset += n_bits
+    anc = [q - n_data for g in out for q in g["q"] if q >= n_data]
+    return {"n_data": n_data, "n_anc": max(anc) + 1 if anc else 0, "gates": out}
+
+
+def decompose_cp(circ):
+    """`Circuit.decomposeCp`: a top-level `cp a k c t` is p a (k+1) c, p a (k+1) t, cnot c t,
+    p (−a) (k+1) t, cnot c t (the QIR emitter's path, Stage 17b)."""
+    out = []
+    for g in circ["gates"]:
+        if g["op"] == "cp" and "if" not in g:
+            c, t, a, k = g["q"][0], g["q"][1], g["a"], g["k"]
+            out += [{"op": "p", "q": [c], "a": a, "k": k + 1}, {"op": "p", "q": [t], "a": a, "k": k + 1},
+                    {"op": "cnot", "q": [c, t]}, {"op": "p", "q": [t], "a": -a, "k": k + 1},
+                    {"op": "cnot", "q": [c, t]}]
+        else:
+            out.append(g)
+    return {**circ, "gates": out}
+
+
+def gate_equal(g, w):
+    """A re-parsed gate against a Lean gate: a QIR `rz` (op p with `angle`) matches `p a k` on the
+    same qubits when |angle − 2πa/2^k| ≤ 1e-12·(1 + |angle|) (emit_diff.py)."""
+    if "angle" in g:
+        if w.get("op") != "p" or g["q"] != w["q"] or g.get("if") != w.get("if"):
+            return False
+        want = 2 * math.pi * w["a"] / 2 ** w["k"]
+        return abs(g["angle"] - want) <= 1e-12 * (1 + abs(g["angle"]))
+    return g == w
+
+
+def count_certify(out, *extra):
+    return run(["lake", "env", "lean", "--run", os.path.join("scripts", "CertifyTool.lean"),
+                "count-certify", os.path.join("examples", f"{NAME}.cqr"), "4", "--out", out, *extra])
+
+
+def composed_grade(blocks):
+    """The Stage 19a composed bound over the block rows: w, a peaks, d, t sums with multiplicities;
+    the second record's sums, and the T-depth bound tDepth(init) + Σ mult · t."""
+    g = {"w": max(b["grade"]["w"] for b in blocks), "a": max(b["grade"]["a"] for b in blocks),
+         "d": sum(b["multiplicity"] * b["grade"]["d"] for b in blocks),
+         "t": sum(b["multiplicity"] * b["grade"]["t"] for b in blocks)}
+    e = {k: sum(b["multiplicity"] * b["grade_ext"][k] for b in blocks)
+         for k in ("two_qubit", "rot", "meas", "ff")}
+    e["t_depth"] = blocks[0]["grade_ext"]["t_depth"] + sum(b["multiplicity"] * b["grade"]["t"]
+                                                            for b in blocks[1:])
+    return g, e
+
+
+def check_count_dir(d, validator):
+    """Schema, the hash link by replaying the block literals, proof hash, the composed grade and the
+    emitted files of one count-certify output directory."""
+    cert = json.loads(read(os.path.join(d, "certificate.json")))
+    validator.validate(cert)
+    text = read(os.path.join(d, "Cert.lean"))
+    assert [b["name"] for b in cert["blocks"]] == COUNT_BLOCKS, cert["blocks"]
+    assert [b["multiplicity"] for b in cert["blocks"]] == [1, 1, 2, 4, 8, 1]
+    circ = replay_blocks(text, cert["blocks"])
+    assert cert["hashes"]["circuit"] == sha3(canon(circ).encode("utf-8")), "circuit hash (replay)"
+    assert cert["hashes"]["proof"] == proof_hash(text), "proof hash"
+    g, e = composed_grade(cert["blocks"])
+    assert cert["grade"] == g and cert["grade_kind"] == "composed_bound", (cert["grade"], g)
+    assert {k: cert["grade_ext"][k] for k in e} == e and cert["grade_ext"]["t_depth_kind"] == "bound", \
+        (cert["grade_ext"], e)
+    assert all(b["live_end"] == 0 for b in cert["blocks"])
+    # the measured record of the literal agrees with the composed sums (two_qubit, meas, ff)
+    gates = circ["gates"]
+    assert e["two_qubit"] == sum(1 for x in gates if x["op"] in ("cnot", "cz", "cp"))
+    assert e["meas"] == sum(1 for x in gates if x["op"] == "measure")
+    assert e["ff"] == sum(1 for x in gates if "if" in x)
+    # Gate.isRotation (Stage 17a): `p a k` unless 2^k | 8a, `cp a k` unless 2^k | 2a
+    assert e["rot"] == sum(1 for x in gates if (x["op"] == "p" and (8 * x["a"]) % 2 ** x["k"] != 0)
+                           or (x["op"] == "cp" and (2 * x["a"]) % 2 ** x["k"] != 0))
+    counts = {"unitary": sum(1 for x in gates if x["op"] not in ("alloc", "free", "measure") and "if" not in x),
+              "mid_circuit_measurements": sum(1 for x in gates if x["op"] == "measure"),
+              "classically_controlled": sum(1 for x in gates if "if" in x),
+              "terminal_measurements": circ["n_data"]}
+    hp = cert["hardware_perturbation"]
+    assert hp["counts"] == counts and hp["G"] == sum(counts.values()), hp
+    assert "countPOVM reads the phase register" in hp["note"], hp["note"]
+    # the emitted files: QASM re-parses to the assembled circuit (cp native), QIR to its decomposeCp
+    qasm = read(os.path.join(d, f"{NAME}.qasm"))
+    parsed, terminal = reparse_qasm.parse(qasm)
+    assert parsed == circ, "qasm re-parse differs from the assembled circuit"
+    assert len(terminal) == circ["n_data"] == 12, "qasm terminal measurement over n + m = 12 qubits"
+    qir = read(os.path.join(d, f"{NAME}.qir"))
+    got, terminal_q = reparse_qir.parse(qir)
+    want = decompose_cp(circ)
+    assert len(got["gates"]) == len(want["gates"]) and all(
+        gate_equal(x, y) for x, y in zip(got["gates"], want["gates"])), "qir re-parse differs from decomposeCp"
+    assert {k: got[k] for k in ("n_data", "n_anc")} == {k: want[k] for k in ("n_data", "n_anc")}
+    assert len(terminal_q) == 12 and qir.count("declare void @__quantum__qis__rz__body(double, ptr)\n") == 1
+    n_cp = sum(1 for x in circ["gates"] if x["op"] == "cp")
+    assert n_cp == 6 and len(want["gates"]) == len(circ["gates"]) + 4 * n_cp, "the inverse QFT has six cp"
+    return cert, text, circ
+
+
+def check_count_cert_text(text):
+    """Cert.lean in the compositional form of amendment (2)."""
+    for frag in ("def prog : DSL.TypedProgram :=", "theorem prog_scoped : prog.scoped = true := by decide\n",
+                 "theorem net_ok : toNetwork prog = .ok net := except_ok_of_check _ _ (by decide +kernel)\n",
+                 "theorem front_end : ∀ x : Fin 8 → Bool, DSL.evalProgram prog x = Network.pred net 8 x :=\n",
+                 "#print axioms front_end\n",
+                 "def emitted : Circuit := assembleCounting h_layer [cg_0, cg_1, cg_2, cg_3] inverse\n",
+                 "theorem emitted_ok : countingCircuit net 8 4 none .tree .mbu = .ok emitted := by\n",
+                 "countingCircuit_of_blocks (N := net)", "grade_assembleCounting_le h_layer",
+                 "gradeExt_assembleCounting h_layer",
+                 "theorem grade_le : Synthesis.grade emitted ≤ ⟨20, 1388, 660, 8⟩ := by\n",
+                 "theorem hM_count : (Finset.univ.filter fun x => Network.pred net 8 x = true).card = 32 := by\n"
+                 "  rw [← Network.countSat_eq_card]\n  decide +kernel\n",
+                 "theorem cert : ∀ M : ℕ, (Finset.univ.filter fun x => Network.pred net 8 x = true).card = M →\n"
+                 "    1 ≤ M →\n",
+                 "ae_parametric_lemma_mk 8 M hpos (Network.pred net 8) hcard (by decide) hN rfl rfl rfl\n",
+                 "#print axioms cert\n", "theorem cert_count :\n", "cert 32 hM_count (by decide)\n",
+                 "#print axioms cert_count\n"):
+        assert text.count(frag) == 1, frag
+    for name, j in zip(COUNT_BLOCKS, [None, 0, 1, 2, 3, None]):
+        assert text.count(f"def {name} : Circuit := ⟨12, [") == 1, name
+        link = (f"theorem {name}_ok : controlledGrover net 8 4 {j} .tree .mbu = .ok {name} :=" if j is not None
+                else f"theorem {name}_ok : counting{'HLayer 8 4' if name == 'h_layer' else 'Inverse 8 4 none'} = {name} := by decide +kernel")
+        assert text.count(link) == 1, link
+        for suffix in ("grade_eq", "gradeExt_eq", "liveEnd"):
+            assert text.count(f"theorem {name}_{suffix} :") == 1, (name, suffix)
+    assert "def emitted : Circuit := ⟨" not in text, "no flat literal of the whole circuit"
+    assert "sorry" not in text and "native_decide" not in text
+    assert text.index("def net : Network") < text.index("def prog :") < text.index("def h_layer :")
+
+
+def check_count(validator, tmp):
+    """Stage 20b3: `count-certify` twice, the committed examples/certs/grover_pred_037_count, the
+    run report, and two negative kernel tests on temporary copies."""
+    t0 = time.time()
+    runs = []
+    for i in (1, 2):
+        out = os.path.join(tmp, f"count{i}")
+        rc, so, se = count_certify(out, "--report")
+        assert rc == 0, (rc, so, se)
+        last = so.rstrip("\n").split("\n")[-1]
+        assert last.startswith("certified (ε ≈ 0.168426, δ = 1 − 8/π² ≈ 0.189431; universal in M ≥ 1; "
+                               "M = 32 decided by the kernel)"), last
+        runs.append(out)
+    cert, text, circ = check_count_dir(runs[0], validator)
+    check_count_cert_text(text)
+    assert cert["status"] == "certified" and cert["obligations"] == [] and cert["axioms"] == STANDARD
+    assert cert["theorem"] == COUNT_THEOREM and cert["uncompute"] == "mbu"
+    assert cert["instance"] == {"n": 8, "M": 32, "m": 4, "kmax": None}, cert["instance"]
+    assert cert["solution_count"] == {"value": 32, "status": "kernel_decided"}
+    assert cert["grade"] == {"w": 20, "d": 1388, "t": 660, "a": 8}, cert["grade"]
+    assert tuple(cert["grade_ext"][k] for k in GRADE_EXT_KEYS) == (1161, 660, 6, 165, 330), cert["grade_ext"]
+    a = 32 / 2 ** 8
+    eps = 2 * math.pi * math.sqrt(a * (1 - a)) / 2 ** 4 + math.pi ** 2 / 4 ** 4
+    assert abs(cert["spec"]["epsilon"]["approx"] - eps) < 1e-6 and \
+        abs(cert["spec"]["delta"]["approx"] - (1 - 8 / math.pi ** 2)) < 1e-6, cert["spec"]
+    assert cert["spec"]["epsilon"]["expr"] == "2*pi*sqrt(a*(1-a))/2^4 + pi^2/4^4 with a = M/2^n = 32/256"
+    assert cert["spec"]["delta"]["expr"] == "1 - 8/pi^2" and cert["spec"]["estimate"] == "sin^2(pi*y/2^m)"
+    assert any("no claim for M = 0" in h for h in cert["hypotheses"]), cert["hypotheses"]
+    assert cert["trust_boundary"]["front_end"] == PROVED
+    assert len(circ["gates"]) == 3682 and circ["n_anc"] == 8, (len(circ["gates"]), circ["n_anc"])
+    print("ok:   count-certify grover_pred_037 m = 4: `certified (…)` (exit 0); schema v1.10.0, pattern "
+          "Count, composed bound (20, 1388, 660, 8) = the sum over the six blocks (1 + 1 + 2 + 4 + 8 + 1 "
+          "copies), grade_ext (1161, T-depth bound 660, 6, 165, 330), ε ≈ 0.168426 and δ ≈ 0.189431 as "
+          "{expr, approx}; axioms exactly the standard three; cert universal in M, cert_count at M = 32")
+    print("ok:   circuit hash = SHA3 of the circuit replayed from the six block literals of Cert.lean "
+          "with their multiplicities and bit shifts (3682 gates); .qasm re-parses to it (cp native), "
+          ".qir to its decomposeCp (six cp → 30 calls); proof hash recomputed; Cert.lean in the "
+          "compositional form (emitted = assembleCounting, emitted_ok by countingCircuit_of_blocks)")
+    cert2, _, _ = check_count_dir(runs[1], validator)
+    for f in ("Cert.lean", f"{NAME}.qir", f"{NAME}.qasm"):
+        assert read(os.path.join(runs[0], f), "rb") == read(os.path.join(runs[1], f), "rb"), f
+    assert without(cert, MACHINE) == without(cert2, MACHINE)
+    ex, _, _ = check_count_dir(EXAMPLE_COUNT, validator)
+    for f in ("Cert.lean", f"{NAME}.qir", f"{NAME}.qasm"):
+        assert read(os.path.join(runs[0], f), "rb") == read(os.path.join(EXAMPLE_COUNT, f), "rb"), \
+            f"committed counting example differs: {f}"
+    assert without(cert, MACHINE) == without(ex, MACHINE), "committed counting certificate.json"
+    assert masked(read(os.path.join(runs[0], "certificate.json"))) == \
+        masked(read(os.path.join(EXAMPLE_COUNT, "certificate.json"))), "counting certificate.json bytes"
+    print("ok:   second count-certify run byte-identical (Cert.lean, .qir, .qasm; JSON except machine "
+          "fields); committed examples/certs/grover_pred_037_count agrees (bytes; JSON outside "
+          "reference_configuration)")
+    # the run report
+    for d in (runs[0], EXAMPLE_COUNT):
+        rep = json.loads(read(os.path.join(d, "run_report.json")))
+        md = read(os.path.join(d, "run_report.md"))
+        assert [r["stage"] for r in rep["rows"]] == STAGES and rep["pattern"] == "Count", rep["rows"]
+        assert rep["certified"] is True and rep["status"].startswith("certified (ε ≈ 0.168426")
+        assert rep["instance"] == {"n": 8, "M": 32, "m": 4, "kmax": None}
+        assert "within about ± 43" in rep["statement"] and "no claim for M = 0" in md, rep["statement"]
+        rows = {r["stage"]: r for r in rep["rows"]}
+        assert "(20, 1388, 660, 8) (composed bound" in rows["4. QPLP Instant."]["resources"]
+        assert "T-depth a bound" in rows["4. QPLP Instant."]["resources"]
+        assert "synthesis precision" in rows["4. QPLP Instant."]["note"], "rot = 6: the rotation note"
+        assert [r["verification"] for r in rep["rows"][4:8]] == ["kernel-checked"] * 4
+        assert rows[STAGES[0]]["verification"] == "declared trust boundary"
+        assert rows["8. QIR Export"]["verification"] == "declared trust boundary"
+        assert "cp gates are emitted to QIR as their five-gate decomposition" in rows["8. QIR Export"]["note"]
+        assert md.count("\n| ") == 10 and "why m = 4" in md, "run_report.md"
+    print("ok:   counting run report (both runs): 9 rows of Table 8.5.2, the statement in M units "
+          "(M ± 43 with probability ≥ 8/π² at m = 4), why m = 4, no claim for M = 0")
+    # negative kernel tests on temporary copies, through `CertifyTool audit`
+    base = read(os.path.join(EXAMPLE_COUNT, "Cert.lean"))
+    i0, i1 = base.index("def cg_0 : Circuit := ⟨12, ["), base.index("theorem cg_0_ok :")
+    blk = base[i0:i1]
+    assert blk.count(".z (.data 8)") == 1, "the phase fix of cg_0"
+    mutated_block = base[:i0] + blk.replace(".z (.data 8)", ".x (.data 8)") + base[i1:]
+    gl = "theorem grade_le : Synthesis.grade emitted ≤ ⟨20, 1388, 660, 8⟩ := by\n"
+    assert base.count(gl) == 1
+    for label, mutated in (("(h1) a mutated gate in the block literal cg_0 (the phase fix z → x)", mutated_block),
+                           ("(h2) grade_le with d lowered by one (1387)",
+                            base.replace(gl, gl.replace("1388", "1387")))):
+        d = os.path.join(tmp, "count_mut")
+        os.makedirs(d, exist_ok=True)
+        path = os.path.join(d, "Cert.lean")
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(mutated)
+        rc, so, se = run(["lake", "env", "lean", "--run", os.path.join("scripts", "CertifyTool.lean"),
+                          "audit", path, COUNT_THEOREM])
+        assert rc == 1 and ": pass" not in so and "certified" not in so, (label, rc, so[-500:], se[-500:])
+        print(f"ok:   {label}: the kernel check fails (exit 1)")
+    print(f"ok:   counting section (Stage 20b3) in {time.time() - t0:.0f} s")
 
 
 def check_dir(d, validator):
@@ -962,6 +1229,9 @@ def main():
         assert not os.path.exists(out)
         print("ok:   (g) --profile ibm_kyiv: unknown profile (exit 2), the diagnostic lists "
               "illustrative_sc; nothing written")
+
+        # Stage 20b3: the counting certificate (count-certify, the committed example, negatives)
+        check_count(validator, tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("certify_check: all checks passed")

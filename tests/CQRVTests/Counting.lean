@@ -115,6 +115,15 @@ def ccCoh : Circuit := (countingCircuit n4 4 2 none .tree .coherent).toOption.ge
 #guard cc.gradeExt.tDepth ≤ (countingHLayer 4 2).gradeExt.tDepth + 1 * cg0.tCount +
   2 * cg1.tCount + (countingInverse 4 2 none).tCount
 
+-- Stage 20b3 (C1): the assembled circuit from its blocks equals the built circuit
+#guard assembleCounting (countingHLayer 4 2) [cg0, cg1] (countingInverse 4 2 none) == cc
+#guard assembleCounting (countingHLayer 4 2) [cg0, cg1] (countingInverse 4 2 (some 1)) ==
+  (countingCircuit n4 4 2 (some 1)).toOption.getD default
+-- the composed bound of C1 at this instance, as the certificate closes it
+#guard Synthesis.grade cc ≤ Synthesis.grade (countingHLayer 4 2) +
+  (1 • Synthesis.grade cg0 + (2 • Synthesis.grade cg1 + 0)) +
+    Synthesis.grade (countingInverse 4 2 none)
+
 /-- The diagnostic code of a refused build. -/
 def codeOf (r : Except DSL.Diagnostic Circuit) : String :=
   match r with
@@ -163,6 +172,40 @@ example (h : controlledGrover n4 4 2 0 = .ok cg0) :
 example (h : countingCircuit n4 4 2 = .ok cc) :
     cc.WF ∧ AncRestore 6 cc.nAnc cc (qftInvU 4 2 none * powersU n4 4 2 .tree * hadamardU 6) :=
   countingCircuit_ancRestore_raw h (by decide +kernel) rfl rfl
+
+-- Stage 20b3 (C1): the converse constructor from the blocks, and the two composed bounds
+example (h0 : controlledGrover n4 4 2 0 .tree .mbu = .ok cg0)
+    (h1 : controlledGrover n4 4 2 1 .tree .mbu = .ok cg1) :
+    countingCircuit n4 4 2 none .tree .mbu =
+      .ok (assembleCounting (countingHLayer 4 2) [cg0, cg1] (countingInverse 4 2 none)) :=
+  countingCircuit_of_blocks none (by decide) rfl fun j hj =>
+    match j, hj with
+    | 0, _ => h0
+    | 1, _ => h1
+    | _ + 2, h => absurd h (by omega)
+example (h0 : cg0.liveEnd = 0) (h1 : cg1.liveEnd = 0) :
+    Synthesis.grade (assembleCounting (countingHLayer 4 2) [cg0, cg1] (countingInverse 4 2 none)) ≤
+      Synthesis.grade (countingHLayer 4 2) +
+        ([cg0, cg1].zipIdx.map fun p => 2 ^ p.2 • Synthesis.grade p.1).sum +
+        Synthesis.grade (countingInverse 4 2 none) :=
+  grade_assembleCounting_le (countingHLayer 4 2) [cg0, cg1] (countingInverse 4 2 none)
+    (fun b hb => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hb
+      rcases hb with rfl | rfl <;> rfl)
+    rfl rfl
+    (fun b hb => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hb
+      rcases hb with rfl | rfl
+      · exact h0
+      · exact h1)
+example : (Synthesis.gradeExt (assembleCounting (countingHLayer 4 2) [cg0, cg1]
+      (countingInverse 4 2 none))).tDepth ≤
+    (Synthesis.gradeExt (countingHLayer 4 2)).tDepth +
+      ([cg0, cg1].zipIdx.map fun p => 2 ^ p.2 * (Synthesis.grade p.1).t).sum +
+      (Synthesis.grade (countingInverse 4 2 none)).t := by
+  have h := (gradeExt_assembleCounting (countingHLayer 4 2) [cg0, cg1]
+    (countingInverse 4 2 none)).2.2.2.2
+  omega
 example (a : ℕ) : unitaryDenote 6 a [.z (.data 4)] =
     dataMat 6 [.z (.data 4)] ⊗ₖ (1 : Matrix (Reg a) (Reg a) ℂ) :=
   unitaryDenote_dataOnly _ rfl rfl

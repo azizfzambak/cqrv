@@ -3,6 +3,7 @@ module
 public import CQRV.Synthesis.Diffusion
 public import CQRV.Synthesis.QFT
 public import CQRV.Synthesis.NetworkCorrect
+public import CQRV.Circuit.GradeCompose
 
 /-!
 # CQRV.Synthesis.Counting
@@ -365,6 +366,139 @@ theorem countingCircuit_of_body {N : Network} {n m : Nat} (kmax : Option Nat)
     countingCircuit N n m kmax shape mode = .ok (body.append (countingInverse n m kmax)) := by
   unfold countingCircuit
   simp [hm, hb, bind, Except.bind, pure, Except.pure]
+
+/-! ## Stage 20b3 (C1; PHASE2_SPEC.md §A.4 "Amendments before Stage 20b3" (2)) — the counting
+circuit assembled from its distinct blocks, for the compositional certificate -/
+
+/-- PHASE2_SPEC.md §A.4 (amendments before Stage 20b3, (2)) — the counting circuit assembled from
+its distinct blocks: the fold of `Circuit.append` from `init` over the `2^j` copies of block `j`
+in program order (the list form of `Circuit.grade_foldl_append_le`), then the inverse block. The
+lambda is written with projections (`p.1`, `p.2`), not `fun (b, j) =>`: a pattern-matching lambda
+elaborates to its own matcher at every occurrence, which `rw` does not identify. -/
+def assembleCounting (init : Circuit) (bs : List Circuit) (inv : Circuit) : Circuit :=
+  ((bs.zipIdx.flatMap fun p => List.replicate (2 ^ p.2) p.1).foldl Circuit.append init).append inv
+
+/-- One more phase qubit, forward: from the powers up to `j` and block `j`. -/
+theorem countingPowers_succ {N : Network} {n m : Nat} {shape : DiffusionShape}
+    {mode : UncomputeMode} {init acc b : Circuit} {j : Nat}
+    (h : countingPowers N n m shape mode init j = .ok acc)
+    (hb : controlledGrover N n m j shape mode = .ok b) :
+    countingPowers N n m shape mode init (j + 1) =
+      .ok ((List.replicate (2 ^ j) b).foldl Circuit.append acc) := by
+  unfold countingPowers
+  simp [h, hb, bind, Except.bind, pure, Except.pure]
+
+/-- The powers up to `k` from the first `k` blocks: the fold over the `2^j` copies of block
+`j`, `j < k`. -/
+theorem countingPowers_eq_foldl {N : Network} {n m : Nat} {shape : DiffusionShape}
+    {mode : UncomputeMode} (init : Circuit) (bs : List Circuit) :
+    ∀ (k : Nat) (hk : k ≤ bs.length),
+      (∀ j (h : j < k), controlledGrover N n m j shape mode =
+        .ok (bs[j]'(Nat.lt_of_lt_of_le h hk))) →
+      countingPowers N n m shape mode init k =
+        .ok (((bs.take k).zipIdx.flatMap fun p => List.replicate (2 ^ p.2) p.1).foldl
+          Circuit.append init)
+  | 0, _, _ => by simp [countingPowers_zero]
+  | k + 1, hk, hbs => by
+    have hk' : k < bs.length := hk
+    have ih := countingPowers_eq_foldl init bs k (Nat.le_of_lt hk')
+      fun j hj => hbs j (Nat.lt_succ_of_lt hj)
+    rw [countingPowers_succ ih (hbs k (Nat.lt_succ_self k)), List.take_succ_eq_append_getElem hk',
+      List.zipIdx_append, List.length_take_of_le (Nat.le_of_lt hk'), Nat.zero_add,
+      List.zipIdx_singleton, List.flatMap_append, List.flatMap_singleton, List.foldl_append]
+
+/-- PHASE2_SPEC.md §A.4 (amendments before Stage 20b3, (2)) — **the converse direction of
+`countingCircuit_ok`** for the certificate: with `m ≠ 0` and the `m` controlled iterates given
+as blocks, `countingCircuit` is `assembleCounting` of the Hadamard layer, the blocks and the
+inverse (A)QFT — so `emitted_ok` needs no kernel evaluation of the whole circuit, only of each
+block's link `controlledGrover … = .ok block`. -/
+theorem countingCircuit_of_blocks {N : Network} {n m : Nat} (kmax : Option Nat)
+    {shape : DiffusionShape} {mode : UncomputeMode} {bs : List Circuit} (hm : m ≠ 0)
+    (hlen : bs.length = m)
+    (hbs : ∀ j (h : j < m), controlledGrover N n m j shape mode = .ok (bs[j]'(hlen ▸ h))) :
+    countingCircuit N n m kmax shape mode =
+      .ok (assembleCounting (countingHLayer n m) bs (countingInverse n m kmax)) := by
+  subst hlen
+  have h := countingPowers_eq_foldl (N := N) (shape := shape) (mode := mode)
+    (countingHLayer n bs.length) bs bs.length (Nat.le_refl _) fun j hj => hbs j hj
+  rw [List.take_length] at h
+  exact countingCircuit_of_body kmax hm h
+
+/-- PHASE2_SPEC.md §A.4 (amendments before Stage 20b3, (2)), report §3.1.4 — **the composed grade
+bound of the assembled counting circuit**: every block on the data register of `init` and
+ending with no live ancilla, `grade ≤ grade init ⊕ ∑_j 2^j • grade (block j) ⊕ grade inv`
+(`Circuit.grade_foldl_append_le`, `Circuit.grade_append_le`). A certificate rewrites the right-hand
+side with the blocks' `grade_eq` and closes the arithmetic by `decide`. -/
+theorem grade_assembleCounting_le (init : Circuit) (bs : List Circuit) (inv : Circuit)
+    (hn : ∀ b ∈ bs, b.nData = init.nData) (hinv : inv.nData = init.nData)
+    (hi : init.liveEnd = 0) (hb : ∀ b ∈ bs, b.liveEnd = 0) :
+    Synthesis.grade (assembleCounting init bs inv) ≤
+      Synthesis.grade init + (bs.zipIdx.map fun p => 2 ^ p.2 • Synthesis.grade p.1).sum +
+        Synthesis.grade inv := by
+  unfold assembleCounting Synthesis.grade
+  have hnL : ∀ c ∈ bs.zipIdx.flatMap fun p => List.replicate (2 ^ p.2) p.1,
+      c.nData = init.nData := fun c hc => by
+    rw [List.mem_flatMap] at hc
+    obtain ⟨⟨b, j⟩, hbj, hc⟩ := hc
+    rw [List.eq_of_mem_replicate hc]
+    exact hn b (List.fst_mem_of_mem_zipIdx hbj)
+  have hbL : ∀ c ∈ bs.zipIdx.flatMap fun p => List.replicate (2 ^ p.2) p.1,
+      c.liveEnd = 0 := fun c hc => by
+    rw [List.mem_flatMap] at hc
+    obtain ⟨⟨b, j⟩, hbj, hc⟩ := hc
+    rw [List.eq_of_mem_replicate hc]
+    exact hb b (List.fst_mem_of_mem_zipIdx hbj)
+  have h1 := Circuit.grade_foldl_append_le init _ hnL hi hbL
+  have h2 := Circuit.grade_append_le (C₂ := inv)
+    (by rw [Circuit.nData_foldl_append]; exact hinv.symm) (Circuit.liveEnd_foldl_append init _ hi hbL)
+  exact le_trans h2 (Grade.seqComp_mono (le_trans h1 (le_of_eq (congrArg (init.grade + ·)
+    (Circuit.sum_map_flatMap_replicate bs.zipIdx Circuit.grade)))) (le_refl _))
+
+/-- PHASE2_SPEC.md §A.4 (amendments before Stage 20b3, (2)), §A.1, §A.3 amendment (6) — **the
+composed second record of the assembled counting circuit**: `twoQ`, `rot`, `meas`, `ff` are the
+sums over the blocks with their multiplicities, and the T-depth is at most
+`tDepth init + ∑_j 2^j · tCount (block j) + tCount inv` (19a's `gradeExt_*_foldl_append`,
+`gradeExt_tDepth_foldl_append_le`, `tDepth_append_le`); no hypothesis. -/
+theorem gradeExt_assembleCounting (init : Circuit) (bs : List Circuit) (inv : Circuit) :
+    (Synthesis.gradeExt (assembleCounting init bs inv)).twoQ =
+        (Synthesis.gradeExt init).twoQ +
+          (bs.zipIdx.map fun p => 2 ^ p.2 * (Synthesis.gradeExt p.1).twoQ).sum +
+          (Synthesis.gradeExt inv).twoQ ∧
+      (Synthesis.gradeExt (assembleCounting init bs inv)).rot =
+        (Synthesis.gradeExt init).rot +
+          (bs.zipIdx.map fun p => 2 ^ p.2 * (Synthesis.gradeExt p.1).rot).sum +
+          (Synthesis.gradeExt inv).rot ∧
+      (Synthesis.gradeExt (assembleCounting init bs inv)).meas =
+        (Synthesis.gradeExt init).meas +
+          (bs.zipIdx.map fun p => 2 ^ p.2 * (Synthesis.gradeExt p.1).meas).sum +
+          (Synthesis.gradeExt inv).meas ∧
+      (Synthesis.gradeExt (assembleCounting init bs inv)).ff =
+        (Synthesis.gradeExt init).ff +
+          (bs.zipIdx.map fun p => 2 ^ p.2 * (Synthesis.gradeExt p.1).ff).sum +
+          (Synthesis.gradeExt inv).ff ∧
+      (Synthesis.gradeExt (assembleCounting init bs inv)).tDepth ≤
+        (Synthesis.gradeExt init).tDepth +
+          (bs.zipIdx.map fun p => 2 ^ p.2 * (Synthesis.grade p.1).t).sum +
+          (Synthesis.grade inv).t := by
+  unfold assembleCounting Synthesis.gradeExt Synthesis.grade
+  have key : ∀ (f : Circuit → Nat), ((bs.zipIdx.flatMap fun p =>
+      List.replicate (2 ^ p.2) p.1).map f).sum = (bs.zipIdx.map fun p => 2 ^ p.2 * f p.1).sum := by
+    intro f
+    exact Circuit.sum_map_flatMap_replicate_nat bs.zipIdx f
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · rw [Circuit.gradeExt_twoQ_append, Circuit.gradeExt_twoQ_foldl_append]
+    exact congrArg (fun x => init.gradeExt.twoQ + x + inv.gradeExt.twoQ) (key _)
+  · rw [Circuit.gradeExt_rot_append, Circuit.gradeExt_rot_foldl_append]
+    exact congrArg (fun x => init.gradeExt.rot + x + inv.gradeExt.rot) (key _)
+  · rw [Circuit.gradeExt_meas_append, Circuit.gradeExt_meas_foldl_append]
+    exact congrArg (fun x => init.gradeExt.meas + x + inv.gradeExt.meas) (key _)
+  · rw [Circuit.gradeExt_ff_append, Circuit.gradeExt_ff_foldl_append]
+    exact congrArg (fun x => init.gradeExt.ff + x + inv.gradeExt.ff) (key _)
+  · refine Nat.le_trans (Circuit.tDepth_append_le _ _) ?_
+    have h := Circuit.gradeExt_tDepth_foldl_append_le init
+      (bs.zipIdx.flatMap fun p => List.replicate (2 ^ p.2) p.1)
+    exact Nat.add_le_add_right (Nat.le_trans h (Nat.le_of_eq
+      (congrArg (init.gradeExt.tDepth + ·) (key Circuit.tCount)))) _
 
 end CQRV.Synthesis
 

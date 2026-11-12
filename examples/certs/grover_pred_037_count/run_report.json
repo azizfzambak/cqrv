@@ -1,0 +1,87 @@
+{"status":
+ "certified (ε ≈ 0.168426, δ = 1 − 8/π² ≈ 0.189431; universal in M ≥ 1; M = 32 decided by the kernel)",
+ "statement":
+ "with probability at least 8/π² ≈ 0.810569, the decoded estimate sin²(π y/2^4) is within ε ≈ 0.168426 of a = M/2^8: in units of M, M within about ± 43 (ε · 2^8, rounded); at M = 32 the decoding set contains the estimate 0 (the weak instance PHASE2_SPEC §A.8 item 3 chose for size); the precision grows with m",
+ "source": "examples/grover_pred_037.cqr",
+ "rows":
+ [{"verification": "declared trust boundary",
+   "stage": "1a. DSL Input: parser, surface checker",
+   "resources": "—",
+   "output": "Typed AST `grover_pred_037`",
+   "note":
+   "parser, surface checker and the typed-term printer: declared trust boundary (the theorem of 1b starts at the typed-term literal `prog` of Cert.lean, so an error before it is not detected there); the source text is bound by predicate_hash only",
+   "input": "examples/grover_pred_037.cqr (predicate_hash d5f128217996…)"},
+  {"verification": "kernel-checked",
+   "stage": "1b. DSL Input: typed AST → network",
+   "resources":
+   "n = 8 input bits; `front_end` covers all 2^8 = 256 inputs (a theorem, not an enumeration)",
+   "output": "Boolean network (toNetwork)",
+   "note":
+   "typed AST → network: proved (`toNetwork_pred`, Stage 16a) and kernel-checked at this instance in Cert.lean — `prog`, `prog_scoped` (decide), `net_ok : toNetwork prog = .ok net` (decide +kernel), `front_end : ∀ x, evalProgram prog x = Network.pred net 8 x`; declared as trust_boundary.front_end = \"DSL typed term → network: proved (toNetwork_pred; kernel-checked net_ok and front_end in Cert.lean); parser, surface checker and the typed-term printer unverified; predicate_hash binds the source\"",
+   "input": "Typed AST `grover_pred_037`"},
+  {"verification": "unverified",
+   "stage": "2. Spec Extraction",
+   "resources":
+   "M = 32 solutions (Network.countSat on all 2^8 inputs, decided by the kernel in Cert.lean: hM_count)",
+   "output":
+   "Counting request: Count, n = 8, m = 4, kmax = none (exact inverse QFT)",
+   "note":
+   "the problem class is a request parameter (PHASE2_SPEC §A.5), not matched by the library before Stage 21; the certificate theorem `cert` is universal in M and does not use the count — `cert_count` is its instance at the kernel-decided count",
+   "input": "Typed AST, request --problem count --precision m"},
+  {"verification": "unverified",
+   "stage": "3. Pattern Matching",
+   "resources": "side conditions: m ≥ 1 (F₅ ≥ 1); M ≥ 1 in `cert`",
+   "output":
+   "Count entry (PHASE2_SPEC §A.5): not matched by the library before Stage 21",
+   "note":
+   "`groverInstance` matches Grover only; Stage 21 adds the Count entry and wires this generator to `cqr certify --problem count`; the certificate theorem states the counting instance directly",
+   "input": "Counting request"},
+  {"verification": "kernel-checked",
+   "stage": "4. QPLP Instant.",
+   "resources":
+   "grade (w, d, t, a) = (20, 1388, 660, 8) (composed bound, grade_assembleCounting_le); ε = 2*pi*sqrt(a*(1-a))/2^4 + pi^2/4^4 with a = M/2^n = 32/256 ≈ 0.168426, δ = 1 - 8/pi^2 ≈ 0.189431; ext: 2Q 1161, T-depth 660, rot 6, meas 165, ff 330 (composed; T-depth a bound)",
+   "output":
+   "Counting circuit H^⊗12 · ∏_j ctrl_j(G)^(2^j) · QFT^−1 (`emitted` = assembleCounting of the blocks in Cert.lean)",
+   "note":
+   "every block as a literal with its `_ok` link, `grade_eq`, `gradeExt_eq` and `liveEnd` by `decide +kernel`; `emitted_ok` by `countingCircuit_of_blocks` (no kernel evaluation of the whole circuit); `grade_le` by `grade_assembleCounting_le` and `decide`; with probability at least 8/π² ≈ 0.810569, the decoded estimate sin²(π y/2^4) is within ε ≈ 0.168426 of a = M/2^8: in units of M, M within about ± 43 (ε · 2^8, rounded); at M = 32 the decoding set contains the estimate 0 (the weak instance PHASE2_SPEC §A.8 item 3 chose for size); the precision grows with m; Clifford+T cost of the rotation gates depends on the synthesis precision (PHASE2_SPEC §C), not folded into t",
+   "input":
+   "ae_parametric_lemma at n = 8, m = 4; blocks h_layer ×1 (12 gates, (w, d, t, a) = (12, 1, 0, 0)), cg_0 ×1 (244 gates, (w, d, t, a) = (20, 92, 44, 8)), cg_1 ×2 (244 gates, (w, d, t, a) = (20, 92, 44, 8)), cg_2 ×4 (244 gates, (w, d, t, a) = (20, 92, 44, 8)), cg_3 ×8 (244 gates, (w, d, t, a) = (20, 92, 44, 8)), inverse ×1 (10 gates, (w, d, t, a) = (12, 7, 0, 0))"},
+  {"verification": "kernel-checked",
+   "stage": "5. Oracle Synthesis",
+   "resources":
+   "iterate block (w, d, t, a) = (20, 92, 44, 8); 4 distinct iterates, 15 copies",
+   "output":
+   "controlled U_P and controlled U_s inside every iterate block (Lemma 6.3.2 per oracle call, countingCircuit_ancRestore)",
+   "note":
+   "the blocks' `_ok` links tie the literals to `controlledGrover net n m j`; the restoration of every block is the library theorem `countingCircuit_ancRestore` (Stage 19c), applied inside `ae_parametric_lemma`",
+   "input":
+   "Boolean network (10 nodes, 2 AND), controlled on each phase qubit"},
+  {"verification": "kernel-checked",
+   "stage": "6. Ancilla Restore",
+   "resources": "165 MBU measurements, 330 classically controlled gates; a = 8",
+   "output": "Restored circuit (AncRestore conjunct of `cert`)",
+   "note":
+   "AncRestore (8 + 4) emitted.nAnc emitted (U_count (net.pred 8) 4 none), on density operators (Lemma 6.3.2 per oracle call, the tree diffusion's MCZ, the phase fix, the data-only inverse QFT: countingCircuit_ancRestore, Stage 19c)",
+   "input": "Controlled oracles and diffusions of the blocks"},
+  {"verification": "kernel-checked",
+   "stage": "7. Certificate Gen",
+   "resources":
+   "kernel 17.00 s, wall 27.39 s (single run); axioms: propext, Classical.choice, Quot.sound",
+   "output":
+   "examples/certs/grover_pred_037_count/Cert.lean, certificate.json (theorems CQRV.Cert.grover_pred_037_count.cert, CQRV.Cert.grover_pred_037_count.cert_count)",
+   "note":
+   "lake env lean exit 0; #print axioms audited for `cert` and `cert_count`; status: certified (ε ≈ 0.168426, δ = 1 − 8/π² ≈ 0.189431; universal in M ≥ 1; M = 32 decided by the kernel)",
+   "input": "Proof + composed grade"},
+  {"verification": "declared trust boundary",
+   "stage": "8. QIR Export",
+   "resources":
+   "G = 3364 noisy operations (2857 unitary, 165 mid-circuit measurements, 330 classically controlled, 12 terminal measurements over all 8 + 4 data qubits)",
+   "output":
+   "QIR text (grover_pred_037.qir), OpenQASM 3 (grover_pred_037.qasm)",
+   "note":
+   "emitter unverified; translation-validated by re-parse in tests/diff (certify_check.py), not in this run; trust_boundary.emitted = QIR text; the inverse QFT's cp gates are emitted to QIR as their five-gate decomposition (decomposeCp_unitary_wf) and to OpenQASM 3 as cp; the QASM / QIR measure all 8 + 4 = 12 data qubits; countPOVM reads the phase register (4 qubits) only, the search register being traced, which is the same POVM on the phase outcomes; alloc/free not counted",
+   "input": "Internal circuit (`emitted`)"}],
+ "pattern": "Count",
+ "name": "grover_pred_037",
+ "instance": {"n": 8, "m": 4, "kmax": null, "M": 32},
+ "certified": true}

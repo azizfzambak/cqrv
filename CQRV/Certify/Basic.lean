@@ -8,6 +8,7 @@ public import CQRV.Certify.FrontEnd
 public import CQRV.Certify.RunReport
 public import CQRV.Certify.Profile
 public import CQRV.Certify.Count
+public import CQRV.Certify.CountCert
 
 /-!
 # CQRV.Certify
@@ -24,5 +25,7 @@ of the front end, `evalProgram` vs `Network.pred` on all `2ⁿ` inputs, §5.3.3)
 (one row per pipeline stage in the shape of Table 8.5.2, §8.5.2). Stage 11b: `Profile` (reading
 a declared hardware profile for `cqr certify --profile`, §3.3.2–3.3.3). Stage 14a: `Count`
 (`Network.countSat` and `Network.countSat_eq_card`: the solution count decided by the kernel for
-`n ≤ --count-limit`, §8.2).
+`n ≤ --count-limit`, §8.2). Stage 20b3: `CountCert` (the counting certificate's request,
+renderer, JSON record and run report, PHASE2_SPEC.md §A.4 "Amendments before Stage 20b3"; called by
+`scripts/CertifyTool.lean count-certify`, wired to `cqr certify --problem count` in Stage 21).
 -/

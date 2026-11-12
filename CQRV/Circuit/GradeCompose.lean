@@ -708,6 +708,56 @@ theorem gradeExt_ff_foldl_append (init : Circuit) (bs : List Circuit) :
     rw [List.foldl_cons, List.map_cons, List.sum_cons, ih, gradeExt_ff_append]
     omega
 
+/-! ## Stage 20b3 (C1; PHASE2_SPEC §A.4 "Amendments before Stage 20b3" (2)) — the fold's data
+register and live ancillae, and the sum over the `2^j`-fold copies of the counting blocks -/
+
+/-- The fold of appends keeps the data register of `init`. -/
+theorem nData_foldl_append (init : Circuit) (bs : List Circuit) :
+    (bs.foldl Circuit.append init).nData = init.nData := by
+  induction bs generalizing init with
+  | nil => rfl
+  | cons b bs ih => rw [List.foldl_cons, ih, nData_append]
+
+/-- The fold of appends of blocks ending with no live ancilla ends with no live ancilla. -/
+theorem liveEnd_foldl_append (init : Circuit) (bs : List Circuit) (hi : init.liveEnd = 0)
+    (hb : ∀ b ∈ bs, b.liveEnd = 0) : (bs.foldl Circuit.append init).liveEnd = 0 := by
+  induction bs generalizing init with
+  | nil => exact hi
+  | cons b bs ih =>
+    rw [List.foldl_cons]
+    exact ih (init.append b) (by rw [liveEnd_append hi]; exact hb b List.mem_cons_self)
+      fun c hc => hb c (List.mem_cons_of_mem b hc)
+
+/-- The sum of a block statistic over the `2^j`-fold copies of the blocks (`assembleCounting`'s
+list, Stage 20b3): `∑_{(b, j)} 2^j • g b`. The lambdas are written with projections, not
+`fun (b, j) =>`: a pattern-matching lambda elaborates to its own matcher at every occurrence,
+which `rw` does not identify across statements. -/
+theorem sum_map_flatMap_replicate {α M : Type} [AddCommMonoid M] (ps : List (α × ℕ))
+    (g : α → M) :
+    ((ps.flatMap fun p => List.replicate (2 ^ p.2) p.1).map g).sum =
+      (ps.map fun p => 2 ^ p.2 • g p.1).sum := by
+  induction ps with
+  | nil => rfl
+  | cons p ps ih =>
+    simp only [List.flatMap_cons, List.map_append, List.sum_append, List.map_replicate,
+      List.sum_replicate, List.map_cons, List.sum_cons, ih]
+
+theorem sum_replicate_nat (n a : ℕ) : (List.replicate n a).sum = n * a := by
+  induction n with
+  | zero => simp
+  | succ n ih => rw [List.replicate_succ, List.sum_cons, ih, Nat.succ_mul, Nat.add_comm]
+
+/-- `sum_map_flatMap_replicate` on `ℕ` with `*` (no algebraic instance on `ℕ` is needed in the
+Physlib-free closure). -/
+theorem sum_map_flatMap_replicate_nat {α : Type} (ps : List (α × ℕ)) (g : α → ℕ) :
+    ((ps.flatMap fun p => List.replicate (2 ^ p.2) p.1).map g).sum =
+      (ps.map fun p => 2 ^ p.2 * g p.1).sum := by
+  induction ps with
+  | nil => rfl
+  | cons p ps ih =>
+    simp only [List.flatMap_cons, List.map_append, List.sum_append, List.map_replicate,
+      sum_replicate_nat, List.map_cons, List.sum_cons, ih]
+
 end Circuit
 
 end CQRV

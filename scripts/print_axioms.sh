@@ -11,7 +11,9 @@
 #      since Stage 14a, the fourth — mode coherent — since Stage 15b) must
 #      kernel-check and their theorems `cert` and (Stage 16b) `front_end` must pass the same
 #      audit (scripts/CertifyTool.lean `audit`, one Lean run per file); since Stage 14a `cert` has
-#      no hypothesis there (`hM_count`).
+#      no hypothesis there (`hM_count`); since Stage 20b3 the counting certificate
+#      examples/certs/grover_pred_037_count/Cert.lean too, with `cert` (universal in M),
+#      `cert_count` (the instance at M = 32) and `front_end`.
 # Exits non-zero on any failure. Run after `lake build`.
 #
 # Portable: bash only; ubuntu and Git Bash on Windows.
@@ -27,3 +29,6 @@ for spec in grover_pred_037:grover_pred_037 simple_alu_x0_1:simple_alu_x0_1 \
     "examples/certs/${spec%%:*}/Cert.lean" "CQRV.Cert.${spec#*:}.cert" \
     "CQRV.Cert.${spec#*:}.front_end"
 done
+lake env lean --run scripts/CertifyTool.lean audit examples/certs/grover_pred_037_count/Cert.lean \
+  CQRV.Cert.grover_pred_037_count.cert CQRV.Cert.grover_pred_037_count.cert_count \
+  CQRV.Cert.grover_pred_037_count.front_end

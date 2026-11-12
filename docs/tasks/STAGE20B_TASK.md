@@ -225,8 +225,120 @@ Stop and ask: a statement needs a hypothesis not listed; an existing statement w
 change; the channel factorization of step 3 fails (for instance, if the ancilla registers of `C`
 and `C₀` differ).
 
+---
+
+## 20b3 — The counting certificate (written at the 20b2 review, 2026-11-10; after 20b2 is accepted)
+
+PHASE2_SPEC.md §A.4 "Amendments before Stage 20b3" (1)–(6) — read it first. Precondition: main =
+af4c813 (the 20b2 review commit). `git switch -c stage-20b3 main`; the 20b3 commit includes the
+reviewer's edits to `docs/PHASE2_SPEC.md`, `docs/PHASE2_ROADMAP.md` and this file, unedited.
+
+**Invariants of 20b3** (in addition to the ones above). The Grover pipeline is not touched:
+`groverInstance`, `CertRequest`, `renderCert*`, `Certificate`, `Certificate.build`, `RunData`,
+`schemaVersion` (it stays `"1.9.0"`) and every committed certificate directory stay byte-identical;
+`cqr certify` produces the same files as before. No new `cqr` subcommand or flag. Every new module
+in `CQRV/Certify/` and `CQRV/Synthesis/` is Physlib-free. The instance is grover_pred_037,
+`n = 8`, `M = 32`, `m = 4`, `kmax = none`, shape tree, mode MBU.
+
+### C1. Library support (Physlib-free; `CQRV/Synthesis/Counting.lean`, `CQRV/Circuit/GradeCompose.lean`)
+
+- `assembleCounting (init : Circuit) (bs : List Circuit) (inv : Circuit) : Circuit` — the fold of
+  `Circuit.append` over `bs.zipIdx.flatMap fun (b, j) => List.replicate (2 ^ j) b` from `init`, then
+  `.append inv`. Write it so that it is literally the list form of `grade_foldl_append_le`.
+- `countingCircuit_of_blocks : m ≠ 0 → bs.length = m → (∀ j (h : j < m), controlledGrover N n m j
+  shape mode = .ok (bs.get ⟨j, _⟩)) → countingCircuit N n m kmax shape mode = .ok (assembleCounting
+  (countingHLayer n m) bs (countingInverse n m kmax))`, by induction through `countingPowers` (the
+  converse direction of `countingCircuit_ok` / `countingCircuit_of_body`).
+- `grade_assembleCounting_le` — with every block on the same data register and `liveEnd = 0`:
+  `(assembleCounting init bs inv).grade ≤ init.grade + (bs.zipIdx.map fun (b, j) => 2 ^ j • b.grade).sum
+  + inv.grade`; and `gradeExt_assembleCounting` — `twoQ`, `rot`, `meas`, `ff` equal to the
+  corresponding sums, `tDepth ≤ init.tDepth + ∑ 2^j · tCount b + tCount inv`. From 19a's list forms.
+  Shape the right-hand sides so that a `Cert.lean` rewrites them with the block `grade_eq` /
+  `gradeExt_eq` and closes the arithmetic by `decide`, with no kernel run of the scheduler on the
+  whole circuit.
+- Tests in `tests/CQRVTests/Counting.lean` at `n = 4`, `m = 2` (the 19b instance): `#guard` that
+  `assembleCounting` of the built blocks equals the built circuit, and examples of the two theorems.
+
+### C2. The generator (`CQRV/Certify/CountCert.lean`, new, Physlib-free)
+
+Its own `CountRequest`, `renderCountCert : CountRequest → String`, `CountCertificate` with `toJson`,
+and a counting run report (Markdown and JSON). Reuse the literal printers (`circuitLit`,
+`networkLit`, the typed-program printer), SHA3, `predicateHash`, `circuitHash` (of
+`emitted.toJson.compress`, the assembled circuit, computed in compiled code), `proofHash`,
+`RefConfig`, `detectMachine`, `checkAndAudit`, `emitQIR`, `emitQASM`. Do not change any of them.
+`Cert.lean` (namespace `CQRV.Cert.«grover_pred_037_count»`):
+
+1. `net`, `prog`, `prog_scoped`, `net_ok`, `front_end` (as the Grover certificates);
+2. the six block literals with `_ok`, `_grade_eq`, `_gradeExt_eq`, `_liveEnd` (the 19b probe form);
+3. `emitted := assembleCounting h_layer [cg_0, cg_1, cg_2, cg_3] inverse` and `emitted_ok` from
+   `countingCircuit_of_blocks` and the four `cg_j_ok`;
+4. `grade_le : Synthesis.grade emitted ≤ ⟨20, 1388, 660, 8⟩` and `gradeExt_bound` (the four equalities
+   and the `tDepth` bound) from C1 and the block theorems — the numbers the generator computes, not
+   these hard-coded ones;
+5. `hN : net.WF`; `cert` universal in `M` as amendment (3), from `ae_parametric_lemma` with
+   `gp := ⟨8, M, hpos, Network.pred net 8, hcard⟩`; `hM_count` (the kernel-decided `32`, as the
+   Grover certificates) and `cert_count`, the instance at `M = 32`;
+6. `#print axioms cert` and `#print axioms cert_count`.
+
+The JSON follows amendments (4) and (5): `schema_version "1.10.0"`, `pattern "Count"`, `instance
+{n, M, m, kmax}` (M the kernel-decided count), `spec {epsilon: {expr, approx}, delta: {expr, approx},
+estimate: "sin^2(pi*y/2^m)"}`, `grade` with `grade_kind "composed_bound"`, `grade_ext` with its
+`t_depth` marked as a bound, `blocks`, `solution_count {value 32, status kernel_decided}`,
+`hypotheses` (M ≥ 1, no claim for M = 0; m = 4; exact inverse QFT), `restoration`, `hashes`,
+`trust_boundary` (the proved front end; the emitted QIR text; the emitter translation-validated by
+re-parse), `hardware_perturbation` (gate counts of the assembled circuit; the QASM measures all
+`n + m` data qubits, and `countPOVM` reads only the phase register, which is the same POVM),
+`reference_configuration`, `theorem "CQRV.Cert.grover_pred_037_count.cert"`, `axioms`,
+`obligations []`, `status "certified"` only after the kernel check and the axiom audit pass. The
+run report says in words what the certificate states, including the ±43 in M units and why m = 4
+was chosen (amendment (4)).
+
+`CertifyTool count-certify <file.cqr> <m> --out <dir> [--report]` writes `Cert.lean`, runs
+`checkAndAudit`, then writes `certificate.json`, `<name>.qir`, `<name>.qasm` and, with `--report`,
+`run_report.{md,json}`; on a failed check it writes no JSON and exits 1, as `cqr certify` does.
+Commit the output for grover_pred_037 at m = 4 as `examples/certs/grover_pred_037_count/`.
+
+### C3. Schema (`docs/certificate.schema.json`, `tests/diff/cert_schema.py`)
+
+Add `"1.10.0"` to the version enum with a `pattern: "Count"` branch (amendment (5)); under 1.10.0
+only `"Count"` is allowed for now. Every committed certificate validates unchanged; every existing
+negative test of `cert_schema.py` is still rejected. New negative tests for the branch: missing
+`grade_kind`; `grade_kind "measured"` with `pattern "Count"`; `spec.epsilon` as a bare number or a
+rational string; an extra key in `instance`; a `blocks` entry without `multiplicity`; the
+`Count` pattern under `1.9.0`.
+
+### C4. Checks (`tests/diff/certify_check.py`, `scripts/print_axioms.sh`)
+
+A counting section in `certify_check.py` (inside the existing step, so the pass mark stays 18):
+`count-certify` twice — `Cert.lean`, `.qir`, `.qasm` byte-identical, the JSON equal outside the
+machine fields — and the comparison with the committed directory (JSON outside
+`reference_configuration`); the schema; the predicate hash; the circuit hash recomputed in Python
+by **replaying the six block literals of `Cert.lean`** with their multiplicities and bit shifts (as
+`counting_diff.py`'s `replay`); `proof_hash`; the QASM re-parsed equal to the assembled circuit, the
+QIR equal to it after `decomposeCp` (the `emit_diff.py` path: the inverse QFT has six `cp`); the
+JSON's composed grade equal to the sum the Python recomputes from the blocks' grades; the
+`theorem`, `axioms`, `status`. Negative tests on temporary copies, through `CertifyTool audit`: a
+mutated gate in one block literal (the kernel rejects `_ok`), and `grade_le` with `d` lowered by
+one (the kernel rejects it). Add the directory to `scripts/print_axioms.sh`. Report the step's time
+before and after.
+
+### 20b3 Docs / Acceptance / Stop
+
+Docs: DECISIONS.md entry; `docs/PROJECT_STATUS.md`; README status line ("Stages 0–20b"); one paragraph
+in `examples/certs/README.md` (if it exists) on the counting certificate and what it does not claim.
+
+Acceptance: `lake build` green; CI 18 PASS, 0 FAIL, 4 n/a; `cert` and `cert_count` kernel-checked
+with axioms exactly `propext`, `Classical.choice`, `Quot.sound`; every Lean process below 8 GB; the
+Grover certificates byte-identical; the new negative tests rejected.
+
+Stop and ask: a block above 600 gates or a `grade_eq` above 30 s; the kernel check of the
+certificate above 8 GB or 10 minutes; a change needed anywhere in the Grover pipeline; a statement
+of C1 that needs a hypothesis not listed; the composed bound differing from the probe's
+`(20, 1388, 660, 8)` (report both, do not adjust).
+
 ## Closing reply (each task)
 
 Per CLAUDE.md: (a) files, (b) build tail, (c) tests — CI summary, the axiom lines, for 20b2 the
-harness numbers of part (h) —, (d) SORRIES.md, (e) open questions; for 20b2, what the certificate
-task 20b3 should know.
+harness numbers of part (h), for 20b3 the kernel time and peak memory of the certificate and the
+step's time —, (d) SORRIES.md, (e) open questions; for 20b2, what the certificate task 20b3 should
+know; for 20b3, what Stage 21 should know about wiring the generator into `cqr certify`.
