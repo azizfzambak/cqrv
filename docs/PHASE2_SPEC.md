@@ -728,6 +728,122 @@ request's literals; its status line reads `certified (ε = …, δ = 1 − 8/π�
 on: solution_count = M)` — the hypothesis is still there, because the lemma is about the true `a`.
 JSON: `"pattern": "Count"`, `"spec": {"epsilon": …, "delta": …, "precision": m, "aqft": kmax?}`.
 
+**Amendments before Stage 21 (reviewer, 2026-11-13; docs/tasks/STAGE21_TASK.md).** They replace
+the parts of this section that they name. Amendment (8), on selection, is in §A.6.
+
+(1) *The split.* The main stage is **21a**, in four commits:
+- 21a1: the request and the Count entry;
+- 21a2: Proposition 5.1;
+- 21a3: the QPLP record and `cqr certify --problem count`;
+- 21a4: certified selection.
+
+21a1 and 21a2 are specified in the task text. 21a3 and 21a4 have outlines there and get their
+detailed text at the review of the task before them. The stretch **21b** (§A.7) is unchanged.
+
+(2) *The Count signature term has seven fields:* `sig(Count, n, M, P, iter, oracle, m)`. The
+search term keeps its six fields `sig(class, n, M, P, iter, oracle)`, so every search output is
+unchanged; `sigFields` gains `"m"`. The entry:
+
+```
+φ_Count = ⟨Count, n: F₁, M: F₆, P: Bool^F₁ → Bool, iter: bounded(F₃),
+           oracle: PhaseKickback(Multiplicative, F₄), m: F₅⟩,   F₅ ≥ 1
+```
+
+- **F₆ has sort `any`.** The counting certificate is universal in M (§A.4, amendments before
+  Stage 20b3 (3)), so the entry does not constrain the count: `unknown` matches.
+- **The `iter` field is part of φ_Count.** The sketch above omitted it, but the cross-entry iter
+  hint needs it.
+- **The two entries never match the same term.** They differ in the class constant and in the
+  argument count.
+- **Corrected at the 21a1 stop (2026-11-13).** This draft first said that a search request's
+  nearest miss stays Grover and a Count request's stays Count. That was false under Algorithm 2 as
+  written. A root clash counts as one gap, so a search term with two gaps had Count as its nearest
+  miss: `search_while` without `--solutions`, where Grover's gaps are M and iter. The implementer
+  found this.
+
+  **The fix (21a1).** `matchLibrary` takes the nearest miss only among the entries whose
+  precondition has the term's root shape: the same head and the same argument count, not the class
+  constant. When no entry has it, the choice falls back to all entries. So every six-field term has
+  Grover as its only candidate, and the search and decision outputs are those of Stage 4 by
+  construction. A Count term has Count as its only candidate. The early exit on a match is
+  unchanged, and so is the statement of Proposition 5.1, which is about matched and non-matched,
+  not about which miss is reported.
+
+(3) *The class and the precision come from the request.*
+- `ProblemClass` gains `count`, and `SigmaIn` gains `precision : Option Nat := none`; the
+  extractor ℰ is unchanged.
+- `SigmaIn.withProblem (.count m)` sets the class to Count and the precision to m, whatever ℰ
+  found. A program that is not a predicate then fails at the `P` field with a hint.
+- `--solutions M` keeps its meaning under both problems.
+- `--aqft` is not a flag in Stage 21. An AQFT certificate is vacuous for m ≤ 6, so it waits for a
+  size where it says something (m ≥ 7, §A.4, amendments before Stage 20b3 (6)).
+
+(4) *The formal statement of Proposition 5.1* (21a2, `CQRV/Matching/Complete.lean`).
+
+**The fragment.** `MillerFragment φ` means that `φ.isMillerPattern` holds and that every
+metavariable occurs in φ with one argument count. The second condition is necessary.
+Counterexample: φ = `c(λ. F x₀, λλ. F x₀ x₁)` and t = `c(λ. x₀, λλ. x₀)`. The substitution
+F ↦ λ. x₀ solves it, because `subst` ignores the binding's arity. `millerMatch` builds the
+bindings ⟨1, x₀⟩ and ⟨2, x₀⟩, finds them inconsistent, and fails.
+
+**The substitutions.** Only well-formed substitutions count (`Subst.WFFor φ σ`). For every
+metavariable of φ, the binding has:
+- the arity of its occurrences;
+- a body without metavariables, whose free variables are below that arity;
+- a body its sort admits.
+
+**The statements.** For φ in the fragment and t ground:
+- (i) `millerMatch_complete`, the converse of `millerMatch_sound`: if a well-formed σ with
+  φσ = t exists, `millerMatch φ t` succeeds. `millerMatch_wf`: its result is well formed.
+- (i′) `matchers_agree`: two well-formed matchers agree on φ's metavariables, so the match set of
+  one entry is a singleton. With side conditions over φ's metavariables, `matchPrecondition`
+  is complete as well.
+- (ii) `library_match_unique`: two entries of `library` never both match.
+- (iii) `matchLibrary_noMatch`: a non-`matched` result means that no entry matches. Collected for
+  the library as `matchLibrary_spec`.
+
+On a non-match, `cqr match` and `cqr certify` say "No library entry matches (proved)", and the
+JSON hint carries `"non_match":"proved"`.
+
+**What is not formalized.** The report's cost bound (Proposition 5.1 (3)) is not, because Lean
+has no cost model here. The implementation is one structural pass per entry, with early exit and
+no backtracking; that is documented, not proved.
+
+The statements are on normal forms, as `millerMatch_sound` is. Matching modulo the AC theory is
+syntactic matching of normal forms (§4.1.1). A theorem that normalization commutes with
+substitution in the fragment is not part of Stage 21.
+
+(5) *Certificate and status of a Count request.* This replaces "Certificate and status" above,
+in line with §A.4 (amendments before Stage 20b3 (3)–(5)): the certificate is universal in M,
+with no "conditional on". Stage 21a3 adds:
+- **n ≤ `--count-limit`:** the count is decided by the kernel, and `cert_count` is stated.
+  M = 0 is refused before anything is written (diagnostic, exit 1).
+- **n > `--count-limit`:** `cert` only. `solution_count` is `{"value": null, "status":
+  "not_decided"}`, and the status line ends "solution count not decided".
+- **Refused** with `--problem count` in Stage 21 (usage, exit 2): `--solutions`, `--iterations`,
+  `--profile`, and `--shape` other than tree. The hardware check is stated for rational δ, and a
+  counting certificate with a profile is later work.
+
+(6) *The QPLP record (Definition 4.1) has two layers,* because the `cqr` closure is
+Physlib-free (§A.8 item 6).
+- **Syntactic layer.** `CQRV/Patterns/Basic.lean` (Physlib-free) holds `QPLP`: the library
+  entry, the names of the specification and of the parametric lemma, the grade kind, and the
+  builder dispatch that replaces the Grover-only `groverInstance`. `cqr` uses this layer.
+- **Semantic layer.** `CQRV/Patterns/Sound.lean` (Physlib-side) holds `QPLP.Sem`, the dependent
+  record ⟨S, φ, C, g, π⟩. Its proof field states the realization and the restoration for every
+  instance whose builder succeeds. It is instantiated for Grover from
+  `grover_parametric_lemma_gen` and for Count from `ae_parametric_lemma_mk`.
+- **The claim is per instance.** The Grover output `Reg n` has no metric, so its claim is
+  `RealizesExact`. The Count output is pseudo-metric, so its claim is `Realizes`.
+
+(7) *Schema 1.10.0 for every certificate* (21a3).
+- **Grover.** The four Grover certificates are regenerated at 1.10.0 with `grade_kind:
+  "measured"`. Only their `certificate.json` changes; `Cert.lean`, `.qir` and `.qasm` are
+  byte-identical. The schema's top-level `grade` description is reworded for both kinds.
+- **Count.** `CertifyTool count-certify` is removed. `cqr certify --problem count` writes
+  `examples/certs/grover_pred_037_count`, with `Cert.lean`, `.qir` and `.qasm` byte-identical to
+  20b3's.
+
 ### A.6 Certified selection under a budget (new; answers review R2.3)
 
 `cqr certify … --budget w,d,t,a --prefer depth|width|t|anc` enumerates the admissible candidate
@@ -739,6 +855,30 @@ certificate then contains, for every candidate `cᵢ`, `theorem grade_i : Synthe
 list, so that the claim "no admissible candidate in this space is better in this order" is
 kernel-checked. The candidate space is finite and stated in the certificate; the claim is about it
 and nothing else.
+
+**Amendment before Stage 21 (8) (reviewer, 2026-11-13; 21a4).**
+
+**Scope.** Selection in Stage 21 is for search requests. The candidate space is the three
+certified pairs (tree, mbu), (tree, coherent) and (few:log, mbu), at the request's r; few:log
+with coherent has no certificate path.
+
+**Fit and order.**
+- A candidate is admissible when its measured grade is ≤ the budget componentwise (the budget
+  order of §3.1).
+- The order is lexicographic: first the preferred component, then the others in the order
+  (w, d, t, a).
+- When no candidate fits, there is a diagnostic listing every candidate's grade, exit 1, and
+  nothing is written.
+
+**What the certificate contains.**
+- The ordinary certificate of the chosen candidate.
+- `cand_grades`: every candidate's grade, by `decide +kernel` on the builder.
+- `selected`: the chosen candidate fits the budget, and no admissible candidate is smaller in the
+  order (`decide`).
+
+**Count selection is not in Stage 21.** Comparing counting candidates means comparing composed
+bounds, not measured grades. The natural criterion there is precision first (the largest
+admissible m), which is not the grade order above. It is left open for the M3 review.
 
 ### A.7 Stretch: measured composition exercised (report Theorem 3.3a)
 

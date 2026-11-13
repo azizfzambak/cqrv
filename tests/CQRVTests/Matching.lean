@@ -34,6 +34,17 @@ def sigTerm (src : String) (solutions : Option Nat := none) : Option Term :=
 def run (src : String) (solutions : Option Nat := none) : Option LibResult :=
   (sigTerm src solutions).map (matchLibrary library)
 
+/-- Stage 21a1: the request `--problem count --precision m` (and `--solutions`) on a source, as a
+normalized term (`SigmaIn.withProblem`, then `toTerm`), and Algorithm 2 on it. -/
+def countTerm (src : String) (m : Nat) (solutions : Option Nat := none) : Option Term :=
+  match extract <$> (parse src >>= check) with
+  | .ok s => some (normalize
+      ({ s with solutionCount := s.solutionCount <|> solutions }.withProblem (.count m)).toTerm)
+  | .error _ => none
+
+def runCount (src : String) (m : Nat) (solutions : Option Nat := none) : Option LibResult :=
+  (countTerm src m solutions).map (matchLibrary library)
+
 /-- The substitution of a match, as `(name, rendered body)` pairs sorted by metavariable. -/
 def substOf : Option LibResult → Option (List (String × String))
   | some (.matched _ σ _) =>
@@ -61,6 +72,10 @@ def missOf : Option LibResult → Option (String × List String × Nat)
 
 #guard library.all fun e => e.precondition.isMillerPattern
 #guard library.all fun e => normalize e.precondition == e.precondition
+-- Stage 21a1: the two entries, their names and priorities; φ_Count in the fragment
+#guard phiCount.normalize.isMillerPattern
+#guard library.map (fun e => (e.name, e.priority)) == [("Grover", 0), ("Count", 1)]
+#guard sigFields == ["class", "n", "M", "P", "iter", "oracle", "m"]
 
 /-! ## §4.1.4 — `grover_pred_037` matches φ_Grover -/
 
@@ -74,6 +89,59 @@ def missOf : Option LibResult → Option (String × List String × Nat)
     | .ok σ => phiGrover.subst σ == t
     | .error _ => false
   | none => false
+
+/-! ## Stage 21a1 — the Count request (PHASE2_SPEC §A.5 "Amendments before Stage 21" (2)–(3)) -/
+
+-- the predicate of grover_pred_037 under `--problem count --precision 4` matches Count
+#guard substOf (runCount groverSrc 4) ==
+  some [("F₁", "8"), ("F₃", "1"), ("F₄", "{0, 3, 7}"), ("F₅", "4"), ("F₆", "32")]
+#guard factsOf (runCount groverSrc 4) == some ["4 ≥ 1"]
+#guard match runCount groverSrc 4 with
+  | some (.matched e _ _) => e.name == "Count"
+  | _ => false
+-- the Count term has seven fields, the search term six; the precision is the seventh
+#guard match countTerm groverSrc 4, sigTerm groverSrc with
+  | some (.const "sig" as), some (.const "sig" bs) => as.length == 7 && bs.length == 6 &&
+      as.getLast? == some (.nat 4) && as.take 6 == (bs.set 0 (.const "Count" []))
+  | _, _ => false
+-- with the count unknown (search_or: ℰ computes no M), it matches with F₆ ↦ unknown
+#guard substOf (runCount orSrc 3) ==
+  some [("F₁", "4"), ("F₃", "1"), ("F₄", "{0, 1}"), ("F₅", "3"), ("F₆", "unknown")]
+-- … while the search request on the same file still needs --solutions (decision 3)
+#guard missOf (run orSrc) == some ("Grover", ["G₁"], 1)
+-- with iter unbounded (search_while), the nearest entry is Count and the hint is the iter hint
+#guard missOf (runCount whileSrc 4) == some ("Count", ["G₁"], 1)
+#guard match countTerm whileSrc 4 with
+  | some t => (renderHints t (matchLibrary library t)).map
+      (fun h => (h.pattern, h.location, h.found)) == [("Count", "iter", "unbounded")]
+  | none => false
+#guard match countTerm whileSrc 4 with
+  | some t => match matchLibrary library t with
+    | .noMatch _ _ _ (σ₁, σ₂) _ => (σ₁.map fun (m, b) => (m.name, b.body.render)) == [("G₁", "unbounded")] &&
+        (σ₂.map fun (m, b) => (m.name, classifyGap (.const "unbounded" []) b.body)) == [("G₁", .unboundedIter)]
+    | _ => false
+  | none => false
+-- with `count 0`, the side condition F₅ ≥ 1 fails at location `m`
+#guard match countTerm groverSrc 0 with
+  | some t => match matchPrecondition phiCount countEntry.sides t with
+    | .error f => f.reason == .sideCondition && f.path == [6]
+    | .ok _ => false
+  | none => false
+#guard match countTerm groverSrc 0 with
+  | some t => (renderHints t (matchLibrary library t)).map
+      (fun h => (h.pattern, h.location, h.expected, h.found)) == [("Count", "m", "F₅ ≥ 1", "0")]
+  | none => false
+-- `withProblem .search` is the identity; the search JSON has no "precision" key
+#guard match extract <$> (parse groverSrc >>= check) with
+  | .ok s => s.withProblem .search == s && (s.toJson.getObjVal? "precision").toOption.isNone &&
+      ((s.withProblem (.count 4)).toJson.getObjVal? "precision").toOption == some (Lean.toJson 4) &&
+      (s.withProblem (.count 4)).problemClass == .count
+  | .error _ => false
+-- every existing search literal still matches Grover with the same substitution
+#guard match run groverSrc, run orSrc (some 5), run whileSrc (some 64) with
+  | some (.matched e _ _), some (.matched e' _ _), some (.noMatch n _ _ _ _) =>
+      e.name == "Grover" && e'.name == "Grover" && n.name == "Grover"
+  | _, _, _ => false
 
 /-! ## §4.3.3 — `search_while` is a near miss of Grover -/
 
@@ -173,6 +241,29 @@ def inconsistentSig : Term :=
   (fun h => (h.location, h.expected, h.found, decide ((h.explanation.splitOn "not applicable").length > 1)))
   == [("M", "F₂ ≥ 1", "0", true)]
 
+-- the near-miss candidates are the entries with the term's root shape (corrected amendment (2)):
+-- a six-field term with a non-Search class constant (Decision) has Grover as its nearest miss
+def decisionSig : Term :=
+  match sigOf 8 32 [0] with
+  | .const "sig" (_ :: rest) => .const "sig" (.const "Decision" [] :: rest)
+  | t => t
+#guard rootShape decisionSig == some ("sig", 6) && rootShape phiCount == some ("sig", 7)
+#guard match matchLibrary library decisionSig with
+  | .noMatch e _ _ _ _ => e.name == "Grover"
+  | _ => false
+-- … and the search request search_while without --solutions keeps its two Grover gaps (the
+-- Stage 4 guard below), although the Count root clash alone would be nearer (dist 1 against 2)
+#guard match run whileSrc with
+  | some (.noMatch e _ _ _ d) => e.name == "Grover" && d.1 == 2
+  | _ => false
+-- search_while's Count request gets the iter hint of the Count entry
+#guard match countTerm whileSrc 4 with
+  | some t => match matchLibrary library t with
+    | .noMatch e _ _ _ d => e.name == "Count" && d.1 == 1 &&
+        ((renderHints t (matchLibrary library t)).map fun h => (h.pattern, h.location)) ==
+          [("Count", "iter")]
+    | _ => false
+  | none => false
 -- A sort clash (decision 3): `unknown` is not a `Nat`.
 #guard match millerMatch (.mvar F₂ []) (.const "unknown" []) with
   | .error f => f.reason == .clash

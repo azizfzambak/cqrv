@@ -18,11 +18,14 @@ namespace CQRV.DSL
 
 open Lean
 
-/-- Report §7.2.2, Table 2 — problem class `Search ∥ Decision ∥ Numeric`. -/
+/-- Report §7.2.2, Table 2 — problem class `Search ∥ Decision ∥ Numeric`; PHASE2_SPEC.md §A.5
+(amendments before Stage 21, (3)) — `Count`, the counting (amplitude-estimation) problem of a
+request `--problem count`: the extractor ℰ never produces it. -/
 inductive ProblemClass where
   | search
   | decision
   | numeric
+  | count
   deriving Repr, DecidableEq, Inhabited
 
 /-- Report §7.2.3 — target of a phase-kickback oracle (`target = Multiplicative`). -/
@@ -72,13 +75,32 @@ structure SigmaIn where
   domain : List Ty
   codomain : Ty
   iter : IterBound
+  /-- PHASE2_SPEC.md §A.5 (amendments before Stage 21, (3)) — the precision `m` (phase qubits)
+  of a counting request; `none` for every signature ℰ produces -/
+  precision : Option Nat := none
   deriving Repr, DecidableEq, Inhabited
+
+/-- PHASE2_SPEC.md §A.5 (amendments before Stage 21, (3)) — the problem of a request:
+`search` (the default and the Phase 1 behaviour) or `count m` (`--problem count --precision m`). -/
+inductive Problem where
+  | search
+  | count (m : Nat)
+  deriving Repr, DecidableEq, Inhabited
+
+/-- PHASE2_SPEC.md §A.5 (amendments before Stage 21, (3)) — the request's problem on a signature:
+`search` is the identity; `count m` sets the class to `Count` and the precision to `m`, whatever
+ℰ found (a program that is not a predicate then fails at the `P` field of the Count entry with a
+hint: the class is the request's, the type is the program's). -/
+def SigmaIn.withProblem : Problem → SigmaIn → SigmaIn
+  | .search, s => s
+  | .count m, s => { s with problemClass := .count, precision := some m }
 
 /-- Report §7.2.3 — JSON name of a problem class. -/
 def ProblemClass.name : ProblemClass → String
   | .search => "Search"
   | .decision => "Decision"
   | .numeric => "Numeric"
+  | .count => "Count"
 
 /-- Report §7.2.3 — JSON name of an algebraic structure. -/
 def AlgStructure.name : AlgStructure → String
@@ -102,7 +124,7 @@ def IterBound.toJson : IterBound → Json
 
 /-- Report §7.2.3 — the signature as JSON, with the field names of §7.2.3. -/
 def SigmaIn.toJson (s : SigmaIn) : Json :=
-  Json.mkObj
+  let base : List (String × Json) :=
     [("problem_class", s.problemClass.name),
      ("arity", s.arity),
      ("solution_count", match s.solutionCount with | some m => (m : Json) | none => Json.null),
@@ -114,6 +136,8 @@ def SigmaIn.toJson (s : SigmaIn) : Json :=
      ("domain", " × ".intercalate (s.domain.map Ty.render)),
      ("codomain", s.codomain.render),
      ("iter", s.iter.toJson)]
+  -- Stage 21a1: the precision only when the request gave one, so the search JSON is unchanged
+  Json.mkObj (base ++ match s.precision with | some m => [("precision", (m : Json))] | none => [])
 
 end CQRV.DSL
 

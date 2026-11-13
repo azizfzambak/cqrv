@@ -105,6 +105,41 @@ out="$("${cqr[@]}" match examples/allocate_tree.cqr | tr -d '\r')"; rc=$?
 expect_exit "match allocate_tree (stops at the surface checker)" 1 "$out" "$rc"
 expect_has "allocate_tree match stage" '"stage":"surface"' "$out"
 
+# Stage 21a1 (PHASE2_SPEC.md §A.5 "Amendments before Stage 21" (2)–(3)) — the Count request on `extract`
+# and `match`: `--problem count --precision m` in any order with `--solutions`; the search path
+# (no `--problem`) is byte-identical to before.
+out="$("${cqr[@]}" extract examples/grover_pred_037.cqr --problem count --precision 4 | tr -d '\r')"; rc=$?
+expect_exit "extract grover_pred_037 --problem count --precision 4" 0 "$out" "$rc"
+expect_has "grover_pred_037 count problem_class" '"problem_class": "Count"' "$out"
+expect_has "grover_pred_037 count precision" '"precision": 4' "$out"
+out="$("${cqr[@]}" extract examples/grover_pred_037.cqr | tr -d '\r')"; rc=$?
+expect_exit "extract grover_pred_037 (search: no precision key)" 0 "$out" "$rc"
+[ "$(grep -c precision <<<"$out")" -eq 0 ] && ok "grover_pred_037 search JSON has no precision key" || bad "grover_pred_037 search JSON has a precision key"
+out="$("${cqr[@]}" match examples/grover_pred_037.cqr --problem count --precision 4 | tr -d '\r')"; rc=$?
+expect_exit "match grover_pred_037 --problem count --precision 4" 0 "$out" "$rc"
+expect_has "grover_pred_037 count pattern" '"pattern": "Count"' "$out"
+expect_has "grover_pred_037 count F₅" '"F₅": 4' "$out"
+expect_has "grover_pred_037 count side condition" '"instance": "4 ≥ 1"' "$out"
+out="$("${cqr[@]}" match examples/search_or.cqr --precision 3 --problem count | tr -d '\r')"; rc=$?
+expect_exit "match search_or --problem count --precision 3 (M unknown: F₆ is any)" 0 "$out" "$rc"
+expect_has "search_or count pattern" '"pattern": "Count"' "$out"
+expect_has "search_or count F₆" '"F₆": "unknown"' "$out"
+out="$("${cqr[@]}" match examples/search_while.cqr --problem count --precision 4 --text | tr -d '\r')"; rc=$?
+expect_exit "match search_while --problem count --precision 4 --text (iter hint)" 1 "$out" "$rc"
+expect_has "search_while count nearest pattern" 'nearest pattern: Count' "$out"
+expect_has "search_while count iter location" 'field `iter` of the spec signature' "$out"
+expect_has "search_while count found unbounded" 'Found:       unbounded' "$out"
+out="$("${cqr[@]}" match examples/grover_pred_037.cqr --problem count --precision 0 | tr -d '\r')"; rc=$?
+expect_exit "match grover_pred_037 --problem count --precision 0 (F₅ ≥ 1 false)" 1 "$out" "$rc"
+expect_has "grover_pred_037 count m location" '"location":"m"' "$out"
+expect_has "grover_pred_037 count m expected" '"expected":"F₅ ≥ 1"' "$out"
+"${cqr[@]}" match examples/grover_pred_037.cqr --problem count >/dev/null 2>&1; rc=$?
+expect_exit "match --problem count without --precision (usage)" 2 "" "$rc"
+"${cqr[@]}" extract examples/grover_pred_037.cqr --precision 4 >/dev/null 2>&1; rc=$?
+expect_exit "extract --precision without --problem count (usage)" 2 "" "$rc"
+"${cqr[@]}" extract examples/grover_pred_037.cqr --problem search --precision 4 >/dev/null 2>&1; rc=$?
+expect_exit "extract --problem search --precision 4 (usage)" 2 "" "$rc"
+
 # Stage 5 — `cqr synthesize` (report §6.1.3–6.1.4, §6.3.1): the measured Grover oracle grade
 # (Table 3 claims d = 21; the decision-4 scheduler measures 27, DECISIONS.md 2026-10-23),
 # the Table 2 budgets of the c∧ = 8 chain, and the two rejections.

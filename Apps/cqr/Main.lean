@@ -16,11 +16,13 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   the truth tables of the DSL evaluator (`evalProgram`) and of `Network.pred (toNetwork …)` as
   `0`/`1` strings (character `x` = value on input `x`, bit `k` of `x` = input bit `k`), for
   `n ≤ 16`; the differential harness compares them with its own reference evaluator.
-* `cqr extract <file> [--solutions M]` — print the `SigmaIn` JSON (exit 0), or the diagnostic
+* `cqr extract <file> [--solutions M] [--problem search|count] [--precision m]` — print the
+  `SigmaIn` JSON (exit 0), or the diagnostic
   JSON (exit 1). `--solutions M` supplies the ground solution count when ℰ cannot compute it
   (DECISIONS.md 2026-10-23, decision 5); a value that contradicts ℰ's is a diagnostic with
   stage `hypothesis`, code `solution_count_mismatch` (exit 1).
-* `cqr match <file> [--solutions M] [--text]` — check → extract → Algorithm 2 against the
+* `cqr match <file> [--solutions M] [--text] [--problem search|count] [--precision m]` — check →
+  extract → Algorithm 2 against the
   library. One match: `{pattern, subst, side_conditions}` JSON, exit 0. Otherwise one repair
   hint (Table 4; stage `match`, code `no_matching_pattern`), exit 1; `--text` prints it as text.
 * `cqr synthesize <file> [--amax k] [--uncompute mbu|coherent] [--json] [--layers]` — check →
@@ -100,7 +102,8 @@ def subcommands : List (String × Nat) :=
 
 def usage : String :=
   "usage: cqr <command> [args]\n\ncommands:\n" ++
-    "  check <file>\n  extract <file> [--solutions M]\n  match <file> [--solutions M] [--text]\n" ++
+    "  check <file>\n  extract <file> [--solutions M] [--problem search|count] [--precision m]\n" ++
+    "  match <file> [--solutions M] [--text] [--problem search|count] [--precision m]\n" ++
     "  synthesize <file> [--amax k] [--uncompute mbu|coherent] [--json] [--layers]\n" ++
     "  synthesize --diffusion n [--shape tree|chain|few:ladder|few:log] [--amax k] [--uncompute mbu|coherent] [--json] [--layers]\n" ++
     "  synthesize <file> --grover [--shape tree|chain|few:ladder|few:log] [--iterations r] [--solutions M] [--uncompute mbu|coherent] [--json] [--layers]\n" ++
@@ -159,11 +162,14 @@ def signature (path : String) (solutions : Option Nat) : IO (Except Diagnostic S
       return .ok sig
     | _, _ => return .ok { sig with solutionCount := sig.solutionCount <|> solutions }
 
-/-- `cqr extract <file> [--solutions M]`. -/
-def runExtract (path : String) (solutions : Option Nat) : IO UInt32 := do
+/-- `cqr extract <file> [--solutions M] [--problem search|count] [--precision m]` — PHASE2_SPEC.md
+§A.5 (amendments before Stage 21, (3)): the request's problem is applied to ℰ's signature
+(`SigmaIn.withProblem`; `search` is the identity, so the Phase 1 output is unchanged). -/
+def runExtract (path : String) (solutions : Option Nat) (problem : Problem := .search) :
+    IO UInt32 := do
   match ← signature path solutions with
   | .error d => IO.println d.toJson.compress; return 1
-  | .ok sig => IO.println sig.toJson.pretty; return 0
+  | .ok sig => IO.println (sig.withProblem problem).toJson.pretty; return 0
 
 /-- Report §4.3.2 — print the outcome of a failed match (Table 4 repair hint, as JSON or with
 `text` as text); exit code 1. -/
@@ -180,17 +186,65 @@ def printNoMatch (cmd : String) (t : Term) (r : LibResult) (text : Bool) : IO UI
   | .matched .. => pure ()
   return 1
 
-/-- `cqr match <file> [--solutions M] [--text]` — report §4.2.4 (Algorithm 2), §4.3.2. -/
-def runMatch (path : String) (solutions : Option Nat) (text : Bool) : IO UInt32 := do
+/-- `cqr match <file> [--solutions M] [--text] [--problem search|count] [--precision m]` — report
+§4.2.4 (Algorithm 2), §4.3.2; PHASE2_SPEC.md §A.5 (amendments before Stage 21, (3)): the
+request's problem is applied to ℰ's signature before the term is built. -/
+def runMatch (path : String) (solutions : Option Nat) (text : Bool)
+    (problem : Problem := .search) : IO UInt32 := do
   match ← signature path solutions with
   | .error d => IO.println d.toJson.compress; return 1
   | .ok sig =>
-    let t := sig.toTerm.normalize
+    let t := (sig.withProblem problem).toTerm.normalize
     match matchLibrary library t with
     | .matched e σ ds => IO.println (matchJson e σ ds).pretty; return 0
     | r => printNoMatch "match" t r text
 
-/-- Parse `[--solutions M] [--text]` in any order. -/
+/-- The request flags of `extract` / `match` (Stage 21a1): `--solutions M`, `--text` (`match`
+only), `--problem search|count`, `--precision m`, in any order. -/
+structure RequestFlags where
+  solutions : Option Nat := none
+  text : Bool := false
+  problem : Option String := none
+  precision : Option Nat := none
+
+/-- Parse the request flags in any order; `none` on an unknown flag, a missing or non-numeric
+value, or a repeated flag. -/
+def requestFlags (allowText : Bool) : List String → Option RequestFlags
+  | [] => some {}
+  | "--text" :: rest => do
+    if !allowText then none
+    let f ← requestFlags allowText rest
+    if f.text then none
+    return { f with text := true }
+  | "--solutions" :: m :: rest => do
+    let k ← m.toNat?
+    let f ← requestFlags allowText rest
+    if f.solutions.isSome then none
+    return { f with solutions := some k }
+  | "--problem" :: p :: rest => do
+    if p != "search" && p != "count" then none
+    let f ← requestFlags allowText rest
+    if f.problem.isSome then none
+    return { f with problem := some p }
+  | "--precision" :: m :: rest => do
+    let k ← m.toNat?
+    let f ← requestFlags allowText rest
+    if f.precision.isSome then none
+    return { f with precision := some k }
+  | _ => none
+
+/-- PHASE2_SPEC.md §A.5 (amendments before Stage 21, (3)) — the problem of a request from its
+flags: `--problem count` needs `--precision m`, and `--precision` needs `--problem count`
+(both usage errors); `--problem search` and no flag are `search`. -/
+def problemOf (f : RequestFlags) : Option Problem :=
+  match f.problem, f.precision with
+  | some "count", some m => some (.count m)
+  | some "count", none => none
+  | _, some _ => none
+  | _, none => some .search
+
+/-- Parse `[--solutions M] [--text]` in any order (the Stage 4 parser of `match`, kept for the
+search path: a flag list without `--problem` / `--precision` is parsed as before). -/
 def matchFlags : List String → Option (Option Nat × Bool)
   | [] => some (none, false)
   | "--text" :: rest => (matchFlags rest).map fun (m, _) => (m, true)
@@ -635,10 +689,25 @@ def main (args : List String) : IO UInt32 := do
     match m.toNat? with
     | some m => runExtract file (some m)
     | none => IO.eprintln s!"cqr extract: --solutions expects a natural number, got `{m}`"; return 2
+  | "extract" :: file :: flags =>
+    -- Stage 21a1: `--problem search|count` and `--precision m`, in any order with `--solutions`
+    match requestFlags false flags with
+    | some f =>
+      match problemOf f with
+      | some p => runExtract file f.solutions p
+      | none => IO.eprint usage; return 2
+    | none => IO.eprint usage; return 2
   | "match" :: file :: flags =>
     match matchFlags flags with
     | some (m, t) => runMatch file m t
-    | none => IO.eprint usage; return 2
+    | none =>
+      -- Stage 21a1: the request flags `--problem` / `--precision` (any order; usage errors exit 2)
+      match requestFlags true flags with
+      | some f =>
+        match problemOf f with
+        | some p => runMatch file f.solutions f.text p
+        | none => IO.eprint usage; return 2
+      | none => IO.eprint usage; return 2
   | "synthesize" :: "--diffusion" :: n :: flags =>
     match n.toNat?, shapeFlag flags with
     | some n, some (sh, flags) =>

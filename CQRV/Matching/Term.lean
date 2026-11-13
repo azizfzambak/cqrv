@@ -156,8 +156,9 @@ def MVar.name (m : MVar) : String :=
 def MVar.f (i : Nat) (s : MSort) : MVar := ⟨.F, i, s⟩
 
 /-- Report §7.2.2 — field names of the signature constructor `sig` (the field order of
-`SigmaIn.toTerm`). -/
-def sigFields : List String := ["class", "n", "M", "P", "iter", "oracle"]
+`SigmaIn.toTerm`); PHASE2_SPEC.md §A.5 (amendments before Stage 21, (2)): `m`, the precision, is
+the seventh field of a Count term. -/
+def sigFields : List String := ["class", "n", "M", "P", "iter", "oracle", "m"]
 
 namespace Term
 
@@ -325,15 +326,18 @@ def _root_.CQRV.DSL.OracleStructure.toTerm : OracleStructure → Term
 `sig(class, n, M, P, iter, oracle)` with a fixed field order (`sigFields`). An unknown
 solution count is the rigid constant `unknown` (DECISIONS.md 2026-10-23, Stage 4 decision 3).
 ĉ∧, the AND-depth, the ancilla budget and the algebra are not matched (they feed the grade,
-Chapter 3), so they are not part of the term. -/
+Chapter 3), so they are not part of the term. PHASE2_SPEC.md §A.5 (amendments before Stage 21,
+(2)): a Count request appends its precision `m` as a seventh argument, exactly when
+`precision = some m`; a search term keeps its six arguments. -/
 def _root_.CQRV.DSL.SigmaIn.toTerm (s : SigmaIn) : Term :=
   .const "sig"
-    [.const s.problemClass.name [],
-     .nat s.arity,
-     match s.solutionCount with | some m => .nat m | none => .const "unknown" [],
-     .const "→" [domTerm s.domain, tyTerm s.codomain],
-     s.iter.toTerm,
-     s.oracle.toTerm]
+    ([.const s.problemClass.name [],
+      .nat s.arity,
+      match s.solutionCount with | some m => .nat m | none => .const "unknown" [],
+      .const "→" [domTerm s.domain, tyTerm s.codomain],
+      s.iter.toTerm,
+      s.oracle.toTerm] ++
+     match s.precision with | some m => [.nat m] | none => [])
 
 end CQRV.Matching
 

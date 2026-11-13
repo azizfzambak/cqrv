@@ -54,8 +54,39 @@ def groverEntry : LibEntry :=
   { name := "Grover", priority := 0, precondition := phiGrover,
     sides := [.ge (.mvar F₂ []) (.nat 1)] }
 
-/-- Report §4.2.4 — the pattern library (Stage 4: φ_Grover only). -/
-def library : List LibEntry := [groverEntry]
+/-- PHASE2_SPEC.md §A.5 (amendments before Stage 21, (2)) — `F₅`: the precision m of a counting
+request (phase qubits). -/
+def F₅ : MVar := .f 5 .nat
+/-- PHASE2_SPEC.md §A.5 (amendments before Stage 21, (2)) — `F₆`: the solution count of a counting
+request, of sort `any`: the counting certificate is universal in M (§A.4, amendments before
+Stage 20b3 (3)), so the entry does not constrain it and `unknown` matches. -/
+def F₆ : MVar := .f 6 .any
+
+/-- PHASE2_SPEC.md §A.5 (amendments before Stage 21, (2)), report §4.1.4, §9.3.2 — φ_Count =
+`⟨Count, n: F₁, M: F₆, P: Bool^F₁ → Bool, iter: bounded(F₃),
+  oracle: PhaseKickback(Multiplicative, F₄), m: F₅⟩`: the Count term has seven fields; the
+`iter` field is part of it, so the cross-entry iter hint of a `loop … while` applies. -/
+def phiCount : Term :=
+  .const "sig"
+    [.const "Count" [],
+     .mvar F₁ [],
+     .mvar F₆ [],
+     .const "→" [.const "Bool^" [.mvar F₁ []], .const "Bool" []],
+     .const "bounded" [.mvar F₃ []],
+     .const "PhaseKickback" [.const "Multiplicative" [], .mvar F₄ []],
+     .mvar F₅ []]
+
+/-- PHASE2_SPEC.md §A.5 (amendments before Stage 21, (2)) — the Count entry, priority 1, side
+condition `F₅ ≥ 1` (at least one phase qubit). -/
+def countEntry : LibEntry :=
+  { name := "Count", priority := 1, precondition := phiCount,
+    sides := [.ge (.mvar F₅ []) (.nat 1)] }
+
+/-- Report §4.2.4, PHASE2_SPEC.md §A.5 — the pattern library: φ_Grover (Stage 4) and φ_Count
+(Stage 21a1). The two entries never match the same term: they differ in the class constant and in
+the argument count, so a search request's nearest miss stays Grover and a Count request's is
+Count. -/
+def library : List LibEntry := [groverEntry, countEntry]
 
 /-! ## Algorithm 2 -/
 
@@ -108,11 +139,35 @@ def nearMiss (e : LibEntry) (f : MatchFailure) (t : Term) : LibResult :=
   let (g, σ₁, σ₂) := lgg t φ
   .noMatch e f g (σ₁, σ₂) (σ₁.length, σ₁.size + σ₂.size)
 
+/-- Stage 21a1 (PHASE2_SPEC.md §A.5 amendment (2), corrected at the 21a1 stop) — the root shape
+of a term: the head constant and the argument count of a constant application (`sig` with six or
+seven fields); the class constant is not part of it. -/
+def rootShape : Term → Option (String × Nat)
+  | .const c as => some (c, as.length)
+  | _ => none
+
 /-- Report §4.2.4, Algorithm 2 — scan by priority, early exit on the first match, otherwise
-keep the entry with minimal `dist` (the first one on ties). `t` is the normalized σ_in. -/
+keep the entry with minimal `dist` (the first one on ties). `t` is the normalized σ_in.
+
+Stage 21a1 (PHASE2_SPEC.md §A.5 amendment (2), corrected at the 21a1 stop): the match is sought
+over every entry; the nearest miss is taken among the entries whose precondition has the term's
+root shape (`rootShape`: the same head constant and argument count, the class constant not
+included), and among all entries when none has it. A root clash generalizes the whole term to one
+metavariable (`dist = 1`), which would otherwise beat an entry with two gaps — the search request
+`search_while` without `--solutions` got the nearest miss Count instead of Grover. With the
+filter, every six-field term (Search or Decision) has Grover as its only candidate and a seven-field
+Count term has Count, so every Stage 4 output is unchanged by construction. `nearMiss`,
+`looseAt`, `distLt` and the printed `dist` are as they were. -/
 def matchLibrary (lib : List LibEntry) (t : Term) : LibResult :=
   let sorted := lib.mergeSort fun a b => a.priority ≤ b.priority
-  go sorted .empty
+  match sorted.findSome? fun e =>
+      match matchPrecondition (normalize e.precondition) e.sides t with
+      | .ok (σ, ds) => some (LibResult.matched e σ ds)
+      | .error _ => none with
+  | some r => r
+  | none =>
+    let same := sorted.filter fun e => rootShape (normalize e.precondition) == rootShape t
+    go (if same.isEmpty then sorted else same) .empty
 where
   /-- the linear scan; `best` is the nearest miss so far -/
   go : List LibEntry → LibResult → LibResult
