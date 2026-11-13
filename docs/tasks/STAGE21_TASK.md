@@ -10,8 +10,8 @@ Stage 21 is written as **21a**, the main stage, in four tasks of one commit each
 after the reviewer accepts the previous one, from `main`:
 - **21a1**, the request and the Count entry, is specified here;
 - **21a2**, Proposition 5.1, is specified here;
-- **21a3**, the QPLP record and `cqr certify --problem count`, gets its detailed text at the 21a2
-  review (the outline below fixes its scope);
+- **21a3**, the QPLP record and `cqr certify --problem count`, is specified below (written at the
+  21a2 review);
 - **21a4**, certified selection, gets its detailed text at the 21a3 review (outline below).
 
 **21b**, the stretch of §A.7, is unchanged and is decided at the M3 review.
@@ -277,34 +277,217 @@ Stop and ask in any of these cases:
 
 ---
 
-## 21a3 — The QPLP record and `cqr certify --problem count` (outline; detailed at the 21a2 review)
+## 21a3 — The QPLP record and `cqr certify --problem count` (written at the 21a2 review, 2026-11-13)
 
-Scope, fixed by §A.5 amendments (5)–(7):
+PHASE2_SPEC §A.5: amendments (5)–(7), and the refinements (5′) and (6′) after the "21a2 done"
+paragraph. Precondition: main = the 21a2 review commit. `git switch -c stage-21a3 main`. The 21a3
+commit includes the reviewer's edits to this file, `docs/PHASE2_SPEC.md` and
+`docs/PHASE2_ROADMAP.md`, unedited.
 
-1. **The record.** `CQRV/Patterns/Basic.lean` (Physlib-free) gets the syntactic QPLP record:
-   - its fields: the entry, the specification name, the lemma name, the grade kind and the builder
-     dispatch;
-   - `qplpLibrary`, with `qplpLibrary.map (·.entry) = library`;
-   - `groverInstance` becomes a dispatch on the matched entry.
+**Notes from the 21a2 review.**
+- (i) `matchLibrary_spec` stays applicable as long as `qplpLibrary.map (·.entry) = library`.
+  The dispatch uses `matchLibrary_matched`: the entry is in the library, and `Matches` holds.
+- (ii) In the kernel, rewrite with `library_mergeSort` before deciding anything about
+  `matchLibrary library`.
+- (iii) `countEntry` matches with M unknown (F₆ : any). So the refusal of M = 0 comes from the
+  request, after the count is decided, not from the matcher.
 
-   `CQRV/Patterns/Sound.lean` (Physlib-side) gets `QPLP.Sem`, the dependent record of
-   Definition 4.1 with its proof field, instantiated for Grover from
-   `grover_parametric_lemma_gen` and for Count from `ae_parametric_lemma_mk`.
-2. **The command.** `cqr certify --problem count --precision m` goes through the dispatch to
-   `CountCert`. It takes `[--count-limit k] [--uncompute mbu|coherent] [--bench k] [--report]
-   [--out dir]`.
-   - **Refused** (usage, exit 2): `--solutions`, `--iterations`, `--profile`, and `--shape` other
-     than tree.
-   - **M = 0 with n ≤ limit**: refused before anything is written (diagnostic, exit 1).
-   - **n > limit**: the certificate has `cert` only, `solution_count` is `{null, "not_decided"}`,
-     and the status line ends "solution count not decided".
-3. **Version 1.10.0 everywhere.**
-   - The four Grover certificates are regenerated at 1.10.0 with `grade_kind "measured"`; only
-     their `certificate.json` changes.
-   - The schema's top-level `grade` description is reworded.
-   - `CertifyTool count-certify` is removed. `cqr certify --problem count` writes
-     `examples/certs/grover_pred_037_count`, with `Cert.lean`, `.qir` and `.qasm` byte-identical.
-   - The checks move into `certify_check.py`.
+**Invariants of 21a3.**
+- **The five committed certificate directories.** Every `Cert.lean`, `.qir` and `.qasm` stays
+  byte-identical. Each `certificate.json` changes only in:
+  - `schema_version`, 1.9.0 → 1.10.0 for the four Grover certificates;
+  - `grade_kind`, added as `"measured"` for Grover;
+  - the machine fields of `reference_configuration`.
+
+  Each `run_report.{md,json}` changes only in its timing and machine lines and, for the counting
+  certificate, in the rows that now come from the actual match (pattern Count, σ, side facts).
+- **Search outputs.** Every output of `cqr check`, `extract`, `match`, `synthesize` and `emit` on
+  a search request stays byte-identical.
+- **The `cqr` closure stays Lean core + Mathlib.** `CQRV/Patterns/Basic.lean` is Physlib-free.
+  `CQRV/Patterns/Sound.lean` is Physlib-side and not imported by the CLI.
+- **No existing theorem statement changes.**
+- **No new CI step.** The pass mark stays 18 PASS, 0 FAIL, 4 n/a. Report the time of step 22
+  before and after.
+
+### F1. The syntactic record (`CQRV/Patterns/Basic.lean`, Physlib-free)
+
+```
+inductive GradeKind | measured | composedBound
+structure QPLP where
+  entry : LibEntry
+  specName : Lean.Name     -- the specification family of Definition 4.1
+  lemmaName : Lean.Name    -- the parametric lemma π
+  semName : Lean.Name      -- the QPLP.Sem instance of F2
+  gradeKind : GradeKind
+def groverQPLP : QPLP   -- groverEntry, SearchSpec, grover_parametric_lemma, groverSem, measured
+def countQPLP : QPLP    -- countEntry, CountSpec, ae_parametric_lemma_mk, countSem, composedBound
+def qplpLibrary : List QPLP := [groverQPLP, countQPLP]
+theorem qplpLibrary_entries : qplpLibrary.map (·.entry) = library := rfl
+```
+
+Then the dispatch: `instantiate`, from the matched entry to `Instance.grover (gi : GroverInstance)
+| Instance.count (q : CountRequest)`. It goes through `qplpLibrary`. The Grover arm calls the
+unchanged `groverInstance`; the Count arm calls `CountRequest.ofProgram`. Choose the exact
+signature. The module imports what it needs from `CQRV.Certify` (no cycle: `CQRV.Certify` does
+not import `CQRV.Patterns`), and `Apps/cqr/Main.lean` imports `CQRV.Patterns.Basic`. Use the
+names in full; F5 checks that they exist.
+
+### F2. The semantic record (`CQRV/Patterns/Sound.lean`, Physlib-side; imported by `CQRV.lean` only)
+
+Definition 4.1 as a dependent record, with the uniform claim of (6′):
+
+```
+structure QPLP.Sem (Params : Type) where
+  pre : Params → Prop
+  nData : Params → ℕ
+  Out : Params → Type
+  [fin : ∀ p, Fintype (Out p)] [dec : ∀ p, DecidableEq (Out p)] [pm : ∀ p, PseudoMetricSpace (Out p)]
+  spec : ∀ p, Spec Unit (Out p)
+  povm : ∀ p, POVM (Out p) (Reg (nData p))
+  circuit : Params → Except DSL.Diagnostic Circuit      -- the Physlib-free builder
+  eps delta : Params → ℝ
+  grade : Params → Circuit → Grade
+  target : ∀ p, Matrix (Reg (nData p)) (Reg (nData p)) ℂ
+  proof : ∀ p, pre p → ∀ C, circuit p = .ok C →
+    Realizes (spec p) (povm p) (groverChannel (nData p) C) (eps p) (delta p) (grade p C) ∧
+      AncRestore (nData p) C.nAnc C (target p)
+```
+
+**The discrete output.** `DiscreteOut α` is a type synonym with the discrete metric (distance 0
+or 1). Its `Fintype` and `DecidableEq` come by `inferInstanceAs`. Before defining the
+`MetricSpace` instance, confirm whether Mathlib already has a discrete metric to reuse (rule 2).
+Prove `realizes_discrete_of_exact`: `RealizesExact S dec Φ δ g → Realizes (S at DiscreteOut)
+(dec at DiscreteOut) Φ 0 δ g`, by `realizes_zero_iff`.
+
+**The two instances.**
+- `groverSem`, from `grover_parametric_lemma`:
+  - `Params`: `gp : GroverParams`, `D : DiffusionCert gp.n`, `r`;
+  - `circuit := groverCircuit gp.oracle.N gp.n r`;
+  - `Out := DiscreteOut (Reg gp.n)`, `spec := SearchSpec gp.oracle.P`, `povm := basisPOVM gp.n`;
+  - `eps := 0`, `delta := 1 − sin²((2r+1)θ)`, `grade := Synthesis.grade`;
+  - `target := groverOp P ^ r * hadamardU n`.
+- `countSem`, from `ae_parametric_lemma_mk`:
+  - `Params`: `n, M, m`, the network and the proofs that lemma takes, `shape`, `mode`;
+  - `circuit := countingCircuit N n m none shape mode`;
+  - `Out := CountOut m (M/2^n)`, `spec := CountSpec`, `povm := countPOVM n m (M/2^n)`;
+  - `eps := ae_eps (M/2^n) m`, `delta := ae_delta`, `grade := Synthesis.grade`;
+  - `target := U_count P m none`.
+
+`pre` holds the side conditions: `1 ≤ M` for Grover, `1 ≤ m ∧ 1 ≤ M` for Count. The structural
+facts are in `Params`. Each proof field is exactly its lemma's conclusion, read through the
+record. Neither parametric lemma is re-proved.
+
+A certificate's composed bound `g ≥ Synthesis.grade C` is a consequence of the record by the
+monotonicity of `Realizes` in the grade. State it as a corollary, `QPLP.Sem.realizes_of_le`.
+
+### F3. `cqr certify --problem count --precision m` (`Apps/cqr/Main.lean`, `CQRV/Certify/CountCert.lean`)
+
+**Flags and refusals.**
+- The flags are `[--count-limit k] [--uncompute mbu|coherent] [--bench k] [--report]
+  [--out dir]`. `--problem` and `--precision` are parsed as in 21a1.
+- Refused with the usage message, exit 2:
+  - `--problem count` without `--precision`;
+  - with `--problem count`: `--solutions`, `--iterations`, `--profile`, and `--shape` other than
+    tree.
+- The default output directory is `certs/<name>_count`.
+
+**The run.** Signature with `withProblem` → `matchLibrary` → `instantiate` → the counting
+generator, in the order of `cqr certify` (a non-match prints the proved hint). Then:
+- **n ≤ limit.** `M := countSat`. If M = 0, print a diagnostic (stage `hypothesis`, a new code
+  `no_solutions`), exit 1, and write nothing. Otherwise, the 20b3 certificate.
+- **n > limit.** (5′): no `hM_count` and no `cert_count` in `Cert.lean`; the JSON and status line
+  of (5′); and the run report says that the count is not decided and that the JSON's ε is the
+  maximum over a.
+- **`--uncompute coherent`.** `CountRequest` gains `mode`, and `renderCountCert` writes it in place
+  of the literal `.mbu`. `ae_parametric_lemma_mk` is generic in the mode. The JSON `uncompute`
+  follows.
+- **`--bench k`.** The median, as `cqr certify` computes it.
+- **`--report`.** The counting run report. Its matching rows come from the actual match
+  (pattern Count, the substitution, the discharged `F₅ ≥ 1`), not from the 20b3 text "not
+  matched by the library before Stage 21".
+
+`CertifyTool count-certify` is removed, with its usage line. Regenerate
+`examples/certs/grover_pred_037_count` with `cqr certify examples/grover_pred_037.cqr --problem
+count --precision 4 --report --out examples/certs/grover_pred_037_count`. The invariants say what
+may change.
+
+### F4. Version 1.10.0 everywhere (`CQRV/Certify/Certificate.lean`, `docs/certificate.schema.json`)
+
+`Certificate.toJson` writes `schema_version "1.10.0"` and `grade_kind "measured"`. Regenerate
+the four Grover directories with the flags `certify_check.py` uses for each, with `--report`, and
+check the invariants. If a byte of a `Cert.lean`, `.qir` or `.qasm` changes, stop.
+
+The schema:
+- **1.10.0 admits both patterns.**
+  - Grover under 1.10.0 requires `grade_kind: "measured"` and forbids `blocks`.
+  - Count requires `grade_kind: "composed_bound"`. Its `solution_count.status` is
+    `kernel_decided` (value a natural number, and `instance.M` that number) or `not_decided`
+    (value `null`, and `instance.M` `null`).
+  - `grade_kind` is allowed only under 1.10.0.
+  - `hardware` and `diffusion_shape` stay allowed under 1.10.0 for Grover.
+- **The descriptions.** The top-level `grade` description covers both kinds, and the
+  description of v1.10.0 is updated.
+- **Envelopes before 1.10.0** stay valid under their own versions.
+
+`tests/diff/cert_schema.py`:
+- every committed certificate validates;
+- the 20b3 negative test "Grover under 1.10.0" becomes "Grover under 1.10.0 without
+  `grade_kind`";
+- new negatives:
+  - Grover with `grade_kind "composed_bound"`;
+  - Grover under 1.10.0 with `blocks`;
+  - Count `not_decided` with a numeric value;
+  - Count `kernel_decided` with value `null`;
+  - Count `not_decided` with a numeric `instance.M`.
+
+### F5. Checks and tests
+
+**`tests/diff/certify_check.py`**, inside the existing step:
+- **The counting section** now runs `cqr certify --problem count`, with every 20b3 check kept: two
+  runs byte-identical, the committed directory, the replayed circuit hash, QASM / QIR, the
+  composed grade, and the two negative kernel tests.
+- **New checks:**
+  - a coherent run, in a temporary directory, not committed: certified; `uncompute` coherent;
+    the blocks' literals end in `.coherent`; the composed grade recomputed;
+  - a not-decided run with `--count-limit 4`, in a temporary directory: certified with `cert`
+    only, `solution_count` `not_decided`, and the ε approx = π/2^4 + π²/4^4;
+  - M = 0 on a temporary unsatisfiable predicate (for example
+    `fn none(x: Vec Bool 4) -> Bool { idx(x, 0) and not idx(x, 0) }`): exit 1, code
+    `no_solutions`, no file written;
+  - the usage refusals of F3: exit 2.
+- **The Grover sections** expect 1.10.0 and `grade_kind "measured"`.
+
+**Lean tests** (`tests/CQRVTests/Patterns.lean`, new; Physlib-side):
+- `qplpLibrary_entries`;
+- every `specName`, `lemmaName` and `semName` in `qplpLibrary` exists in the environment
+  (`Lean.Environment.contains`, through a command that fails otherwise);
+- `#guard_msgs` on `#print axioms groverSem` and `#print axioms countSem` (the standard three);
+- one `example` that applies `countSem.proof` at the AND network of the 19c tests.
+
+**`scripts/print_axioms.sh`**: unchanged, except that the counting certificate line still audits
+`cert`, `cert_count` and `front_end` of the committed directory.
+
+### 21a3 Docs / Acceptance / Stop
+
+Docs:
+- a DECISIONS.md entry;
+- `docs/PROJECT_STATUS.md`;
+- README: the status line, and any sentence that says the certificates are at 1.9.0.
+
+Acceptance:
+- `lake build` green;
+- CI 18 PASS, 0 FAIL, 4 n/a;
+- the invariants hold (list the changed fields per certificate directory);
+- the axioms as in F5;
+- every new negative test rejected.
+
+Stop and ask in any of these cases:
+- a byte of a committed `Cert.lean`, `.qir` or `.qasm` changes;
+- `QPLP.Sem` cannot be stated with the uniform claim. Report it, and propose the per-instance
+  fallback of (6);
+- a parametric lemma would have to be re-proved, or a theorem statement changed;
+- a Lean process above 8 GB, or a kernel check above 10 minutes;
+- step 22 above 900 s. Report the times; do not trim checks.
 
 ## 21a4 — Certified selection (outline; detailed at the 21a3 review)
 

@@ -857,6 +857,46 @@ hold as written, with the correction to (2) above.
   guard `["M", "iter"]` passes unchanged.
 - The `cqr` closure is 48 modules, Lean + Mathlib only.
 
+**21a2 done eefe3e0, accepted 2026-11-13** (CI 18 PASS, 0 FAIL, 4 n/a). Amendment (4) holds as
+written; no statement was false. `CQRV/Matching/Complete.lean` is 1 183 lines, Physlib-free, and
+proves:
+- `millerMatch_complete`, through `millerMatch_complete_extends`;
+- `millerMatch_wf`;
+- `matchers_agree`, as a corollary of the two;
+- `matchPrecondition_complete`;
+- `matchLibrary_noMatch`, through `List.findSome?_eq_none_iff`, and `matchLibrary_matched`;
+- `library_fragment` (decide) and `library_match_unique` (from `not_matches_both`);
+- `SigmaIn.toTerm_ground`;
+- `matchLibrary_spec`, with axioms `propext`, `Classical.choice`, `Quot.sound`.
+
+The uniform-arity counterexample is a test. "Not matched" is stated as `(matchLibrary lib
+t).isMatched = false`. The hypothesis `t.Ground` of `millerMatch_complete` is implied by
+well-formedness, but kept as stated. The kernel does not reduce `List.mergeSort`, so concrete
+uses of `matchLibrary` in the kernel rewrite with `library_mergeSort` first.
+
+The no-match outputs carry the proved wording: 22 of the 126 compared runs differ, only by it.
+The `cqr` closure is 49 modules.
+
+**Refinements at the 21a2 review (2026-11-13), for 21a3.** They make (5) and (6) precise.
+
+(5′) *When the count is not decided*, n > `--count-limit`, the certified statement is still
+`cert` for every M ≥ 1, but ε depends on the unknown a = M/2ⁿ. The JSON then gives:
+- `spec.epsilon`: `{expr: "max over a in [0,1] of 2*pi*sqrt(a*(1-a))/2^m + pi^2/4^m =
+  pi/2^m + pi^2/4^m", approx: π/2^m + π²/4^m}`. This is a sound upper bound, because
+  2π√(a(1−a)) ≤ π.
+- `instance.M`: `null`.
+- `solution_count`: `{"value": null, "status": "not_decided"}`.
+- the status line: `certified (ε ≤ π/2^m + π²/4^m ≈ …, δ = 1 − 8/π² ≈ 0.189431; universal in
+  M ≥ 1; solution count not decided)`.
+
+Counting is the case where M is unknown, so this path is not an edge case.
+
+(6′) *The claim of `QPLP.Sem` is uniform.* Its proof field states `Realizes` for every
+instance. The Grover output gets a discrete metric through a type synonym (`DiscreteOut (Reg n)`,
+distance 0 or 1). Its ε = 0 realization then comes from the existing `RealizesExact` by
+`realizes_zero_iff`. This replaces "the claim is per instance" in (6). If the synonym route meets
+an instance problem in Lean, the fallback is the per-instance claim of (6), reported.
+
 ### A.6 Certified selection under a budget (new; answers review R2.3)
 
 `cqr certify … --budget w,d,t,a --prefer depth|width|t|anc` enumerates the admissible candidate
