@@ -171,6 +171,17 @@ Stop and ask in any of these cases:
 
 ## 21a2 — Proposition 5.1 (`CQRV/Matching/Complete.lean`, new, Physlib-free)
 
+**Notes added at the 21a1 review (2026-11-13).** 21a1 is accepted (9782199). Precondition for
+21a2: main = the 21a1 review commit, and `git switch -c stage-21a2 main`.
+- (i) `matchLibrary` now finds a match with `List.findSome?` over the priority-sorted entries,
+  then runs the old scan `go` on the nearest-miss candidates. A proof of `matchLibrary_noMatch`
+  goes through the `findSome?`-is-`none` lemma (confirm its current name with `#check`). It needs
+  nothing about `go` or the root-shape filter, which chooses only the reported miss.
+- (ii) The root-shape filter appears in no E2 statement. A lemma about which entry a near miss
+  names is optional and not part of (i)–(iii).
+- (iii) Both entries are in the fragment with uniform arity. The F₆ of φ_Count has sort `any`, so
+  `Binding.WF` must accept an `unknown` body for it: `MSort.admits .any` is true.
+
 The statements follow §A.5 amendment (4). Import the module from `CQRV.Matching.Basic`. The
 proofs use Lean core and Mathlib list lemmas only.
 

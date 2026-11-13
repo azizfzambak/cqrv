@@ -844,6 +844,19 @@ Physlib-free (§A.8 item 6).
   `examples/certs/grover_pred_037_count`, with `Cert.lean`, `.qir` and `.qasm` byte-identical to
   20b3's.
 
+**21a1 done 9782199, accepted 2026-11-13** (CI 18 PASS, 0 FAIL, 4 n/a). Amendments (2) and (3)
+hold as written, with the correction to (2) above.
+- `ProblemClass.count`, `SigmaIn.precision`, `Problem` and `SigmaIn.withProblem` exist.
+- The seven-field Count term exists, and `sigFields` includes `"m"`.
+- φ_Count has F₆ : any and F₅ ≥ 1; `library := [groverEntry, countEntry]`.
+- `cqr extract` and `cqr match` take `--problem` and `--precision`.
+- `matchLibrary` takes the nearest miss among the entries with the term's root shape. It finds a
+  match with `List.findSome?` over the priority-sorted entries, then runs the old scan on the
+  candidates.
+- The search path is unchanged: 126 of 126 compared runs are byte-identical, and the Stage 4
+  guard `["M", "iter"]` passes unchanged.
+- The `cqr` closure is 48 modules, Lean + Mathlib only.
+
 ### A.6 Certified selection under a budget (new; answers review R2.3)
 
 `cqr certify … --budget w,d,t,a --prefer depth|width|t|anc` enumerates the admissible candidate
