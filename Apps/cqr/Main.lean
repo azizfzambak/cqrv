@@ -172,12 +172,17 @@ def runExtract (path : String) (solutions : Option Nat) (problem : Problem := .s
   | .ok sig => IO.println (sig.withProblem problem).toJson.pretty; return 0
 
 /-- Report §4.3.2 — print the outcome of a failed match (Table 4 repair hint, as JSON or with
-`text` as text); exit code 1. -/
+`text` as text); exit code 1. Stage 21a2 (PHASE2_SPEC §A.5 amendment (4)): the non-match is
+proved — `matchLibrary_spec` (Proposition 5.1, `CQRV/Matching/Complete.lean`) says that a
+non-`matched` result on the ground term `t` (`SigmaIn.toTerm_ground`) means that no library entry
+matches; the text ends with that line and the JSON carries `non_match: proved`. -/
 def printNoMatch (cmd : String) (t : Term) (r : LibResult) (text : Bool) : IO UInt32 := do
   match r with
   | .noMatch _ _ _ _ dist =>
     let hs := renderHints t r
-    if text then IO.print (hintsText hs dist)
+    if text then
+      IO.print (hintsText hs dist)
+      IO.println "No library entry matches (proved: Proposition 5.1, matchLibrary_spec)."
     else
       match hs with
       | h :: _ => IO.println (h.toJson dist hs.length).compress
@@ -466,7 +471,12 @@ def runEmit (path : String) (fmt : EmitFormat) (iters solutions : Option Nat) (o
   | .error d, _ | _, .error d => IO.println d.toJson.compress; return 1
   | .ok (tp, _), .ok sig =>
     match groverInstance tp sig (if oracle then iters.getD 0 else iters) with
-    | .error (.diagnostic d) => IO.println d.toJson.compress; return 1
+    | .error (.diagnostic d) =>
+      -- Stage 21a2 (PHASE2_SPEC §A.5 amendment (4)): the no-match diagnostic of `groverInstance`
+      -- carries `non_match: proved` like the hint of `cqr match` (`matchLibrary_spec`).
+      let j := if d.code = .noMatchingPattern then d.toJson.setObjVal! "non_match" "proved"
+        else d.toJson
+      IO.println j.compress; return 1
     | .error (.usage msg) => IO.eprintln s!"cqr emit: {msg}"; return 2
     | .ok gi =>
       let (name, C) := if oracle then (s!"{tp.name}_oracle", gi.oracle) else (tp.name, gi.circuit)

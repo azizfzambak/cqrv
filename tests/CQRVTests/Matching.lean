@@ -297,4 +297,90 @@ def supp : Term := .acSet [.nat 7, .nat 0, .nat 3]
 
 #print axioms millerMatch_sound
 
+/-! ## Stage 21a2 — Proposition 5.1 (`CQRV/Matching/Complete.lean`; PHASE2_SPEC §A.5 (4)) -/
+
+-- `matchLibrary_spec` is sorry-free: `propext`, `Classical.choice`, `Quot.sound` only.
+/-- info: 'CQRV.Matching.matchLibrary_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms matchLibrary_spec
+
+/-- The library is sorted by priority already, so Algorithm 2 scans it as it is (the kernel
+cannot evaluate `mergeSort` on two elements; it can evaluate the rest of `matchLibrary`). -/
+theorem library_mergeSort : library.mergeSort (fun a b => a.priority ≤ b.priority) = library :=
+  List.mergeSort_of_pairwise (by decide)
+
+/-- The entry a `matched` result names. -/
+def matchedName : LibResult → Option String
+  | .matched e _ _ => some e.name
+  | _ => none
+
+/-- The normalized σ_in of `grover_pred_037`, written out: the term `cqr match` builds. -/
+def tGrover : Term :=
+  .const "sig"
+    [.const "Search" [], .nat 8, .nat 32,
+     .const "→" [.const "Bool^" [.nat 8], .const "Bool" []],
+     .const "bounded" [.nat 1],
+     .const "PhaseKickback" [.const "Multiplicative" [], .acSet [.nat 0, .nat 3, .nat 7]]]
+
+#guard sigTerm groverSrc == some tGrover
+
+/-- Algorithm 2 on `tGrover`, evaluated by the kernel: a match of Grover. -/
+theorem tGrover_matched : matchedName (matchLibrary library tGrover) = some "Grover" := by
+  unfold matchLibrary; rw [library_mergeSort]; decide +kernel
+
+/-- Proposition 5.1 on a match (`matchLibrary_spec`): `grover_pred_037` matches Grover, and no
+other entry matches it. -/
+example : Matches groverEntry tGrover ∧ ¬ Matches countEntry tGrover := by
+  have hg : tGrover.Ground := by decide
+  have hn := tGrover_matched
+  obtain ⟨e, σ, ds, h⟩ : ∃ e σ ds, matchLibrary library tGrover = .matched e σ ds := by
+    generalize matchLibrary library tGrover = r at hn ⊢
+    cases r <;> simp only [matchedName, reduceCtorEq] at hn
+    exact ⟨_, _, _, rfl⟩
+  obtain ⟨he, hm, huniq, _⟩ := (matchLibrary_spec tGrover hg).1 e σ ds h
+  rw [h] at hn
+  simp only [matchedName, Option.some.injEq] at hn
+  have he' : e = groverEntry := by
+    simp only [library, List.mem_cons, List.not_mem_nil, or_false] at he
+    rcases he with rfl | rfl
+    · rfl
+    · exact absurd hn (by decide)
+  subst he'
+  refine ⟨hm, fun hc => ?_⟩
+  exact absurd (congrArg LibEntry.name (huniq countEntry (by simp [library]) hc)) (by decide)
+
+/-- A normalized σ_in of a `loop … while` with unknown M (the shape of `search_while` without
+`--solutions`): no entry matches it. -/
+def tNo : Term :=
+  .const "sig"
+    [.const "Search" [], .nat 4, .const "unknown" [],
+     .const "→" [.const "Bool^" [.nat 4], .const "Bool" []],
+     .const "unbounded" [],
+     .const "PhaseKickback" [.const "Multiplicative" [], .acSet [.nat 0, .nat 1]]]
+
+/-- Algorithm 2 on `tNo`, evaluated by the kernel: not a match. -/
+theorem tNo_noMatch : (matchLibrary library tNo).isMatched = false := by
+  unfold matchLibrary; rw [library_mergeSort]; decide +kernel
+
+/-- Proposition 5.1 on a non-match (`matchLibrary_spec`): no library entry matches `tNo`. -/
+example : ∀ e ∈ library, ¬ Matches e tNo := (matchLibrary_spec tNo (by decide)).2 tNo_noMatch
+
+/-! Amendment (4), the counterexample to the fragment without uniform arity:
+φ = `c(λ. F x₀, λλ. F x₀ x₁)` and t = `c(λ. x₀, λλ. x₀)`. The substitution `F ↦ λ. x₀` solves
+φσ = t, because `subst` ignores the binding's arity; `millerMatch` builds `⟨1, x₀⟩` at the first
+occurrence and `⟨2, x₀⟩` at the second, and fails with `inconsistent`. So `uniformArity` is a
+necessary hypothesis of `millerMatch_complete`. -/
+
+def Fc : MVar := .f 9 .any
+def phiC : Term := .const "c" [.lam (.mvar Fc [.bvar 0]), .lam (.lam (.mvar Fc [.bvar 0, .bvar 1]))]
+def tC : Term := .const "c" [.lam (.bvar 0), .lam (.lam (.bvar 0))]
+def sigmaC : Subst := [(Fc, ⟨1, .bvar 0⟩)]
+
+#guard phiC.isMillerPattern && !phiC.uniformArity
+#guard phiC.subst sigmaC == tC
+#guard match millerMatch phiC tC with | .error f => f.reason == .inconsistent | .ok _ => false
+-- With uniform arity the same shape matches: `c(λ. F x₀, λ. F x₀)`.
+#guard (millerMatch (.const "c" [.lam (.mvar Fc [.bvar 0]), .lam (.mvar Fc [.bvar 0])])
+  (.const "c" [.lam (.bvar 0), .lam (.bvar 0)])).toBool
+
 end CQRV.Tests.Matching

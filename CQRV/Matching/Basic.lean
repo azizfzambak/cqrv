@@ -6,6 +6,7 @@ public import CQRV.Matching.Miller
 public import CQRV.Matching.Lgg
 public import CQRV.Matching.Library
 public import CQRV.Matching.Hint
+public import CQRV.Matching.Complete
 
 /-!
 # CQRV.Matching
@@ -21,5 +22,8 @@ lgg            : Term → Term → Term × Subst × Subst    -- anti-unification
 matchLibrary   : List LibEntry → Term → LibResult      -- Algorithm 2, early exit
 renderHints    : Term → LibResult → List Hint          -- Table 4
 ```
+Proposition 5.1 for this algorithm — completeness of `millerMatch`, uniqueness of the matcher,
+and `matchLibrary_spec` (a non-`matched` result means no entry matches) — is `Complete.lean`
+(Stage 21a2, PHASE2_SPEC §A.5 amendment (4)).
 No Physlib import in this component.
 -/

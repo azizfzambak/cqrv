@@ -142,15 +142,17 @@ def renderHints (t : Term) : LibResult → List Hint
   | _ => []
 
 /-- Report §4.3.2 — the hint as flat JSON (like `Diagnostic`): stage `match`, code
-`no_matching_pattern`, the five fields of Table 4, the nearest pattern, `dist`, and the number
-of gaps (the five fields describe the first gap; `text` lists all). -/
+`no_matching_pattern`, the five fields of Table 4, the nearest pattern, `dist`, the number
+of gaps (the five fields describe the first gap; `text` lists all), and — Stage 21a2, PHASE2_SPEC
+§A.5 amendment (4) — `non_match: proved`: by `matchLibrary_spec` (Proposition 5.1), a
+non-`matched` result of Algorithm 2 on the ground term means that no library entry matches. -/
 def Hint.toJson (h : Hint) (dist : Nat × Nat) (gapCount : Nat) : Json :=
   Json.mkObj
     [("stage", Stage.matching.name), ("code", Code.noMatchingPattern.name),
      ("message", "specification outside the realizable fragment Cl♭: no library pattern matches"),
      ("pattern", h.pattern), ("dist", dist.1), ("location", h.location),
      ("expected", h.expected), ("found", h.found), ("explanation", h.explanation),
-     ("suggestion", h.suggestion), ("gap_count", gapCount)]
+     ("suggestion", h.suggestion), ("gap_count", gapCount), ("non_match", "proved")]
 
 /-- Report §4.3.2–4.3.3 — the hint as text, in the order of Table 4. -/
 def Hint.toText (h : Hint) : String :=

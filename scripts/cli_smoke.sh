@@ -81,6 +81,7 @@ out="$("${cqr[@]}" match examples/search_while.cqr --solutions 64 | tr -d '\r')"
 expect_exit "match search_while --solutions 64" 1 "$out" "$rc"
 expect_has "search_while stage" '"stage":"match"' "$out"
 expect_has "search_while code" '"code":"no_matching_pattern"' "$out"
+expect_has "search_while non_match proved" '"non_match":"proved"' "$out"
 expect_has "search_while location" '"location":"iter"' "$out"
 expect_has "search_while expected" '"expected":"bounded(F₃)' "$out"
 expect_has "search_while found" '"found":"unbounded"' "$out"
@@ -89,6 +90,7 @@ expect_has "search_while suggestion" 'max_iter' "$out"
 out="$("${cqr[@]}" match examples/search_while.cqr --solutions 64 --text | tr -d '\r')"; rc=$?
 expect_exit "match search_while --solutions 64 --text" 1 "$out" "$rc"
 expect_has "search_while text Location" 'Location:    field `iter`' "$out"
+expect_has "search_while text proved line" 'No library entry matches (proved: Proposition 5.1, matchLibrary_spec).' "$out"
 
 out="$("${cqr[@]}" match examples/search_or.cqr | tr -d '\r')"; rc=$?
 expect_exit "match search_or (M unknown)" 1 "$out" "$rc"
@@ -127,6 +129,7 @@ expect_has "search_or count F₆" '"F₆": "unknown"' "$out"
 out="$("${cqr[@]}" match examples/search_while.cqr --problem count --precision 4 --text | tr -d '\r')"; rc=$?
 expect_exit "match search_while --problem count --precision 4 --text (iter hint)" 1 "$out" "$rc"
 expect_has "search_while count nearest pattern" 'nearest pattern: Count' "$out"
+expect_has "search_while count text proved line" 'No library entry matches (proved: Proposition 5.1, matchLibrary_spec).' "$out"
 expect_has "search_while count iter location" 'field `iter` of the spec signature' "$out"
 expect_has "search_while count found unbounded" 'Found:       unbounded' "$out"
 out="$("${cqr[@]}" match examples/grover_pred_037.cqr --problem count --precision 0 | tr -d '\r')"; rc=$?
@@ -247,11 +250,16 @@ expect_exit "emit without --format" 2 "" "$rc"
 out="$("${cqr[@]}" emit examples/search_or.cqr --format qir | tr -d '')"; rc=$?
 expect_exit "emit search_or (M unknown: no match, as cqr match)" 1 "$out" "$rc"
 expect_has "emit search_or code" '"code":"no_matching_pattern"' "$out"
+expect_has "emit search_or non_match proved" '"non_match":"proved"' "$out"
 "${cqr[@]}" emit examples/search_or.cqr --format qasm --solutions 5 >/dev/null; rc=$?
 expect_exit "emit search_or --solutions 5" 0 "" "$rc"
 out="$("${cqr[@]}" emit examples/search_while.cqr --format qir --solutions 64 | tr -d '')"; rc=$?
 expect_exit "emit search_while --solutions 64 (no match)" 1 "$out" "$rc"
 expect_has "emit search_while code" '"code":"no_matching_pattern"' "$out"
+expect_has "emit search_while non_match proved" '"non_match":"proved"' "$out"
+out="$("${cqr[@]}" certify examples/search_or.cqr | tr -d '')"; rc=$?
+expect_exit "certify search_or (M unknown: no match, as cqr match)" 1 "$out" "$rc"
+expect_has "certify search_or non_match proved" '"non_match":"proved"' "$out"
 
 # Stage 9b: the second worked predicate (RevLib Simple ALU, bit 1 of x0), M = 30 from the harness
 # (tests/diff/benchmark_diff.py), and the front-end truth tables.
@@ -266,6 +274,7 @@ expect_has "simple_alu_x0_1 and_depth" '"and_depth": 4' "$out"
 out="$("${cqr[@]}" match "$alu" | tr -d '\r')"; rc=$?
 expect_exit "match simple_alu_x0_1 without --solutions (hint)" 1 "$out" "$rc"
 expect_has "simple_alu_x0_1 hint" '"code":"no_matching_pattern"' "$out"
+expect_has "simple_alu_x0_1 non_match proved" '"non_match":"proved"' "$out"
 out="$("${cqr[@]}" match "$alu" --solutions 30 | tr -d '\r')"; rc=$?
 expect_exit "match simple_alu_x0_1 --solutions 30" 0 "$out" "$rc"
 expect_has "simple_alu_x0_1 F₂" '"F₂": 30' "$out"
