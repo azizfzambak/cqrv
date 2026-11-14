@@ -16,7 +16,8 @@ after the reviewer accepts the previous one, from `main`:
 
 **21m**, the M3 close (the header fix and `docs/M3_REPORT.md`), is specified below (written at the
 M3 review, PHASE2_SPEC §A.9). **21b**, the stretch of §A.7, was decided at the M3 review: 21b1 (a
-feasibility probe), then 21b2; 21b1 is specified below (written at the 21m review).
+feasibility probe), then 21b2; 21b1 is specified below (written at the 21m review), and 21b2
+below it (written at the 21b1 review).
 
 Precondition: Stage 20 complete; main = c2199db (the 20b3 review commit). `git switch -c
 stage-21a1 main`. The 21a1 commit includes this file and the reviewer's edits to
@@ -920,6 +921,114 @@ Stop and ask in any of these cases:
 - a Lean process above 8 GB, or a kernel check above 10 minutes;
 - the probe would need a change to `CQRV/` or to a committed certificate;
 - a statement of mine is false; give the counterexample and the corrected form.
+
+## 21b2 — Search with an unknown number of solutions: Theorem 3.3a exercised (written at the 21b1 review, 2026-11-15)
+
+PHASE2_SPEC §A.7, §A.9 (1), the "21b1 done" paragraph and the refinements (9)–(12).
+`docs/notes/PROBE_21B1.md` and `scripts/probes/Probe21b1.lean` are the starting point.
+Precondition: main = the 21b1 review commit. Start with `git switch -c stage-21b2 main`.
+
+**Invariants of 21b2.**
+- **No existing theorem statement changes.** `measured_composition` stays as it is; the pseudo
+  form is a new theorem.
+- **Nothing is regenerated.** No certificate changes, and the search outputs are untouched: no
+  CLI change.
+- **The `cqr` closure is unchanged.** The new modules are Physlib-side and imported by
+  `CQRV.lean` only.
+- **No new CI step.** The pass mark stays 19 PASS, 0 FAIL, 4 n/a.
+
+### J1. Library pieces
+
+- **`measured_composition_pseudo`** goes in `CQRV/Realizability/Composition.lean`: Theorem 3.3a
+  with `[PseudoMetricSpace Y] [PseudoMetricSpace Z]`, with the proof of the probe.
+- **`CQRV/Realizability/MeasurePrepare.lean`** (new) holds the measure-and-prepare channel of
+  the probe: `mpChoi`, `mpChoi_psd`, `mpChoi_traceLeft`, `measurePrepare`,
+  `measurePrepare_encode`. Add a doc-comment saying what it is: the channel
+  ρ ↦ ∑_y ⟨y|ρ|y⟩ σ_y, of which the encoded basis states are the case the composition needs.
+
+### J2. `CQRV/Grover/SearchUnknownM.lean` (new, Physlib-side)
+
+- **`searchStage (C : CountOut m a → Circuit) (g : Grade)`** is the stage-2 `GradedChannel`:
+  `measurePrepare` of `y ↦ (groverChannel n (C y)).chan (encode ())`, with declared grade `g`.
+  `searchStage_encode` states its value on `encode y`.
+- **`SearchAfterCount m a P ε : Spec (CountOut m a) (DiscreteOut (Reg n))`** is
+  `fun y z => |countEst m a y − a| ≤ ε ∧ P z`. Lemmas:
+  - its domain, under `1 ≤ M`: the y with |countEst − a| ≤ ε;
+  - non-expansiveness (take z = z');
+  - domain compatibility with `CountSpec m a` at ε (`countSpec_relax`).
+- **`searchStage_realizes`.** Realizes `SearchAfterCount` with ε = 0 and
+  δ = 1 − sin²((2r₀+1)θ). Its hypotheses:
+  - the good-domain hypothesis: every y in the domain has `C y = C₀`;
+  - C₀ = the Grover circuit at r₀;
+  - the branch facts that `groverSem` needs.
+
+  The proof is `groverSem.proof` per branch, through `searchStage_encode`.
+- **`search_unknown_M`, the composite.** For the parameters of `countSem` (stage 1, circuit C₁)
+  and of `groverSem` (stage 2, circuit C₀ at r₀), a circuit family C with the good-domain
+  hypothesis, and a grade g₂ with `∀ y, Synthesis.grade (C y) ≤ g₂` (refinement (9)):
+  `Realizes ((SearchAfterCount m a P (ae_eps a m)).comp (CountSpec m a)) (basisPOVM n)
+  (measuredComp (groverChannel (n+m) C₁) (countPOVM n m a) (searchStage C g₂)) (ae_eps a m)
+  (ae_delta + (1 − sin²((2r₀+1)θ))) (Synthesis.grade C₁ + g₂)`.
+  - Proof: `measured_composition_pseudo` applied to `countSem.proof` and
+    `searchStage_realizes`, with the two free hypotheses.
+  - Choose the exact parameter form, keeping to refinements (10) and (11).
+  - State the corollary with δ as a rational through `groverDelta`, as the certificates'
+    `delta_eq` do.
+- **`domain_8_32_5`, the domain lemma at the instance.** Every y : CountOut 5 (32/2^8) with
+  |countEst − 1/8| ≤ `ae_eps (1/8) 5` is the ideal point or one of the outcomes 3, 4, 28, 29
+  (state the outcomes as `Reg 5` values in a form `decide` can use).
+  - Use the monotonicity of sin² on [0, π/2] and the symmetry y ↔ 32 − y, so that only the two
+    boundary inequalities (y = 2 and y = 5) need real bounds.
+  - Use the confirmed π bounds `Real.pi_gt_d4` / `Real.pi_lt_d4` (or d6) and `Real.sin_le` /
+    `Real.sin_gt_sub_cube` (confirm each name).
+- **`search_unknown_M_8_32_5`, the corollary at the instance.** n = 8, M = 32, m = 5, r₀ = 2,
+  δ = 1 − 8/π² + 7/128. Its remaining hypotheses are only:
+  - the circuit equalities (`countingCircuit … = .ok C₁`, `groverCircuit … 2 = .ok C₀`);
+  - the network facts;
+  - the table property `∀ y ∈ {3, 4, 28, 29}, C (inl y) = C₀`, and `C (inr ()) = C₀`;
+  - the grade bound.
+
+  All of these are decidable at the instance.
+
+### J3. Tests and the numbers
+
+**`tests/CQRVTests/SearchUnknownM.lean`** (new):
+- `#guard_msgs` on the axioms of `measured_composition_pseudo`, `measurePrepare_encode`,
+  `search_unknown_M`, `domain_8_32_5` and `search_unknown_M_8_32_5`;
+- an `example` that applies the corollary with its hypotheses as hypotheses (as the `countSem`
+  test does).
+
+**`scripts/probes/probe_21b1.py`** prints, in addition, for (8, 32, 5):
+- the full table y ↦ r(y);
+- the largest r and the Grover grade there, which is the honest g₂ of refinement (9), by
+  `CertifyTool` or a `cqr synthesize` at that r;
+- the composite grade `(21, 2862, 1364, 8) + g₂`.
+
+Put these numbers in `docs/notes/PROBE_21B1.md` under a heading "21b2", and in the doc-comment of
+`search_unknown_M_8_32_5`. Change nothing else in the probe note.
+
+### 21b2 Docs / Acceptance / Stop
+
+Docs:
+- a DECISIONS.md entry;
+- `docs/PROJECT_STATUS.md`;
+- one line in README's status;
+- in `docs/M3_REPORT.md` §7, the row on Theorems 3.3a / 3.3b: replace "3.3a is not yet exercised
+  on two certified stages (21b)" with the exact form of (12). Nothing else in the report changes.
+
+Acceptance:
+- `lake build` green;
+- CI 19 PASS, 0 FAIL, 4 n/a;
+- the axioms of J3 are the standard three;
+- the honest g₂ and the composite grade are stated.
+
+Stop and ask in any of these cases:
+- `measurePrepare` needs more than about 150 lines in library form, or `domain_8_32_5` more than
+  about 300;
+- a statement of mine is false (give the counterexample and the corrected form);
+- a Lean process above 8 GB, or a kernel check above 10 minutes;
+- the composite cannot be stated over the two QPLP records; report it and propose the direct
+  form.
 
 ## Closing reply (each task)
 

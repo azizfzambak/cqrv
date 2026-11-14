@@ -1166,3 +1166,48 @@ The probe checks these points; they are not established.
     vacuous.
   - At m = 5 and m = 6 the domain seems to contain only outcomes with r(y) = 2, which would give
     δ ≈ 1 − 8/π² + 7/128 ≈ 0.244.
+
+**21b1 done, accepted 2026-11-15** (a probe; no CI). Route (a) is feasible at `grover_pred_037`
+(n = 8, M = 32) with m = 5. `docs/notes/PROBE_21B1.md` records the findings, and
+`scripts/probes/Probe21b1.lean` holds the proofs (outside the build; 12 s; standard axioms):
+- **Q1.** `measured_composition` holds on pseudo-metric spaces with its proof unchanged; no lemma
+  it uses needs a metric.
+- **Q2.** Physlib has no measure-and-prepare constructor. The probe builds one from the
+  block-diagonal Choi matrix through `CPTPMap.CPTP_of_choi_PSD_Tr`, in 60 lines, and proves
+  `measurePrepare_encode`.
+- **Q3.** The numbers confirm the reviewer's arithmetic:
+  - m = 4 is vacuous. Both y = 0 and y = 1 lie in the domain with a wrong r.
+  - For m = 5 to 7, the domain contains only outcomes with r = 2, giving δ = 1 − 8/π² + 7/128 ≈
+    0.2441.
+  - `simple_alu_x0_1` is non-vacuous but weak, and is not a candidate.
+- **Q4.** At m = 5 there are 15 exclusion inequalities, up to the symmetry y ↔ 32 − y. The
+  tightest (y = 2, margin 0.0124) is proved in 16 lines from `Real.pi_lt_d4`, `Real.sin_le` and
+  `nlinarith`.
+- **Q5.** The counting certificate at m = 5 checks in 22.4 s with 2.6 GB.
+
+**Refinement at the 21b1 review (2026-11-15), for 21b2** (reviewer decisions, delegated).
+
+*(9) The stage-2 grade covers every branch.* Stage 2 runs the Grover circuit at r(y) on every
+outcome y, not only on the outcomes in the domain. So its declared grade must bound all of them.
+In the theorem this is a hypothesis `∀ y, Synthesis.grade (C y) ≤ g₂`. The probe's composite
+grade (21, 2996, 1436, 8) took the maximum over the domain only. At m = 5 the outcome y = 0 has
+estimate 0 and gets r = 12. The honest g₂ is therefore the Grover grade at the largest r in the
+table; 21b2 states which grade that is, and recomputes the composite grade.
+
+*(10) The post-processing is a parameter.* `rStar` computes in `Float`, which the kernel does not
+evaluate. So the theorem takes r, or directly the circuit family `C : CountOut m a → Circuit`, as a
+parameter, and assumes the good-domain hypothesis: every y within ε of a gets the circuit `C₀` of
+r₀ iterations. The CLI or a probe computes the table with `rStar`; the theorem does not depend on
+how the table was found.
+
+*(11) The two stages come through the QPLP records.* Stage 1 is `countSem` and the per-branch
+stage 2 is `groverSem`, so the composite is stated over the two records' parameters and proved
+from their proof fields. This uses Definition 4.1 rather than restating the lemmas.
+
+*(12) No committed composition certificate.* The domain lemma is real analysis specific to one
+instance: strict inequalities on sin²(πy/2^m), which no generator can produce for arbitrary
+(n, M, m). The remaining facts at the instance are circuit equalities and grades, which are
+decidable and of the kind every committed certificate already checks by kernel. So 21b ends with
+21b2: the library theorem, the instance's domain lemma, and the corollary at (8, 32, 5) with only
+those decidable facts as hypotheses. Paper 1 may say that Theorem 3.3a is exercised at that
+instance in this form, and no more.
