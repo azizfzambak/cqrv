@@ -105,6 +105,13 @@ Runs the built `cqr` from the project root and checks
     phase gate in a synthesized circuit, so no `rz`); the measured values: grover_pred_037
     (126, 39, 0, 18, 36), simple_alu_x0_1 (137, 28, 0, 15, 30), grover_pred_037_few
     (106, 77, 0, 8, 16), grover_pred_037_coh (216, 74, 0, 0, 0); run report row 4 prints them.
+  * Stage 21a3 (PHASE2_SPEC.md §A.5 amendments (5)–(7), (5′)): every certificate at schema 1.10.0
+    with grade_kind ("measured" for Grover; the four committed Grover directories regenerated:
+    only certificate.json changed, in schema_version, grade_kind and the machine fields); the
+    counting section runs `cqr certify --problem count --precision 4` (count-certify removed) with
+    the 20b3 checks kept, plus a coherent run, a not-decided run (--count-limit 4; cert only,
+    solution_count not_decided, ε = π/2^4 + π²/4^4), M = 0 refused (no_solutions) and the usage
+    refusals of amendment (5).
   * Stage 20b3 (PHASE2_SPEC.md §A.4 "Amendments before Stage 20b3"): `CertifyTool count-certify
     examples/grover_pred_037.cqr 4` twice — Cert.lean / .qir / .qasm byte-identical, the JSON equal
     outside the machine fields — and the committed examples/certs/grover_pred_037_count (JSON
@@ -320,7 +327,7 @@ def masked(text):
     return out
 
 
-def check_hardware(d, cert, plain, last_two, fits, version="1.9.0"):
+def check_hardware(d, cert, plain, last_two, fits, version="1.10.0"):
     """The `hardware` object of a --profile run, recomputed; the rest equals `plain`."""
     prof = json.loads(read(PROFILE))
     h = cert["hardware"]
@@ -502,9 +509,11 @@ def gate_equal(g, w):
     return g == w
 
 
-def count_certify(out, *extra):
-    return run(["lake", "env", "lean", "--run", os.path.join("scripts", "CertifyTool.lean"),
-                "count-certify", os.path.join("examples", f"{NAME}.cqr"), "4", "--out", out, *extra])
+def count_certify(cqr, out, *extra):
+    """Stage 21a3: the counting certificate through `cqr certify --problem count --precision 4`
+    (Stage 20b3 ran `CertifyTool count-certify`, removed)."""
+    return certify(cqr, os.path.join("examples", f"{NAME}.cqr"), out, "--problem", "count",
+                   "--precision", "4", *extra)
 
 
 def composed_grade(blocks):
@@ -522,7 +531,7 @@ def composed_grade(blocks):
 
 def check_count_dir(d, validator):
     """Schema, the hash link by replaying the block literals, proof hash, the composed grade and the
-    emitted files of one count-certify output directory."""
+    emitted files of one counting output directory."""
     cert = json.loads(read(os.path.join(d, "certificate.json")))
     validator.validate(cert)
     text = read(os.path.join(d, "Cert.lean"))
@@ -568,28 +577,40 @@ def check_count_dir(d, validator):
     return cert, text, circ
 
 
-def check_count_cert_text(text):
-    """Cert.lean in the compositional form of amendment (2)."""
-    for frag in ("def prog : DSL.TypedProgram :=", "theorem prog_scoped : prog.scoped = true := by decide\n",
-                 "theorem net_ok : toNetwork prog = .ok net := except_ok_of_check _ _ (by decide +kernel)\n",
-                 "theorem front_end : ∀ x : Fin 8 → Bool, DSL.evalProgram prog x = Network.pred net 8 x :=\n",
-                 "#print axioms front_end\n",
-                 "def emitted : Circuit := assembleCounting h_layer [cg_0, cg_1, cg_2, cg_3] inverse\n",
-                 "theorem emitted_ok : countingCircuit net 8 4 none .tree .mbu = .ok emitted := by\n",
-                 "countingCircuit_of_blocks (N := net)", "grade_assembleCounting_le h_layer",
-                 "gradeExt_assembleCounting h_layer",
-                 "theorem grade_le : Synthesis.grade emitted ≤ ⟨20, 1388, 660, 8⟩ := by\n",
-                 "theorem hM_count : (Finset.univ.filter fun x => Network.pred net 8 x = true).card = 32 := by\n"
-                 "  rw [← Network.countSat_eq_card]\n  decide +kernel\n",
-                 "theorem cert : ∀ M : ℕ, (Finset.univ.filter fun x => Network.pred net 8 x = true).card = M →\n"
-                 "    1 ≤ M →\n",
-                 "ae_parametric_lemma_mk 8 M hpos (Network.pred net 8) hcard (by decide) hN rfl rfl rfl\n",
-                 "#print axioms cert\n", "theorem cert_count :\n", "cert 32 hM_count (by decide)\n",
-                 "#print axioms cert_count\n"):
+def check_count_cert_text(text, mode="mbu", grade="⟨20, 1388, 660, 8⟩", decided=True):
+    """Cert.lean in the compositional form of amendment (2); Stage 21a3: the mode literal of the
+    request (`--uncompute`), and without `hM_count` / `cert_count` when the count is not decided (5′)."""
+    frags = ["def prog : DSL.TypedProgram :=", "theorem prog_scoped : prog.scoped = true := by decide\n",
+             "theorem net_ok : toNetwork prog = .ok net := except_ok_of_check _ _ (by decide +kernel)\n",
+             "theorem front_end : ∀ x : Fin 8 → Bool, DSL.evalProgram prog x = Network.pred net 8 x :=\n",
+             "#print axioms front_end\n",
+             "def emitted : Circuit := assembleCounting h_layer [cg_0, cg_1, cg_2, cg_3] inverse\n",
+             f"theorem emitted_ok : countingCircuit net 8 4 none .tree .{mode} = .ok emitted := by\n",
+             f"(mode := .{mode})",
+             "countingCircuit_of_blocks (N := net)", "grade_assembleCounting_le h_layer",
+             "gradeExt_assembleCounting h_layer",
+             f"theorem grade_le : Synthesis.grade emitted ≤ {grade} := by\n",
+             "theorem cert : ∀ M : ℕ, (Finset.univ.filter fun x => Network.pred net 8 x = true).card = M →\n"
+             "    1 ≤ M →\n",
+             "ae_parametric_lemma_mk 8 M hpos (Network.pred net 8) hcard (by decide) hN rfl rfl rfl\n",
+             "#print axioms cert\n", f"uncompute = {mode};"]
+    decided_frags = ["theorem hM_count : (Finset.univ.filter fun x => Network.pred net 8 x = true).card = 32 := by\n"
+                     "  rw [← Network.countSat_eq_card]\n  decide +kernel\n",
+                     "theorem cert_count :\n", "cert 32 hM_count (by decide)\n", "#print axioms cert_count\n",
+                     "`cert_count` its instance at M = 32 (decided by the kernel:\n`hM_count`)."]
+    if decided:
+        frags += decided_frags
+    else:
+        for frag in decided_frags + ["theorem hM_count", "theorem cert_count", "#print axioms cert_count",
+                                     "hM_count (by decide)"]:
+            assert frag not in text, ("not decided", frag)
+        frags += ["the solution count is not decided (n = 8 above\n`--count-limit`), so there is no `cert_count`.",
+                  "ε ≤ max over a in [0,1] of 2*pi*sqrt(a*(1-a))/2^4 + pi^2/4^4 = pi/2^4 + pi^2/4^4 ≈ 0.234903"]
+    for frag in frags:
         assert text.count(frag) == 1, frag
     for name, j in zip(COUNT_BLOCKS, [None, 0, 1, 2, 3, None]):
         assert text.count(f"def {name} : Circuit := ⟨12, [") == 1, name
-        link = (f"theorem {name}_ok : controlledGrover net 8 4 {j} .tree .mbu = .ok {name} :=" if j is not None
+        link = (f"theorem {name}_ok : controlledGrover net 8 4 {j} .tree .{mode} = .ok {name} :=" if j is not None
                 else f"theorem {name}_ok : counting{'HLayer 8 4' if name == 'h_layer' else 'Inverse 8 4 none'} = {name} := by decide +kernel")
         assert text.count(link) == 1, link
         for suffix in ("grade_eq", "gradeExt_eq", "liveEnd"):
@@ -599,14 +620,16 @@ def check_count_cert_text(text):
     assert text.index("def net : Network") < text.index("def prog :") < text.index("def h_layer :")
 
 
-def check_count(validator, tmp):
-    """Stage 20b3: `count-certify` twice, the committed examples/certs/grover_pred_037_count, the
-    run report, and two negative kernel tests on temporary copies."""
+def check_count(cqr, validator, tmp):
+    """Stage 20b3 / 21a3: `cqr certify --problem count --precision 4` twice, the committed
+    examples/certs/grover_pred_037_count, the run report (its matching rows from the actual match),
+    two negative kernel tests on temporary copies; Stage 21a3: a coherent run, a not-decided run
+    (`--count-limit 4`, (5′)), M = 0 refused (`no_solutions`), the usage refusals of amendment (5)."""
     t0 = time.time()
     runs = []
     for i in (1, 2):
         out = os.path.join(tmp, f"count{i}")
-        rc, so, se = count_certify(out, "--report")
+        rc, so, se = count_certify(cqr, out, "--report")
         assert rc == 0, (rc, so, se)
         last = so.rstrip("\n").split("\n")[-1]
         assert last.startswith("certified (ε ≈ 0.168426, δ = 1 − 8/π² ≈ 0.189431; universal in M ≥ 1; "
@@ -629,7 +652,7 @@ def check_count(validator, tmp):
     assert any("no claim for M = 0" in h for h in cert["hypotheses"]), cert["hypotheses"]
     assert cert["trust_boundary"]["front_end"] == PROVED
     assert len(circ["gates"]) == 3682 and circ["n_anc"] == 8, (len(circ["gates"]), circ["n_anc"])
-    print("ok:   count-certify grover_pred_037 m = 4: `certified (…)` (exit 0); schema v1.10.0, pattern "
+    print("ok:   cqr certify --problem count --precision 4 (grover_pred_037): `certified (…)` (exit 0); schema v1.10.0, pattern "
           "Count, composed bound (20, 1388, 660, 8) = the sum over the six blocks (1 + 1 + 2 + 4 + 8 + 1 "
           "copies), grade_ext (1161, T-depth bound 660, 6, 165, 330), ε ≈ 0.168426 and δ ≈ 0.189431 as "
           "{expr, approx}; axioms exactly the standard three; cert universal in M, cert_count at M = 32")
@@ -648,7 +671,7 @@ def check_count(validator, tmp):
     assert without(cert, MACHINE) == without(ex, MACHINE), "committed counting certificate.json"
     assert masked(read(os.path.join(runs[0], "certificate.json"))) == \
         masked(read(os.path.join(EXAMPLE_COUNT, "certificate.json"))), "counting certificate.json bytes"
-    print("ok:   second count-certify run byte-identical (Cert.lean, .qir, .qasm; JSON except machine "
+    print("ok:   second counting run byte-identical (Cert.lean, .qir, .qasm; JSON except machine "
           "fields); committed examples/certs/grover_pred_037_count agrees (bytes; JSON outside "
           "reference_configuration)")
     # the run report
@@ -668,8 +691,17 @@ def check_count(validator, tmp):
         assert rows["8. QIR Export"]["verification"] == "declared trust boundary"
         assert "cp gates are emitted to QIR as their five-gate decomposition" in rows["8. QIR Export"]["note"]
         assert md.count("\n| ") == 10 and "why m = 4" in md, "run_report.md"
+        # Stage 21a3: the matching rows come from the actual match
+        m3 = rows["3. Pattern Matching"]
+        assert m3["output"] == "Count: σ = {F₁ ↦ 8, F₃ ↦ 1, F₄ ↦ [0,3,7], F₅ ↦ 4, F₆ ↦ 32}", m3["output"]
+        assert m3["resources"] == "side conditions discharged: F₅ ≥ 1: 4 ≥ 1; M ≥ 1 in `cert`", m3["resources"]
+        assert "matchLibrary_spec" in m3["note"] and "qplpLibrary" in m3["note"], m3["note"]
+        assert "withProblem" in rows["2. Spec Extraction"]["note"] and \
+            "before Stage 21" not in rows["2. Spec Extraction"]["note"]
+        assert "uncompute = mbu" in md
     print("ok:   counting run report (both runs): 9 rows of Table 8.5.2, the statement in M units "
-          "(M ± 43 with probability ≥ 8/π² at m = 4), why m = 4, no claim for M = 0")
+          "(M ± 43 with probability ≥ 8/π² at m = 4), why m = 4, no claim for M = 0; the matching rows "
+          "from the actual match (pattern Count, σ with F₅ ↦ 4 and F₆ ↦ 32, F₅ ≥ 1 discharged)")
     # negative kernel tests on temporary copies, through `CertifyTool audit`
     base = read(os.path.join(EXAMPLE_COUNT, "Cert.lean"))
     i0, i1 = base.index("def cg_0 : Circuit := ⟨12, ["), base.index("theorem cg_0_ok :")
@@ -690,7 +722,80 @@ def check_count(validator, tmp):
                           "audit", path, COUNT_THEOREM])
         assert rc == 1 and ": pass" not in so and "certified" not in so, (label, rc, so[-500:], se[-500:])
         print(f"ok:   {label}: the kernel check fails (exit 1)")
-    print(f"ok:   counting section (Stage 20b3) in {time.time() - t0:.0f} s")
+    # Stage 21a3 (i): --uncompute coherent, in a temporary directory (not committed)
+    out = os.path.join(tmp, "count_coh")
+    t1 = time.time()
+    rc, so, se = count_certify(cqr, out, "--uncompute", "coherent", "--report")
+    dt_coh = time.time() - t1
+    assert rc == 0, (rc, so, se)
+    last = so.rstrip("\n").split("\n")[-1]
+    assert last.startswith("certified (ε ≈ 0.168426, δ = 1 − 8/π² ≈ 0.189431; universal in M ≥ 1; "
+                           "M = 32 decided by the kernel)"), last
+    coh, ctext, ccirc = check_count_dir(out, validator)
+    assert coh["uncompute"] == "coherent" and coh["status"] == "certified" and coh["axioms"] == STANDARD
+    assert coh["solution_count"] == {"value": 32, "status": "kernel_decided"} and coh["instance"]["M"] == 32
+    check_count_cert_text(ctext, mode="coherent",
+                          grade="⟨%d, %d, %d, %d⟩" % tuple(coh["grade"][k] for k in "wdta"))
+    assert coh["hashes"]["circuit"] != cert["hashes"]["circuit"] and coh["grade"] != cert["grade"]
+    assert coh["grade_ext"]["meas"] == 0 and coh["grade_ext"]["ff"] == 0, coh["grade_ext"]
+    assert "measure" not in {x["op"] for x in ccirc["gates"]} and not any("if" in x for x in ccirc["gates"])
+    rep_c = json.loads(read(os.path.join(out, "run_report.json")))
+    assert rep_c["certified"] is True and "uncompute = coherent" in read(os.path.join(out, "run_report.md"))
+    print(f"ok:   (i) --uncompute coherent: `certified (…)` (exit 0, {dt_coh:.0f} s); uncompute coherent, the "
+          f"blocks' links end in .coherent, composed bound {tuple(coh['grade'][k] for k in 'wdta')} recomputed "
+          "from the blocks, 0 measurements, 0 classical bits")
+    # Stage 21a3 (ii): the count not decided (--count-limit 4 at n = 8), refinement (5′)
+    out = os.path.join(tmp, "count_nd")
+    t1 = time.time()
+    rc, so, se = count_certify(cqr, out, "--count-limit", "4", "--report")
+    dt_nd = time.time() - t1
+    assert rc == 0, (rc, so, se)
+    last = so.rstrip("\n").split("\n")[-1]
+    eps_max = math.pi / 2 ** 4 + math.pi ** 2 / 4 ** 4
+    assert last == (f"certified (ε ≤ π/2^4 + π²/4^4 ≈ {eps_max:.6f}, δ = 1 − 8/π² ≈ 0.189431; universal in "
+                    "M ≥ 1; solution count not decided)"), last
+    nd, ntext, _ = check_count_dir(out, validator)
+    check_count_cert_text(ntext, decided=False)
+    assert nd["solution_count"] == {"value": None, "status": "not_decided"} and nd["instance"]["M"] is None
+    assert nd["status"] == "certified" and nd["axioms"] == STANDARD and nd["theorem"] == COUNT_THEOREM
+    assert abs(nd["spec"]["epsilon"]["approx"] - eps_max) < 1e-6, nd["spec"]["epsilon"]
+    assert nd["spec"]["epsilon"]["expr"] == \
+        "max over a in [0,1] of 2*pi*sqrt(a*(1-a))/2^4 + pi^2/4^4 = pi/2^4 + pi^2/4^4", nd["spec"]["epsilon"]
+    assert nd["hashes"]["circuit"] == cert["hashes"]["circuit"] and nd["grade"] == cert["grade"]
+    assert nd["hashes"]["proof"] != cert["hashes"]["proof"]
+    assert any("not decided" in h for h in nd["hypotheses"]), nd["hypotheses"]
+    rep_n = json.loads(read(os.path.join(out, "run_report.json")))
+    assert rep_n["instance"]["M"] is None and "not decided" in rep_n["statement"]
+    assert "maximum over a" in read(os.path.join(out, "run_report.md"))
+    print(f"ok:   (ii) --count-limit 4 (n = 8, the count not decided): `{last}` (exit 0, {dt_nd:.0f} s); "
+          "Cert.lean with cert only (no hM_count, no cert_count), solution_count not_decided, instance.M "
+          f"null, ε = π/2^4 + π²/4^4 ≈ {eps_max:.6f} as the maximum over a")
+    # Stage 21a3 (iii): M = 0 on an unsatisfiable predicate: refused, nothing written
+    src0 = os.path.join(tmp, "unsat.cqr")
+    with open(src0, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write("fn unsat(x: Vec Bool 4) -> Bool {\n  idx(x, 0) and not idx(x, 0)\n}\n")
+    out = os.path.join(tmp, "unsat_count")
+    rc, so, se = certify(cqr, src0, out, "--problem", "count", "--precision", "2")
+    d0 = json.loads(so.strip().split("\n")[-1])
+    assert rc == 1 and d0["code"] == "no_solutions" and d0["stage"] == "hypothesis", (rc, so, se)
+    assert "no satisfying assignment" in d0["message"] and not os.path.exists(out), "M = 0 wrote a certificate"
+    print("ok:   (iii) M = 0 (an unsatisfiable predicate, n = 4 ≤ --count-limit): diagnostic no_solutions "
+          "(stage hypothesis), exit 1, nothing written")
+    # Stage 21a3 (iv): the usage refusals of amendment (5): exit 2, nothing written
+    src = os.path.join("examples", f"{NAME}.cqr")
+    for label, extra in (("--problem count without --precision", ["--problem", "count"]),
+                         ("--precision without --problem count", ["--precision", "4"]),
+                         ("--problem count with --solutions", ["--problem", "count", "--precision", "4", "--solutions", "32"]),
+                         ("--problem count with --iterations", ["--problem", "count", "--precision", "4", "--iterations", "2"]),
+                         ("--problem count with --profile", ["--problem", "count", "--precision", "4", "--profile", PROFILE_NAME]),
+                         ("--problem count with --shape few:log", ["--problem", "count", "--precision", "4", "--shape", "few:log"]),
+                         ("--problem bogus", ["--problem", "bogus", "--precision", "4"])):
+        out = os.path.join(tmp, "refused")
+        rc, so, se = certify(cqr, src, out, *extra)
+        assert rc == 2 and not os.path.exists(out), (label, rc, so, se)
+    print("ok:   (iv) refused with exit 2, nothing written: --problem count without --precision, --precision "
+          "alone, --problem count with --solutions / --iterations / --profile / --shape few:log, --problem bogus")
+    print(f"ok:   counting section (Stage 20b3 / 21a3) in {time.time() - t0:.0f} s")
 
 
 def check_dir(d, validator):
@@ -708,7 +813,9 @@ def check_dir(d, validator):
         assert parsed == circ, f"{fmt} re-parse differs from the IR literal of Cert.lean"
         assert len(terminal) == circ["n_data"], f"{fmt} terminal measurement"
         assert "rz" not in emitted, f"{fmt}: a synthesized circuit has no phase gate"
-    assert cert["schema_version"] == "1.9.0", cert["schema_version"]
+    # Stage 21a3 (PHASE2_SPEC.md §A.5 amendment (7)): every Grover certificate at 1.10.0, grade measured
+    assert cert["schema_version"] == "1.10.0", cert["schema_version"]
+    assert cert["grade_kind"] == "measured" and "blocks" not in cert, cert.get("grade_kind")
     check_grade_ext(cert, text, circ)
     return cert, text
 
@@ -804,7 +911,7 @@ def main():
         assert text.count("nAnc_eq hM_count\n") == 1 and "native_decide" not in text
         print("ok:   Cert.lean: hM_count by Network.countSat_eq_card and decide +kernel; "
               "theorem cert without hypothesis; solution_count kernel_decided")
-        print("ok:   JSON valid (schema v1.9.0, uncompute mbu); grade (15, 134, 72, 7), delta 7/128, "
+        print("ok:   JSON valid (schema v1.10.0, grade_kind measured, uncompute mbu); grade (15, 134, 72, 7), delta 7/128, "
               "axioms exactly propext, Classical.choice, Quot.sound; front end: the proved wording, "
               "Cert.lean states prog / prog_scoped / net_ok / front_end (Stage 16b)")
         print("ok:   circuit hash = SHA3 of the IR literal of Cert.lean (hashlib); "
@@ -827,9 +934,9 @@ def main():
         print("ok:   committed examples/certs/grover_pred_037 agrees (JSON modulo machine fields)")
         assert masked(read(os.path.join(runs[0], "certificate.json"))) == \
             masked(read(os.path.join(EXAMPLE, "certificate.json"))), "certificate.json bytes"
-        assert cert["schema_version"] == "1.9.0" and "hardware" not in cert
+        assert cert["schema_version"] == "1.10.0" and "hardware" not in cert
         print("ok:   without --profile: certificate.json byte-identical to the committed one "
-              "outside reference_configuration (schema_version 1.9.0, no hardware)")
+              "outside reference_configuration (schema_version 1.10.0, grade_kind measured, no hardware)")
 
         # --profile illustrative_sc (Stage 11b; renamed from ibm_kyiv in Stage 14a)
         out = os.path.join(tmp, "prof")
@@ -909,7 +1016,7 @@ def main():
         assert so_p.rstrip("\n").split("\n")[-1] == "certified", so_p
         fc, ftext = check_dir(out_p, validator)
         check_front_end(ftext, 8, NAME)
-        assert fc["schema_version"] == "1.9.0" and fc["diffusion_shape"] == "few:log", fc
+        assert fc["schema_version"] == "1.10.0" and fc["diffusion_shape"] == "few:log", fc
         assert tuple(fc["grade_ext"][k] for k in GRADE_EXT_KEYS) == GRADE_EXT["grover_pred_037_few"], fc
         assert fc["uncompute"] == "mbu" and fc["trust_boundary"]["front_end"] == PROVED, fc
         assert fc["solution_count"] == {"value": 32, "status": "kernel_decided"}, fc
@@ -946,7 +1053,7 @@ def main():
         assert exf["reference_configuration"]["kernel_check"]["runs"] == 5
         check_report(EXAMPLE_FEW, exf)
         print("ok:   --shape few:log: `certified` (exit 0); "
-              "schema v1.9.0, diffusion_shape few:log, grade (10, 172, 96, 2), grade_ext "
+              "schema v1.10.0, diffusion_shape few:log, grade (10, 172, 96, 2), grade_ext "
               "(106, 77, 0, 8, 16), delta 7/128, "
               "axioms exactly the standard three; grover_certificate_few_all, no fewCheck")
         print("ok:   --shape few:log --profile illustrative_sc: fits all budgets (d = 172 <= 200), "
@@ -966,7 +1073,7 @@ def main():
         assert so_p.rstrip("\n").split("\n")[-1] == "certified", so_p
         cc, ctext = check_dir(out_p, validator)
         check_front_end(ctext, 8, NAME)
-        assert cc["schema_version"] == "1.9.0" and cc["uncompute"] == "coherent", cc
+        assert cc["schema_version"] == "1.10.0" and cc["uncompute"] == "coherent", cc
         assert tuple(cc["grade_ext"][k] for k in GRADE_EXT_KEYS) == GRADE_EXT["grover_pred_037_coh"], cc
         assert cc["trust_boundary"]["front_end"] == PROVED, cc
         assert "diffusion_shape" not in cc and "hardware" not in cc
@@ -1024,7 +1131,7 @@ def main():
         assert not os.path.exists(out), "a certificate was written for few:log + coherent"
         rc, so, se = certify(args.cqr, src, os.path.join(tmp, "bogus"), "--uncompute", "bogus")
         assert rc == 2 and not os.path.exists(os.path.join(tmp, "bogus")), (rc, so, se)
-        print("ok:   --uncompute coherent: `certified` (exit 0); schema v1.9.0, uncompute coherent, "
+        print("ok:   --uncompute coherent: `certified` (exit 0); schema v1.10.0, uncompute coherent, "
               "grade (15, 200, 144, 7), grade_ext (216, 74, 0, 0, 0), 0 measurements, 0 classical "
               "bits, delta 7/128, axioms exactly "
               "the standard three; grover_certificate_coherent, OracleCertCoh, no DiffusionCert")
@@ -1230,8 +1337,9 @@ def main():
         print("ok:   (g) --profile ibm_kyiv: unknown profile (exit 2), the diagnostic lists "
               "illustrative_sc; nothing written")
 
-        # Stage 20b3: the counting certificate (count-certify, the committed example, negatives)
-        check_count(validator, tmp)
+        # Stage 20b3 / 21a3: the counting certificate (cqr certify --problem count, the committed
+        # example, negatives; coherent, not decided, M = 0, the refusals)
+        check_count(args.cqr, validator, tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("certify_check: all checks passed")

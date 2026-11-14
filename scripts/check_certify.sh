@@ -52,7 +52,10 @@
 #                                committed examples/certs/grover_pred_037_count, the circuit hash
 #                                by replaying the six block literals, QASM / QIR re-parse with
 #                                decomposeCp, the composed grade (20, 1388, 660, 8) recomputed,
-#                                two negative kernel tests)
+#                                two negative kernel tests); since Stage 21a3 the counting
+#                                certificate is written by `cqr certify --problem count
+#                                --precision 4` (count-certify removed), plus the coherent,
+#                                not-decided, M = 0 and usage-refusal checks
 #   tests/diff/profile_schema.py profiles/*.json against docs/profile.schema.json;
 #                                illustrative_sc = report Table 3.5 / §3.3.3 (renamed from
 #                                ibm_kyiv in Stage 14a, no alias); mutated profiles rejected by

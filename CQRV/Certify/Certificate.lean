@@ -46,7 +46,10 @@ reviewer decisions 2 and 3).
   **v1.9.0 (Stage 17b, PHASE2_SPEC.md §A.1)** adds the required object `grade_ext`
   `{two_qubit, t_depth, rot, meas, ff}` — the second resource record `GradeExt`, measured by the
   same scheduler as `grade` and stated in `Cert.lean` as `gradeExt_eq` (`decide +kernel`);
-  present iff the version is 1.9.0; every certificate says "1.9.0".
+  present iff the version is 1.9.0; every certificate said "1.9.0". **v1.10.0 (Stage 21a3,
+  PHASE2_SPEC.md §A.5 amendment (7))** adds `grade_kind` (`"measured"` here: the scheduler on the
+  whole circuit; `"composed_bound"` for the counting certificate of `CountCert.lean`); every
+  certificate says "1.10.0" and admits both patterns.
 -/
 
 @[expose] public section
@@ -261,17 +264,19 @@ structure Certificate where
   uncompute : UncomputeMode := .mbu
   deriving Repr
 
-/-- The schema version written to `schema_version` (semver): "1.9.0" for every certificate
-since Stage 17b (PHASE2_SPEC.md §A.1) — the object `grade_ext` (`GradeExt`, `gradeExt_eq` in
-`Cert.lean`) is required, as are `solution_count` and `uncompute`, and
-`trust_boundary.front_end` is the proved wording (`frontEndProvedText`); `hardware` (Stage 11b)
-and `diffusion_shape` (Stage 12d) are optional under it. History: 1.8.0 Stage 16b (the proved
+/-- The schema version written to `schema_version` (semver): "1.10.0" for every certificate
+since Stage 21a3 (PHASE2_SPEC.md §A.5 amendment (7)) — `grade_kind` is required (`"measured"` for
+a Grover certificate, `"composed_bound"` for a counting one, `CountCert.lean`), as are the object
+`grade_ext` (`GradeExt`, `gradeExt_eq` in `Cert.lean`; 1.9.0, Stage 17b, PHASE2_SPEC.md §A.1),
+`solution_count` and `uncompute`, and `trust_boundary.front_end` is the proved wording
+(`frontEndProvedText`); `hardware` (Stage 11b) and `diffusion_shape` (Stage 12d) are optional
+under it. History: 1.9.0 Stage 17b (`grade_ext`), 1.8.0 Stage 16b (the proved
 front end, `uncompute` written in every certificate — the Stage 15b convention "omitted means
 `mbu`" retired; DECISIONS.md 2026-10-31), 1.7.0 Stage 15b (`uncompute` on coherent certificates
 only), 1.6.0 Stage 14a (`solution_count`); before Stage 14a the version depended on the optional
 objects present (1.3.0 / 1.4.0 / 1.5.0). Each of these stages regenerated every committed
 certificate, so one version suffices. -/
-def schemaVersion : String := "1.9.0"
+def schemaVersion : String := "1.10.0"
 
 /-- The trust-boundary note of the `hardware` object (§5.3.1). -/
 def hardwareNote : String :=
@@ -307,6 +312,7 @@ def Certificate.toJson (c : Certificate) : Json :=
        ("a", c.grade.a)]),
      ("grade_ext", Json.mkObj [("two_qubit", c.gradeExt.twoQ), ("t_depth", c.gradeExt.tDepth),
        ("rot", c.gradeExt.rot), ("meas", c.gradeExt.meas), ("ff", c.gradeExt.ff)]),
+     ("grade_kind", str "measured"),
      ("hypotheses", Json.arr (c.hypotheses.map str).toArray),
      ("restoration", str c.restoration),
      ("hashes", Json.mkObj [("predicate", str c.predicateHash), ("circuit", str c.circuitHash),

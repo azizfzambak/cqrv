@@ -111,7 +111,8 @@ def main():
     assert cert["trust_boundary"]["front_end"] == PROVED, cert["trust_boundary"]
     assert cert["theorem"] is None and cert["obligations"] == []
     assert cert["reference_configuration"]["kernel_check"] is None
-    assert cert["schema_version"] == "1.9.0", cert["schema_version"]
+    assert cert["schema_version"] == "1.10.0", cert["schema_version"]
+    assert cert["grade_kind"] == "measured", cert.get("grade_kind")
     assert cert["uncompute"] == "mbu", cert.get("uncompute")
     assert cert["solution_count"] == {"value": 32, "status": "hypothesis"}, cert["solution_count"]
     assert cert["hypotheses"][0] == "solution_count = 32 (hM_card, supplied, not decided)"
@@ -119,8 +120,8 @@ def main():
     assert cert["grade_ext"] == {"two_qubit": 126, "t_depth": 39, "rot": 0, "meas": 18, "ff": 36}, \
         cert["grade_ext"]
     print("ok:   delta 7/128, grade (15, 134, 72, 7), grade_ext (2Q 126, T-depth 39, rot 0, meas 18, "
-          "ff 36), status 'not yet audited'; schema_version 1.9.0, uncompute mbu, front_end = the "
-          "proved wording")
+          "ff 36), status 'not yet audited'; schema_version 1.10.0 with grade_kind measured (Stage 21a3), "
+          "uncompute mbu, front_end = the proved wording")
 
     with open(os.path.join(ROOT, SRC), "rb") as f:
         src = f.read().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
@@ -153,12 +154,14 @@ def main():
         return c
 
     def legacy(c, version):
-        """The sample as a certificate of a version before 1.9.0 (Stage 17b): no `grade_ext`; before
-        1.8.0 (Stage 16b) also no `uncompute` (1.7.0 adds it back for coherent ones) and the
-        Stage 9b front_end wording."""
+        """The sample as a certificate of a version before 1.10.0 (Stage 21a3): no `grade_kind`; before
+        1.9.0 (Stage 17b) no `grade_ext`; before 1.8.0 (Stage 16b) also no `uncompute` (1.7.0 adds
+        it back for coherent ones) and the Stage 9b front_end wording."""
         c.update(schema_version=version)
-        c.pop("grade_ext", None)
-        if version != "1.8.0":
+        c.pop("grade_kind", None)
+        if version != "1.9.0":
+            c.pop("grade_ext", None)
+        if version not in ("1.8.0", "1.9.0"):
             c.pop("uncompute", None)
             c["trust_boundary"]["front_end"] = VALIDATED_8
 
@@ -226,23 +229,30 @@ def main():
         "solution_count without value": mutated(lambda c: c["solution_count"].pop("value")),
         "solution_count negative value": mutated(lambda c: c["solution_count"].update(value=-1)),
         "solution_count extra key": mutated(lambda c: c["solution_count"].update(by="kernel")),
-        # Stage 16b (1.8.0 legacy) and Stage 17b (1.9.0)
-        "1.9.0 without uncompute": mutated(lambda c: c.pop("uncompute")),
+        # Stage 16b (1.8.0 legacy), Stage 17b (1.9.0 legacy) and Stage 21a3 (1.10.0)
+        "1.10.0 without uncompute": mutated(lambda c: c.pop("uncompute")),
+        "1.9.0 without uncompute": mutated(lambda c: (legacy(c, "1.9.0"), c.pop("uncompute"))),
         "1.8.0 without uncompute": mutated(lambda c: (legacy(c, "1.8.0"), c.pop("uncompute"))),
-        "1.9.0 with the Stage 9b front_end wording":
+        "1.10.0 with the Stage 9b front_end wording":
             mutated(lambda c: c["trust_boundary"].update(front_end=VALIDATED_8)),
         "1.8.0 with the Stage 9b front_end wording":
             mutated(lambda c: (legacy(c, "1.8.0"), c["trust_boundary"].update(front_end=VALIDATED_8))),
-        "1.9.0 with the Stage 8b front_end wording":
+        "1.10.0 with the Stage 8b front_end wording":
             mutated(lambda c: c["trust_boundary"].update(front_end=TRUST_8B)),
         "the proved wording under 1.7.0":
             mutated(lambda c: (c.update(schema_version="1.7.0", uncompute="coherent"),
-                               c.pop("grade_ext"))),
+                               c.pop("grade_ext"), c.pop("grade_kind"))),
         "the proved wording under 1.6.0":
             mutated(lambda c: (c.update(schema_version="1.6.0"), c.pop("uncompute"),
-                               c.pop("grade_ext"))),
-        # Stage 17b: grade_ext present iff 1.9.0, five natural components, nothing else
-        "1.9.0 without grade_ext": mutated(lambda c: c.pop("grade_ext")),
+                               c.pop("grade_ext"), c.pop("grade_kind"))),
+        # Stage 21a3: grade_kind required under 1.10.0 and allowed only there; "measured" for Grover
+        "1.10.0 without grade_kind": mutated(lambda c: c.pop("grade_kind")),
+        "grade_kind under 1.9.0": mutated(lambda c: (legacy(c, "1.9.0"), c.update(grade_kind="measured"))),
+        "Grover with grade_kind composed_bound": mutated(lambda c: c.update(grade_kind="composed_bound")),
+        "grade_kind free text": mutated(lambda c: c.update(grade_kind="scheduled")),
+        # Stage 17b: grade_ext present iff 1.9.0 / 1.10.0, five natural components, nothing else
+        "1.10.0 without grade_ext": mutated(lambda c: c.pop("grade_ext")),
+        "1.9.0 without grade_ext": mutated(lambda c: (legacy(c, "1.9.0"), c.pop("grade_ext"))),
         "grade_ext under 1.8.0":
             mutated(lambda c: (legacy(c, "1.8.0"), c.update(grade_ext=copy.deepcopy(cert["grade_ext"])))),
         "grade_ext under 1.7.0":
@@ -255,11 +265,14 @@ def main():
         "grade_ext extra key": mutated(lambda c: c["grade_ext"].update(t_count=72)),
         "grade_ext not an object": mutated(lambda c: c.update(grade_ext=[126, 39, 0, 18, 36])),
     })
-    # Stage 17b: 1.8.0 envelopes (no grade_ext) still validate, audited and coherent too
+    # Stage 17b: 1.8.0 envelopes (no grade_ext) still validate, audited and coherent too; Stage 21a3:
+    # 1.9.0 envelopes (no grade_kind) too
     validator.validate(mutated(lambda c: legacy(c, "1.8.0")))
     validator.validate(mutated(lambda c: (audited(c), legacy(c, "1.8.0"), c.update(uncompute="coherent"))))
-    print("ok:   schema v1.8.0 (legacy, no grade_ext): the sample and an audited coherent envelope "
-          "validate")
+    validator.validate(mutated(lambda c: legacy(c, "1.9.0")))
+    validator.validate(mutated(lambda c: (audited(c), legacy(c, "1.9.0"), c.update(uncompute="coherent"))))
+    print("ok:   schema v1.8.0 (legacy, no grade_ext) and v1.9.0 (legacy, no grade_kind): the sample and "
+          "an audited coherent envelope validate")
     hw = {"profile": "illustrative_sc", "profile_hash": "0" * 64,
           "components": {"w": {"required": 15, "budget": 127, "fits": True},
                          "d": {"required": 230, "budget": 200, "fits": False},
@@ -268,11 +281,11 @@ def main():
           "fits": False, "G": 390, "p_bar": "1/100", "delta_hw": "2531/640", "vacuous": True,
           "note": "routing, native gates and calibration are outside the trust boundary"}
 
-    def with_hw(f=lambda h: None, version="1.9.0", no_count=False):
+    def with_hw(f=lambda h: None, version="1.10.0", no_count=False):
         def g(c):
             h = copy.deepcopy(hw)
             f(h)
-            if version != "1.9.0":
+            if version != "1.10.0":
                 legacy(c, version)
             if no_count:
                 c.pop("solution_count")
@@ -281,11 +294,12 @@ def main():
 
     validator.validate(with_hw())
     validator.validate(with_hw(lambda h: h.update(p_bar=None, delta_hw=None, vacuous=None)))
+    validator.validate(with_hw(version="1.9.0"))
     validator.validate(with_hw(version="1.8.0"))
     validator.validate(with_hw(version="1.6.0"))
     validator.validate(with_hw(version="1.4.0", no_count=True))
-    print("ok:   schema v1.9.0: an envelope with `hardware` validates (also without p_bar); "
-          "legacy v1.8.0, v1.6.0 and v1.4.0 ones too")
+    print("ok:   schema v1.10.0: an envelope with `hardware` validates (also without p_bar); "
+          "legacy v1.9.0, v1.8.0, v1.6.0 and v1.4.0 ones too")
     bad.update({
         "hardware under 1.3.0": with_hw(version="1.3.0", no_count=True),
         "1.4.0 without hardware": mutated(lambda c: (legacy(c, "1.4.0"), c.pop("solution_count"))),
@@ -299,9 +313,9 @@ def main():
         "hardware short profile hash": with_hw(lambda h: h.update(profile_hash="abc")),
     })
 
-    def with_shape(shape="few:log", version="1.9.0", hardware=False, no_count=False):
+    def with_shape(shape="few:log", version="1.10.0", hardware=False, no_count=False):
         def g(c):
-            if version != "1.9.0":
+            if version != "1.10.0":
                 legacy(c, version)
             if hardware:
                 c.update(hardware=copy.deepcopy(hw))
@@ -312,11 +326,12 @@ def main():
 
     validator.validate(with_shape())
     validator.validate(with_shape(hardware=True))
+    validator.validate(with_shape(version="1.9.0"))
     validator.validate(with_shape(version="1.8.0"))
     validator.validate(with_shape(version="1.6.0"))
     validator.validate(with_shape(version="1.5.0", no_count=True))
-    print("ok:   schema v1.9.0: diffusion_shape few:log validates (with and without hardware); "
-          "legacy v1.8.0, v1.6.0 and v1.5.0 ones too")
+    print("ok:   schema v1.10.0: diffusion_shape few:log validates (with and without hardware); "
+          "legacy v1.9.0, v1.8.0, v1.6.0 and v1.5.0 ones too")
     bad.update({
         "diffusion_shape under 1.3.0": with_shape(version="1.3.0", no_count=True),
         "diffusion_shape under 1.4.0": with_shape(version="1.4.0", hardware=True, no_count=True),
@@ -329,7 +344,7 @@ def main():
     # Stage 15b: a 1.7.0 envelope — `uncompute` on coherent certificates only, the Stage 9b wording
     def with_unc(mode="coherent", version="1.7.0", hardware=False):
         def g(c):
-            if version != "1.9.0":
+            if version != "1.10.0":
                 legacy(c, version)
             c.update(uncompute=mode)
             if hardware:
@@ -352,16 +367,18 @@ def main():
         "uncompute free text under 1.7.0": with_unc(mode="adjoint"),
         "uncompute free text under 1.8.0": with_unc(mode="adjoint", version="1.8.0"),
         "uncompute free text under 1.9.0": with_unc(mode="adjoint", version="1.9.0"),
+        "uncompute free text under 1.10.0": with_unc(mode="adjoint", version="1.10.0"),
     })
     # Stage 16b / 17b: 1.8.0 and 1.9.0 with uncompute coherent, audited, with hardware and
     # diffusion_shape
     validator.validate(with_unc(version="1.8.0"))
     validator.validate(with_unc(version="1.9.0"))
+    validator.validate(with_unc(version="1.10.0"))
     validator.validate(mutated(lambda c: (audited(c), c.update(uncompute="coherent"))))
     validator.validate(mutated(lambda c: c.update(hardware=copy.deepcopy(hw),
                                                   diffusion_shape="few:log")))
-    print("ok:   schema v1.9.0: uncompute coherent validates (audited too); hardware and "
-          "diffusion_shape under 1.9.0 validate")
+    print("ok:   schema v1.10.0: uncompute coherent validates (audited too); hardware and "
+          "diffusion_shape under 1.10.0 validate")
     # Stage 20b3: the Count branch of 1.10.0 on the committed counting certificate
     with open(COUNT_CERT, encoding="utf-8") as f:
         count = json.load(f)
@@ -382,6 +399,22 @@ def main():
         f(c)
         return c
 
+    # Stage 21a3: every committed certificate validates (the four Grover ones at 1.10.0 with
+    # grade_kind measured, the counting one at 1.10.0 with grade_kind composed_bound), and the
+    # not-decided counting envelope of (5′) validates (value and instance.M null)
+    for d in ("grover_pred_037", "simple_alu_x0_1", "grover_pred_037_few", "grover_pred_037_coh",
+              "grover_pred_037_count"):
+        with open(os.path.join(ROOT, "examples", "certs", d, "certificate.json"), encoding="utf-8") as f:
+            c = json.load(f)
+        validator.validate(c)
+        assert c["schema_version"] == "1.10.0", (d, c["schema_version"])
+        assert c["grade_kind"] == ("composed_bound" if d.endswith("_count") else "measured"), d
+    validator.validate(mutated_count(lambda c: (c["solution_count"].update(status="not_decided", value=None),
+                                                c["instance"].update(M=None))))
+    print("ok:   schema v1.10.0 (Stage 21a3): the five committed certificates validate (four Grover with "
+          "grade_kind measured, Count with composed_bound); a not-decided Count envelope (value and "
+          "instance.M null) validates")
+
     bad.update({
         "Count without grade_kind": mutated_count(lambda c: c.pop("grade_kind")),
         "Count with grade_kind measured": mutated_count(lambda c: c.update(grade_kind="measured")),
@@ -395,16 +428,25 @@ def main():
             mutated_count(lambda c: c["solution_count"].update(status="hypothesis")),
         "Count without t_depth_kind": mutated_count(lambda c: c["grade_ext"].pop("t_depth_kind")),
         "Count delta as rational string": mutated_count(lambda c: c["spec"].update(delta="7/128")),
-        "Grover with grade_kind": mutated(lambda c: c.update(grade_kind="measured")),
-        "Grover with blocks": mutated(lambda c: c.update(blocks=[])),
-        "Grover under 1.10.0": mutated(lambda c: c.update(schema_version="1.10.0")),
+        "Grover under 1.10.0 with blocks": mutated(lambda c: c.update(blocks=[])),
+        "Grover under 1.10.0 without grade_kind": mutated(lambda c: c.pop("grade_kind")),
         "Grover 1.10.0 with the Count fields but pattern Grover":
             mutated_count(lambda c: c.update(pattern="Grover")),
+        # Stage 21a3: the consistency of solution_count.status with value and instance.M (5′)
+        "Count not_decided with a numeric value":
+            mutated_count(lambda c: (c["solution_count"].update(status="not_decided"),
+                                     c["instance"].update(M=None))),
+        "Count kernel_decided with value null": mutated_count(lambda c: c["solution_count"].update(value=None)),
+        "Count not_decided with a numeric instance.M":
+            mutated_count(lambda c: c["solution_count"].update(status="not_decided", value=None)),
+        "Count with solution_count value null but status kernel_decided and instance.M null":
+            mutated_count(lambda c: (c["solution_count"].update(value=None), c["instance"].update(M=None))),
     })
     for label, c in bad.items():
         if validator.is_valid(c):
             raise AssertionError(f"schema accepts a bad envelope: {label}")
-    print(f"ok:   {len(bad)} mutated envelopes rejected (15 of them the Count branch of Stage 20b3)")
+    print(f"ok:   {len(bad)} mutated envelopes rejected (the Count branch of Stage 20b3; the grade_kind and "
+          "not_decided negatives of Stage 21a3)")
     print("cert_schema: all checks passed")
 
 

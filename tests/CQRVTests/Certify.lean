@@ -71,7 +71,8 @@ def sample : Except String Certificate := certificateOf groverSrc cfg
 #guard match sample with
   | .ok c => c.hypotheses.head? == some "solution_count = 32 (hM_card, supplied, not decided)" &&
       (c.toJson.compress.splitOn "\"solution_count\":{\"status\":\"hypothesis\",\"value\":32}").length == 2 &&
-      (c.toJson.compress.splitOn "\"schema_version\":\"1.9.0\"").length == 2
+      (c.toJson.compress.splitOn "\"schema_version\":\"1.10.0\"").length == 2 &&
+      (c.toJson.compress.splitOn "\"grade_kind\":\"measured\"").length == 2
   | .error _ => false
 -- Stage 17b: the second record, measured from the circuit, as `grade_ext` (keys sorted)
 #guard match sample with
@@ -349,15 +350,15 @@ def groverCertCoh : String := (groverReqCoh.map renderCert).getD ""
     | .error (.diagnostic d) => d.stage == .synthesis && d.code == .unsupportedCombination
     | _ => false
   | .error _ => false
--- the JSON (Stage 16b, schema 1.8.0; 1.9.0 since Stage 17b): `uncompute` written in every
--- certificate, one version
+-- the JSON (Stage 16b, schema 1.8.0; 1.9.0 since Stage 17b; 1.10.0 with grade_kind "measured" since
+-- Stage 21a3): `uncompute` written in every certificate, one version
 #guard match sample with
   | .ok c =>
     let cc : Certificate := { c with uncompute := .coherent }
     (c.toJson.compress.splitOn "\"uncompute\":\"mbu\"").length == 2 &&
-      (c.toJson.compress.splitOn "\"schema_version\":\"1.9.0\"").length == 2 &&
+      (c.toJson.compress.splitOn "\"schema_version\":\"1.10.0\"").length == 2 &&
       (cc.toJson.compress.splitOn "\"uncompute\":\"coherent\"").length == 2 &&
-      (cc.toJson.compress.splitOn "\"schema_version\":\"1.9.0\"").length == 2
+      (cc.toJson.compress.splitOn "\"schema_version\":\"1.10.0\"").length == 2
   | .error _ => false
 #guard (groverCertFew.splitOn "nAnc_eq\n    hM_card\n").length == 2
 -- Stage 14a, few:log with the kernel-decided count

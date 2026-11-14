@@ -46,6 +46,7 @@ inductive Code where
   | indexOutOfBounds
   | foldDiscipline
   | solutionCountMismatch
+  | noSolutions
   | noMatchingPattern
   | unboundedLoop
   | unsupportedNetwork
@@ -74,6 +75,7 @@ def Code.name : Code → String
   | .indexOutOfBounds => "index_out_of_bounds"
   | .foldDiscipline => "fold_discipline"
   | .solutionCountMismatch => "solution_count_mismatch"
+  | .noSolutions => "no_solutions"
   | .noMatchingPattern => "no_matching_pattern"
   | .unboundedLoop => "unbounded_loop"
   | .unsupportedNetwork => "unsupported_network"

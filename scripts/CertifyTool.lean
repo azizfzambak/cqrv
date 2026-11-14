@@ -51,14 +51,8 @@ Run with `lake env lean --run scripts/CertifyTool.lean <command>` (after `lake b
   <m-max> <file.cqr>…` prints `{"<file name>": {"name", "n", "m": {"<m>": {"mbu", "coherent",
   "aqft": {"<kmax>": …}}}}}` for `m = 1 .. m-max` (the AQFT variants in mode `coherent`,
   `kmax = 1 .. m − 1`), which `tests/diff/counting_diff.py` reads (one Lean start).
-* `count-certify <file.cqr> <m> --out <dir> [--report]` (Stage 20b3, PHASE2_SPEC.md §A.4
-  "Amendments before Stage 20b3"): the counting certificate of the predicate of `file.cqr` with
-  `m` phase qubits (exact inverse QFT, shape tree, mode MBU; `M` by `Network.countSat`): writes
-  `Cert.lean` (`CQRV.Certify.renderCountCert`, the compositional form), kernel-checks it and
-  audits `cert` and `cert_count` (`checkAndAudit`), then writes `certificate.json`
-  (`CountCertificate.toJson`, schema 1.10.0, pattern `Count`), `<name>.qir`, `<name>.qasm` and,
-  with `--report`, `run_report.{md,json}`; on a failed check it writes no JSON and exits 1, as
-  `cqr certify` does. Stage 21 wires the same functions to `cqr certify --problem count`.
+* `count-certify` (Stage 20b3) was removed in Stage 21a3: `cqr certify --problem count
+  --precision m` writes the counting certificate.
 * `command-output <timeout-ms> <cmd> <args…>` (Stage 18b B0): run `CQRV.Certify.runCommand` —
   the guarded command runner of the machine detection — and print its trimmed stdout, or `none`
   (`none (timed out after T ms)` when the child was killed at the timeout), then `wall_ms: N`.
@@ -378,94 +372,6 @@ def main (args : List String) : IO UInt32 := do
             IO.println j.compress
             return 0
       | _ => usage
-  | "count-certify" :: rest =>
-    -- Stage 20b3 (PHASE2_SPEC.md §A.4 "Amendments before Stage 20b3"): the counting certificate
-    let usage : IO UInt32 := do
-      IO.eprintln "usage: CertifyTool count-certify <file.cqr> <m> --out <dir> [--report]"
-      return 2
-    let rec parse : List String → Option (List String × Option String × Bool)
-      | [] => some ([], none, false)
-      | "--out" :: d :: xs => (parse xs).map fun (p, _, r) => (p, some d, r)
-      | "--report" :: xs => (parse xs).map fun (p, o, _) => (p, o, true)
-      | x :: xs => if x.startsWith "--" then none else (parse xs).map fun (p, o, r) => (x :: p, o, r)
-    let some (pos, out, report) := parse rest | usage
-    let [file, mStr] := pos | usage
-    let some m := mStr.toNat? | usage
-    let some dir0 := out | usage
-    let src ← IO.FS.readFile file
-    let tp ← match (CQRV.DSL.parse src >>= CQRV.DSL.check) with
-      | .error d => IO.println d.toJson.compress; return 1
-      | .ok tp => pure tp
-    let net ← match toNetwork tp with
-      | .error d => IO.println d.toJson.compress; return 1
-      | .ok net => pure net
-    if !net.wf then
-      IO.eprintln s!"count-certify: the network of {tp.name} is not well formed"; return 1
-    let n := tp.arity
-    let q ← match CountRequest.ofProgram tp src net n m with
-      | .error e => IO.eprintln s!"count-certify: {e}"; return 1
-      | .ok q => pure q
-    let cfg ← match RefConfig.ofFiles (← IO.FS.readFile "lean-toolchain")
-        (← IO.FS.readFile "lake-manifest.json") with
-      | .ok c => pure c
-      | .error e => IO.eprintln s!"count-certify: {e}"; return 2
-    let text := renderCountCert q
-    let qirText ← match CQRV.Emit.emitQIR tp.name q.circuit with
-      | .ok t => pure t
-      | .error d => IO.println d.toJson.compress; return 1
-    let dir := dir0.dropEndWhile (fun c => c == '/' || c == '\\')
-    let fileOf (nm : String) : String := s!"{dir}/{nm}"
-    IO.FS.createDirAll dir.toString
-    let certPath := fileOf "Cert.lean"
-    IO.FS.writeFile certPath text
-    -- kernel check and audit of `cert` and `cert_count` (one Lean run)
-    let o ← match ← checkAndAudit certPath q.theoremName with
-      | .ok o => pure o
-      | .error e => IO.eprintln s!"count-certify: {certPath}: {e}"; return 1
-    let some axsCount := parseAxioms q.countTheoremName o.check.output
-      | IO.eprintln s!"count-certify: no `#print axioms {q.countTheoremName}` line"; return 1
-    let bad := (match o.result with | .pass => [] | .fail b => b) ++
-      (match auditAxioms axsCount with | .pass => [] | .fail b => b)
-    let obligations := (if bad.contains "sorryAx" then ["sorryAx"] else []) ++
-      (bad.filter (· != "sorryAx")).eraseDups
-    let status := if bad.isEmpty then Status.certified else Status.withObligations
-    let timing : KernelTiming :=
-      { wallMs := o.check.wallMs, kernelMs := o.check.kernelMs, runs := 1,
-        statistic := "single run" }
-    let mi ← detectMachine
-    for c in mi.timedOut do
-      IO.eprintln s!"count-certify: machine detection: `{c}` timed out after \
-        {machineCommandTimeoutMs / 1000} s; machine fields from the environment"
-    let cfg := { cfg with cpu := some (mi.cpu.getD "unknown"), logicalCpus := mi.logicalCpus,
-                          clock := mi.clock, leanThreads := ← IO.getEnv "LEAN_NUM_THREADS",
-                          kernelCheck := timing }
-    let axioms := (o.axioms ++ axsCount).eraseDups
-    let cert := { CountCertificate.ofRequest q cfg with
-      proofHash := some (proofHash text cfg.lean cfg.mathlib cfg.physlib), axioms, status,
-      theoremName := some q.theoremName, obligations }
-    IO.FS.writeFile (fileOf "certificate.json") (cert.toJson.compress ++ "\n")
-    IO.FS.writeFile (fileOf s!"{tp.name}.qir") qirText
-    IO.FS.writeFile (fileOf s!"{tp.name}.qasm") (CQRV.Emit.emitQASM tp.name q.circuit)
-    let eps := round6 (aeEpsFloat n q.M m)
-    let statusLine := match status with
-      | .certified => s!"certified (ε ≈ {eps}, δ = 1 − 8/π² ≈ {round6 aeDeltaFloat}; universal in \
-          M ≥ 1; M = {q.M} decided by the kernel)"
-      | _ => s!"certificate with tracked obligations: {", ".intercalate obligations}"
-    if report then
-      let rd : CountRunData :=
-        { q, source := file, certPath, timing, axioms, statusLine,
-          certified := status == .certified }
-      IO.FS.writeFile (fileOf "run_report.md") rd.toMarkdown
-      IO.FS.writeFile (fileOf "run_report.json") (rd.toJson.pretty ++ "\n")
-    let kms := match timing.kernelMs with | some k => s!", {msText k} kernel" | none => ""
-    IO.println s!"kernel check: {certPath} (exit 0, {msText timing.wallMs} wall{kms}; \
-      {timing.statistic})"
-    IO.println s!"axioms: {", ".intercalate axioms}"
-    IO.println s!"wrote: {fileOf "certificate.json"}, {fileOf s!"{tp.name}.qir"}, \
-      {fileOf s!"{tp.name}.qasm"}{if report then s!", {fileOf "run_report.md"}, \
-      {fileOf "run_report.json"}" else ""}"
-    IO.println statusLine
-    return 0
   | "command-output" :: timeoutStr :: cmd :: cmdArgs =>
     -- Stage 18b B0: exercise `runCommand` (the timeout of the machine-detection commands)
     let some timeoutMs := timeoutStr.toNat?
@@ -514,6 +420,6 @@ end CQRV.Forms.«{tp.name}»
       [<theorem> …] | emit-sample <json|qasm|qir> [--decompose-cp] [--if-cp] | front-end <file.cqr> \
       <out.lean> | qft-sample (<m> [<kmax>] [--adjoint] | --all <m-max>) | counting-sample \
       (<file.cqr> <m> [--kmax k] [--shape tree|chain] [--uncompute mbu|coherent] [--lean <out.lean>] \
-      | --all <m-max> <file.cqr>…) | count-certify <file.cqr> <m> --out <dir> [--report] | \
+      | --all <m-max> <file.cqr>…) | \
       command-output <timeout-ms> <cmd> <args…>)"
          return 2

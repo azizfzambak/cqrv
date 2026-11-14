@@ -26,16 +26,15 @@
    "output":
    "Counting request: Count, n = 8, m = 4, kmax = none (exact inverse QFT)",
    "note":
-   "the problem class is a request parameter (PHASE2_SPEC §A.5), not matched by the library before Stage 21; the certificate theorem `cert` is universal in M and does not use the count — `cert_count` is its instance at the kernel-decided count",
+   "the problem class and the precision are request parameters (PHASE2_SPEC §A.5): `SigmaIn.withProblem` sets the class Count and the seventh field m before the term is built; the certificate theorem `cert` is universal in M and does not use the count — `cert_count` is its instance at the kernel-decided count",
    "input": "Typed AST, request --problem count --precision m"},
   {"verification": "unverified",
    "stage": "3. Pattern Matching",
-   "resources": "side conditions: m ≥ 1 (F₅ ≥ 1); M ≥ 1 in `cert`",
-   "output":
-   "Count entry (PHASE2_SPEC §A.5): not matched by the library before Stage 21",
+   "resources": "side conditions discharged: F₅ ≥ 1: 4 ≥ 1; M ≥ 1 in `cert`",
+   "output": "Count: σ = {F₁ ↦ 8, F₃ ↦ 1, F₄ ↦ [0,3,7], F₅ ↦ 4, F₆ ↦ 32}",
    "note":
-   "`groverInstance` matches Grover only; Stage 21 adds the Count entry and wires this generator to `cqr certify --problem count`; the certificate theorem states the counting instance directly",
-   "input": "Counting request"},
+   "Algorithm 2 on the request term (Stage 21a1: the Count entry, F₆ : any); `millerMatch_sound` and Proposition 5.1 (`matchLibrary_spec`, Stage 21a2) are proved for the algorithm, this run is not kernel-checked; the builder dispatch goes through `qplpLibrary` (Stage 21a3) and the certificate theorem states the counting instance directly",
+   "input": "Counting request σ_in (seven fields)"},
   {"verification": "kernel-checked",
    "stage": "4. QPLP Instant.",
    "resources":
@@ -66,7 +65,7 @@
   {"verification": "kernel-checked",
    "stage": "7. Certificate Gen",
    "resources":
-   "kernel 17.00 s, wall 27.39 s (single run); axioms: propext, Classical.choice, Quot.sound",
+   "kernel 18.10 s, wall 28.80 s (single run); axioms: propext, Classical.choice, Quot.sound",
    "output":
    "examples/certs/grover_pred_037_count/Cert.lean, certificate.json (theorems CQRV.Cert.grover_pred_037_count.cert, CQRV.Cert.grover_pred_037_count.cert_count)",
    "note":
