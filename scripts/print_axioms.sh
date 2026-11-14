@@ -13,7 +13,9 @@
 #      audit (scripts/CertifyTool.lean `audit`, one Lean run per file); since Stage 14a `cert` has
 #      no hypothesis there (`hM_count`); since Stage 20b3 the counting certificate
 #      examples/certs/grover_pred_037_count/Cert.lean too, with `cert` (universal in M),
-#      `cert_count` (the instance at M = 32) and `front_end`.
+#      `cert_count` (the instance at M = 32) and `front_end`; since Stage 21a4 the selection
+#      certificate examples/certs/grover_pred_037_sel/Cert.lean with `cert`, `chosen_fits` and
+#      `selected`.
 # Exits non-zero on any failure. Run after `lake build`.
 #
 # Portable: bash only; ubuntu and Git Bash on Windows.
@@ -32,3 +34,7 @@ done
 lake env lean --run scripts/CertifyTool.lean audit examples/certs/grover_pred_037_count/Cert.lean \
   CQRV.Cert.grover_pred_037_count.cert CQRV.Cert.grover_pred_037_count.cert_count \
   CQRV.Cert.grover_pred_037_count.front_end
+# Stage 21a4: the selection certificate — `cert`, `chosen_fits` and `selected`
+lake env lean --run scripts/CertifyTool.lean audit examples/certs/grover_pred_037_sel/Cert.lean \
+  CQRV.Cert.grover_pred_037.cert CQRV.Cert.grover_pred_037.chosen_fits \
+  CQRV.Cert.grover_pred_037.selected

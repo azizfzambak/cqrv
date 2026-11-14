@@ -54,6 +54,7 @@ inductive Code where
   | frontEndMismatch
   | unsupportedCombination
   | unsupportedInQir
+  | budgetUnsatisfiable
   deriving Repr, DecidableEq, Inhabited
 
 /-- Report §4.2.3 — JSON name of a stage. -/
@@ -83,6 +84,7 @@ def Code.name : Code → String
   | .frontEndMismatch => "front_end_mismatch"
   | .unsupportedCombination => "unsupported_combination"
   | .unsupportedInQir => "unsupported_in_qir"
+  | .budgetUnsatisfiable => "budget_unsatisfiable"
 
 /-- Report §4.2.2–4.2.3 — a front-end diagnostic; `line`/`col` are 1-based. -/
 structure Diagnostic where

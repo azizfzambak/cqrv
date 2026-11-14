@@ -407,7 +407,7 @@ def main():
         with open(os.path.join(ROOT, "examples", "certs", d, "certificate.json"), encoding="utf-8") as f:
             c = json.load(f)
         validator.validate(c)
-        assert c["schema_version"] == "1.10.0", (d, c["schema_version"])
+        assert c["schema_version"] == "1.10.0", (d, c["schema_version"])  # grover_pred_037_sel: 1.11.0, below
         assert c["grade_kind"] == ("composed_bound" if d.endswith("_count") else "measured"), d
     validator.validate(mutated_count(lambda c: (c["solution_count"].update(status="not_decided", value=None),
                                                 c["instance"].update(M=None))))
@@ -442,11 +442,52 @@ def main():
         "Count with solution_count value null but status kernel_decided and instance.M null":
             mutated_count(lambda c: (c["solution_count"].update(value=None), c["instance"].update(M=None))),
     })
+    # Stage 21a4 (schema v1.11.0, PHASE2_SPEC.md §A.6 (8), (8′)): the committed selection certificate
+    # validates; a hand-written `selection` on the audited sample under 1.11.0 validates
+    with open(os.path.join(ROOT, "examples", "certs", "grover_pred_037_sel", "certificate.json"),
+              encoding="utf-8") as f:
+        selc = json.load(f)
+    validator.validate(selc)
+    assert selc["schema_version"] == "1.11.0" and selc["grade_kind"] == "measured", selc["schema_version"]
+    assert set(selc["selection"]) == {"budget", "prefer", "order", "candidates", "selected", "theorem"}
+    assert len(selc["selection"]["candidates"]) == 3 and selc["selection"]["prefer"] == "depth"
+    sel = copy.deepcopy(selc["selection"])
+
+    def with_sel(f=lambda s: None, version="1.11.0"):
+        def g(c):
+            audited(c)
+            s = copy.deepcopy(sel)
+            f(s)
+            c.update(schema_version=version, selection=s)
+        return mutated(g)
+
+    validator.validate(with_sel())
+    validator.validate(with_sel(lambda s: s["candidates"][1].update(grade=None, admissible=False)))
+    print("ok:   schema v1.11.0 (Stage 21a4): the committed selection certificate validates (grade_kind "
+          "measured, three candidates, prefer depth); the sample with a selection object validates, also "
+          "with a failed candidate (grade null)")
+    bad.update({
+        "selection under 1.10.0": with_sel(version="1.10.0"),
+        "1.11.0 without selection": mutated(lambda c: (audited(c), c.update(schema_version="1.11.0"))),
+        "selection on a Count envelope": mutated_count(lambda c: c.update(selection=copy.deepcopy(sel))),
+        "Count under 1.11.0 with selection":
+            mutated_count(lambda c: c.update(schema_version="1.11.0", selection=copy.deepcopy(sel))),
+        "selection prefer outside the enum": with_sel(lambda s: s.update(prefer="size")),
+        "selection with two candidates": with_sel(lambda s: s["candidates"].pop()),
+        "selection with four candidates": with_sel(lambda s: s["candidates"].append(copy.deepcopy(s["candidates"][0]))),
+        "selection budget missing a component": with_sel(lambda s: s["budget"].pop("t")),
+        "selection budget negative component": with_sel(lambda s: s["budget"].update(d=-1)),
+        "selection order of three letters": with_sel(lambda s: s.update(order="dwt")),
+        "selection without theorem": with_sel(lambda s: s.pop("theorem")),
+        "selection candidate shape free text": with_sel(lambda s: s["candidates"][0].update(shape="chain")),
+        "selection extra key": with_sel(lambda s: s.update(note="x")),
+        "1.11.0 with grade_kind composed_bound": with_sel(lambda s: None) | {"grade_kind": "composed_bound"},
+    })
     for label, c in bad.items():
         if validator.is_valid(c):
             raise AssertionError(f"schema accepts a bad envelope: {label}")
     print(f"ok:   {len(bad)} mutated envelopes rejected (the Count branch of Stage 20b3; the grade_kind and "
-          "not_decided negatives of Stage 21a3)")
+          "not_decided negatives of Stage 21a3; the selection negatives of Stage 21a4)")
     print("cert_schema: all checks passed")
 
 

@@ -94,6 +94,10 @@ structure RunData where
   count : CountStatus := .hypothesis
   /-- Stage 15b: the uncomputation mode of `oracle` and `circuit` -/
   uncompute : UncomputeMode := .mbu
+  /-- Stage 21a4: extra rows after Table 8.5.2 (the certified selection), none by default -/
+  extraRows : List ReportRow := []
+  /-- Stage 21a4: extra header lines after the instance line, none by default -/
+  extraHeader : List String := []
   deriving Inhabited
 
 /-- `(w, d, t, a)` -/
@@ -253,7 +257,7 @@ def hardwareRow (h : HardwareCheck) : ReportRow :=
 /-- Report §8.5.2 — the rows of the run report: Table 8.5.2, then the hardware row if a
 profile was given. -/
 def RunData.allRows (d : RunData) : List ReportRow :=
-  d.rows ++ (d.hardware.map fun h => [hardwareRow h]).getD []
+  d.rows ++ d.extraRows ++ (d.hardware.map fun h => [hardwareRow h]).getD []
 
 /-- A Markdown table cell (`|` escaped, no newlines). -/
 def mdCell (s : String) : String := (s.replace "|" "\\|").replace "\n" " "
@@ -266,6 +270,7 @@ def RunData.toMarkdown (d : RunData) : String :=
     of this run, never a report target.\n\n\
     - source: `{d.source}`\n- instance: n = {d.n}, M = {d.M} ({countWord d.count}), r = {d.r}, \
     uncompute = {d.uncompute}\n\
+    {String.join (d.extraHeader.map fun l => s!"- {l}\n")}\
     - status: **{d.statusLine}**\n\n\
     | Stage | Input | Output | Verification | Resources |\n|---|---|---|---|---|\n"
   let body := String.join (rows.map fun r =>

@@ -13,6 +13,7 @@ import CQRV.Realizability.Coherent
 import CQRV.Realizability.Obstruction
 import CQRV.Patterns.Basic
 import CQRV.Patterns.Sound
+import CQRV.Patterns.Select
 import CQRV.DSL.Basic
 import CQRV.Matching.Basic
 import CQRV.Circuit.Basic

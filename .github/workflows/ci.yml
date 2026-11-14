@@ -93,6 +93,9 @@ jobs:
       - name: cqr certify (Stage 8b; kernel check, audit, schema, hash link, reproducibility, negative tests)
         run: scripts/check_certify.sh
 
+      - name: Certified selection (Stage 21a4; --budget / --prefer, the committed grover_pred_037_sel, no fit, refusals, negative kernel tests)
+        run: scripts/check_select.sh
+
   candidate:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

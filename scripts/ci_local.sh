@@ -7,8 +7,8 @@
 # setup-python: the local toolchain and the .venv are used; apt install of llvm: only when
 # llvm-as is on PATH, otherwise the QIR check runs with llvmlite only). M2 acceptance is judged on
 # this output. Keep the step list in sync with ci.yml.
-# Pass mark since Stage 19b (the step "Counting circuit"): 18 PASS, 0 FAIL, 4 n/a (17 PASS since
-# Stage 18b, 16 before).
+# Pass mark since Stage 21a4 (the step "Certified selection"): 19 PASS, 0 FAIL, 4 n/a (18 PASS since
+# Stage 19b, 17 since Stage 18b, 16 before).
 #
 # Usage (from anywhere):  scripts/ci_local.sh
 #   PYTHON=<python> scripts/ci_local.sh   # default: .venv/Scripts/python.exe or .venv/bin/python
@@ -80,6 +80,7 @@ else
   step "SHA3, schema, QIR / QASM re-parse (llvmlite; llvm-as absent)" scripts/check_emit.sh
 fi
 step "cqr certify (both predicates, few:log, negative tests)" scripts/check_certify.sh
+step "Certified selection (Stage 21a4)" scripts/check_select.sh
 
 echo "ci_local: $pass PASS, $fail FAIL, $na n/a (logs: .lake/ci_local/)"
 [ "$fail" -eq 0 ]

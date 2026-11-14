@@ -4,6 +4,7 @@ import CQRV.Synthesis.Basic
 import CQRV.Certify.Basic
 import CQRV.Emit.Basic
 import CQRV.Patterns.Basic
+import CQRV.Patterns.Select
 
 /-!
 # `cqr` command-line interface
@@ -113,6 +114,8 @@ def usage : String :=
     "          [--profile name|path] [--shape tree|few:log] [--count-limit k] [--uncompute mbu|coherent]\n" ++
     "  certify <file> --problem count --precision m [--out dir] [--bench k] [--report]\n" ++
     "          [--count-limit k] [--uncompute mbu|coherent]\n" ++
+    "  certify <file> --budget w,d,t,a --prefer width|depth|t|anc [--solutions M] [--iterations r]\n" ++
+    "          [--count-limit k] [--profile name|path] [--bench k] [--report] [--out dir]\n" ++
     "  emit <file> --format qir|qasm [--iterations r] [--solutions M] [--oracle]\n"
 
 /-- Report §4.2.2 — parse and surface-check a source file; also returns the position of the
@@ -545,6 +548,149 @@ def secs (ms : Nat) : String :=
   let c := (ms + 5) / 10
   s!"{c / 100}.{if c % 100 < 10 then "0" else ""}{c % 100} s"
 
+/-- The certificate of a matched Grover instance `gi` (the tail of `cqr certify`, from the solution
+count to the status line): `Cert.lean`, the kernel check and the audit, `certificate.json`, the
+QIR / QASM texts and the run report. Stage 21a4 (PHASE2_SPEC.md §A.6 (8), (8′)): with `sel`, the
+selection block is appended to `Cert.lean`, `chosen_fits` and `selected` are audited in the same
+kernel run, the JSON carries `selection` (schema 1.11.0), the report a selection row, and the
+`selection:` line follows the status line; without `sel` the output is byte for byte that of the
+ordinary path. -/
+def certifyGrover (path src : String) (tp : TypedProgram) (entryPos : Pos) (sig : SigmaIn)
+    (subst : String) (sides : List String) (gi : GroverInstance) (solutions : Option Nat)
+    (out : Option String) (bench : Option Nat) (report : Bool) (profile : Option String)
+    (diff : CertDiffusion) (countLimit : Nat) (mode : UncomputeMode)
+    (sel : Option SelectionInfo) : IO UInt32 := do
+    let some M := gi.M
+      | IO.eprintln "cqr certify: the certificate needs the solution count M (--solutions M)"
+        return 2
+    -- the front end (Stage 16b): a theorem of Cert.lean (`front_end`), declared as such
+    let feText := frontEndProvedText
+    -- the solution count (Stage 14a): for n ≤ --count-limit, counted here and decided by the
+    -- kernel in Cert.lean (`hM_count`); a mismatch with the supplied / extracted M writes nothing
+    let count : CountStatus ←
+      if 0 < countLimit && gi.n ≤ countLimit then do
+        let c := gi.net.countSat gi.n
+        if c != M then
+          let src := if solutions.isSome then "--solutions" else "computed by ℰ"
+          let msg := s!"the solution count M = {M} ({src}) contradicts the count {c} of \
+            Network.countSat (the network of `{tp.name}` evaluated on all 2^{gi.n} inputs; \
+            report §8.2)"
+          IO.println (Diagnostic.at .hypothesis .solutionCountMismatch entryPos msg).toJson.compress
+          return 1
+        pure .kernelDecided
+      else pure .hypothesis
+    let cfg ← match RefConfig.ofFiles (← IO.FS.readFile "lean-toolchain")
+        (← IO.FS.readFile "lake-manifest.json") with
+      | .ok c => pure c
+      | .error e => IO.eprintln s!"cqr certify: {e}"; return 2
+    let prof ← match profile with
+      | none => pure none
+      | some arg => match ← loadProfile arg with
+        | .ok ph => pure (some ph)
+        | .error e => IO.eprintln s!"cqr certify: {e}"; return 2
+    let q := CertRequest.ofInstance tp src gi M count
+    let text := match sel with
+      | none => renderCert q
+      | some s => insertSelection (renderCert q) (renderSelection q s)
+    -- the QIR text (Stage 17b: `emitQIR` can refuse a circuit; nothing is written then)
+    let qirText ← match emitQIR tp.name gi.circuit with
+      | .ok t => pure t
+      | .error d => IO.println d.toJson.compress; return 1
+    let dir := (out.getD s!"certs/{tp.name}{if sel.isSome then "_sel" else ""}").dropEndWhile
+      (fun c => c == '/' || c == '\\')
+    let file (n : String) : String := s!"{dir}/{n}"
+    IO.FS.createDirAll dir.toString
+    let certPath := file "Cert.lean"
+    IO.FS.writeFile certPath text
+    -- kernel check and audit (decisions 2, 3); with --bench, k + 1 runs, the first discarded
+    -- Stage 21a4: with a selection, `chosen_fits` and `selected` are audited in the same run
+    let selNames := if sel.isSome then
+      [s!"CQRV.Cert.{q.name}.chosen_fits", s!"CQRV.Cert.{q.name}.selected"] else []
+    let mut outcomes : Array (AuditOutcome × List String) := #[]
+    for _ in [0:(bench.map (· + 1)).getD 1] do
+      match ← checkAndAudit certPath q.theoremName with
+      | .ok o =>
+        let mut extra : List String := []
+        for nm in selNames do
+          match parseAxioms nm o.check.output with
+          | some a => extra := extra ++ a
+          | none => IO.eprintln s!"cqr certify: no `#print axioms {nm}` line"; return 1
+        outcomes := outcomes.push (o, extra)
+      | .error e => IO.eprintln s!"cqr certify: {certPath}: {e}"; return 1
+    let some (last, extraAxioms) := outcomes.back? | return 1
+    let timed := if bench.isSome then outcomes.toList.drop 1 else outcomes.toList
+    let kernels := timed.filterMap (·.1.check.kernelMs)
+    let timing : KernelTiming :=
+      { wallMs := median (timed.map (·.1.check.wallMs)),
+        kernelMs := if kernels.length == timed.length then some (median kernels) else none,
+        runs := timed.length,
+        statistic := match bench with
+          | some k => s!"median of {k} (first run excluded)"
+          | none => "single run" }
+    let bad := (match last.result with | .pass => [] | .fail b => b) ++
+      (if sel.isSome then (match auditAxioms extraAxioms with | .pass => [] | .fail b => b) else [])
+    let (status, obligations) :=
+      if bad.isEmpty then (Status.certified, []) else (Status.withObligations, obligationsOf bad)
+    let axioms := (last.axioms ++ extraAxioms).eraseDups
+    let mi ← detectMachine
+    -- Stage 18b B0: a machine-detection command that hit the 20 s timeout is named on stderr;
+    -- the machine fields then come from the environment (stdout unchanged).
+    for c in mi.timedOut do
+      IO.eprintln s!"cqr certify: machine detection: `{c}` timed out after \
+        {machineCommandTimeoutMs / 1000} s; machine fields from the environment"
+    let (cpu, cpus, clock) := (mi.cpu, mi.logicalCpus, mi.clock)
+    let cfg := { cfg with cpu := some (cpu.getD "unknown"), logicalCpus := cpus, clock,
+                          leanThreads := ← IO.getEnv "LEAN_NUM_THREADS", kernelCheck := timing }
+    let base ← match Certificate.build src sig gi.entry gi.facts gi.circuit gi.circuit.grade gi.r
+        gi.n M q.delta cfg feText count mode with
+      | .ok c => pure c
+      | .error e => IO.eprintln s!"cqr certify: {e}"; return 1
+    let hw := prof.map fun (p, h) =>
+      HardwareCheck.of p h base.grade base.delta base.gateCounts.total
+    let cert := { base with
+      proofHash := some (proofHash text cfg.lean cfg.mathlib cfg.physlib), axioms,
+      status, theoremName := some q.theoremName, obligations, hardware := hw, diffusion := diff }
+    let certJson := match sel with
+      | none => cert.toJson
+      | some s => s.addTo cert.toJson s!"CQRV.Cert.{q.name}.selected"
+    -- compact, keys sorted (canonical, as `circuit_hash` and `CertifyTool sample`)
+    IO.FS.writeFile (file "certificate.json") (certJson.compress ++ "\n")
+    IO.FS.writeFile (file s!"{tp.name}.qir") qirText
+    IO.FS.writeFile (file s!"{tp.name}.qasm") (emitQASM tp.name gi.circuit)
+    let statusLine := match status, count with
+      | .certified, .kernelDecided => "certified"
+      | .certified, .hypothesis => s!"certified (conditional on: solution_count = {M})"
+      | _, _ => s!"certificate with tracked obligations: {", ".intercalate obligations}"
+    if report then
+      let dif ← match (match diff with
+          | .tree => diffusion gi.n none .tree mode
+          | .fewLog => diffusionFew gi.n .logDepth) with
+        | .ok c => pure c
+        | .error d => IO.println d.toJson.compress; return 1
+      let rd : RunData :=
+        { name := tp.name, source := path, predicateHash := cert.predicateHash, sig,
+          pattern := gi.entry.name, subst, sides, net := gi.net, oracle := gi.oracle,
+          diffusion := dif, circuit := gi.circuit, n := gi.n, M, r := gi.r, delta := q.delta,
+          theoremName := q.theoremName, certPath, timing,
+          axioms, statusLine, certified := status == .certified,
+          hardware := hw, diffusionShape := diff, count, uncompute := mode,
+          extraRows := (sel.map fun s => [s.reportRow]).getD [],
+          extraHeader := (sel.map fun s => [s.headerLine]).getD [] }
+      IO.FS.writeFile (file "run_report.md") rd.toMarkdown
+      IO.FS.writeFile (file "run_report.json") (rd.toJson.pretty ++ "\n")
+    let kms := match timing.kernelMs with | some k => s!", {secs k} kernel" | none => ""
+    IO.println s!"kernel check: {certPath} (exit 0, {secs timing.wallMs} wall{kms}; \
+      {timing.statistic})"
+    IO.println s!"axioms: {", ".intercalate axioms}"
+    IO.println s!"wrote: {file "certificate.json"}, {file s!"{tp.name}.qir"}, \
+      {file s!"{tp.name}.qasm"}{if report then s!", {file "run_report.md"}, \
+      {file "run_report.json"}" else ""}"
+    IO.println s!"front end: {feText}"
+    IO.println statusLine
+    if let some s := sel then IO.println s.statusLine
+    if let some h := hw then IO.println h.statusLine
+    return if status == .certified then 0 else 3
+
 /-- `cqr certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k] [--report]
 [--profile name|path]` —
 report §5.1.3, §8.4.1, §8.4.4, §9.5.1 (Stage 8b): check → extract → match → synthesize (`r = r⋆`
@@ -588,116 +734,83 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
         return 2
       | .error (.diagnostic d) => IO.println d.toJson.compress; return 1
       | .error (.usage msg) => IO.eprintln s!"cqr certify: {msg}"; return 2
-    let some M := gi.M
-      | IO.eprintln "cqr certify: the certificate needs the solution count M (--solutions M)"
+    certifyGrover path src tp entryPos sig subst sides gi solutions out bench report profile diff
+      countLimit mode none
+
+/-- `cqr certify <file> --budget w,d,t,a --prefer width|depth|t|anc [--solutions M] [--iterations r]
+[--count-limit k] [--profile name|path] [--bench k] [--report] [--out dir]` — PHASE2_SPEC.md §A.6
+amendment (8) and refinement (8′) (Stage 21a4): the front end, the signature and Algorithm 2 as
+`cqr certify` (a non-match prints the proved hint); the three candidates of `candidates` through
+`groverInstance` at their (shape, mode) and the request's r, with their measured grades (a builder
+that fails at the instance is a candidate without a grade, not admissible); `select`. No fit: the
+diagnostic `budget_unsatisfiable` (stage `synthesis`) listing every candidate's grade, exit 1,
+nothing written. Otherwise the ordinary certificate path of the chosen candidate with the selection
+block (`certifyGrover`); the default directory is `certs/<name>_sel`. -/
+def runCertifySelect (path : String) (budget : Grade) (pref : Pref) (solutions iters : Option Nat)
+    (out : Option String) (bench : Option Nat) (report : Bool) (profile : Option String)
+    (countLimit : Nat) : IO UInt32 := do
+  let src ← IO.FS.readFile path
+  match ← frontEnd path, ← signature path solutions with
+  | .error d, _ | _, .error d => IO.println d.toJson.compress; return 1
+  | .ok (tp, entryPos), .ok sig =>
+    let t := sig.toTerm.normalize
+    let (entry, subst, sides) ← match matchLibrary library t with
+      | .matched e σ ds =>
+        let σs := σ.mergeSort fun a b => Term.MVar.cmp a.1 b.1 != .gt
+        pure (e, ", ".intercalate (σs.map fun (m, b) => s!"{m.name} ↦ {b.toJson.compress}"),
+          ds.map fun d => s!"{d.cond.render}: {d.render}")
+      | r => return (← printNoMatch "certify" t r false)
+    -- the three candidates at their (shape, mode) and the request's r
+    let mut built : List (Candidate × Option GroverInstance) := []
+    let mut firstFailure : Option Diagnostic := none
+    for c in candidates do
+      match instantiate entry tp src sig .search iters c.shape countLimit c.mode with
+      | .ok (.grover gi) => built := built ++ [(c, some gi)]
+      | .ok (.count _) =>
+        IO.eprintln s!"cqr certify: matched pattern {entry.name}: a counting certificate needs \
+          --problem count --precision m"
         return 2
-    -- the front end (Stage 16b): a theorem of Cert.lean (`front_end`), declared as such
-    let feText := frontEndProvedText
-    -- the solution count (Stage 14a): for n ≤ --count-limit, counted here and decided by the
-    -- kernel in Cert.lean (`hM_count`); a mismatch with the supplied / extracted M writes nothing
-    let count : CountStatus ←
-      if 0 < countLimit && gi.n ≤ countLimit then do
-        let c := gi.net.countSat gi.n
-        if c != M then
-          let src := if solutions.isSome then "--solutions" else "computed by ℰ"
-          let msg := s!"the solution count M = {M} ({src}) contradicts the count {c} of \
-            Network.countSat (the network of `{tp.name}` evaluated on all 2^{gi.n} inputs; \
-            report §8.2)"
-          IO.println (Diagnostic.at .hypothesis .solutionCountMismatch entryPos msg).toJson.compress
-          return 1
-        pure .kernelDecided
-      else pure .hypothesis
-    let cfg ← match RefConfig.ofFiles (← IO.FS.readFile "lean-toolchain")
-        (← IO.FS.readFile "lake-manifest.json") with
-      | .ok c => pure c
-      | .error e => IO.eprintln s!"cqr certify: {e}"; return 2
-    let prof ← match profile with
-      | none => pure none
-      | some arg => match ← loadProfile arg with
-        | .ok ph => pure (some ph)
-        | .error e => IO.eprintln s!"cqr certify: {e}"; return 2
-    let q := CertRequest.ofInstance tp src gi M count
-    let text := renderCert q
-    -- the QIR text (Stage 17b: `emitQIR` can refuse a circuit; nothing is written then)
-    let qirText ← match emitQIR tp.name gi.circuit with
-      | .ok t => pure t
-      | .error d => IO.println d.toJson.compress; return 1
-    let dir := (out.getD s!"certs/{tp.name}").dropEndWhile (fun c => c == '/' || c == '\\')
-    let file (n : String) : String := s!"{dir}/{n}"
-    IO.FS.createDirAll dir.toString
-    let certPath := file "Cert.lean"
-    IO.FS.writeFile certPath text
-    -- kernel check and audit (decisions 2, 3); with --bench, k + 1 runs, the first discarded
-    let mut outcomes : Array AuditOutcome := #[]
-    for _ in [0:(bench.map (· + 1)).getD 1] do
-      match ← checkAndAudit certPath q.theoremName with
-      | .ok o => outcomes := outcomes.push o
-      | .error e => IO.eprintln s!"cqr certify: {certPath}: {e}"; return 1
-    let some last := outcomes.back? | return 1
-    let timed := if bench.isSome then outcomes.toList.drop 1 else outcomes.toList
-    let kernels := timed.filterMap (·.check.kernelMs)
-    let timing : KernelTiming :=
-      { wallMs := median (timed.map (·.check.wallMs)),
-        kernelMs := if kernels.length == timed.length then some (median kernels) else none,
-        runs := timed.length,
-        statistic := match bench with
-          | some k => s!"median of {k} (first run excluded)"
-          | none => "single run" }
-    let (status, obligations) := match last.result with
-      | .pass => (Status.certified, [])
-      | .fail bad => (Status.withObligations, obligationsOf bad)
-    let mi ← detectMachine
-    -- Stage 18b B0: a machine-detection command that hit the 20 s timeout is named on stderr;
-    -- the machine fields then come from the environment (stdout unchanged).
-    for c in mi.timedOut do
-      IO.eprintln s!"cqr certify: machine detection: `{c}` timed out after \
-        {machineCommandTimeoutMs / 1000} s; machine fields from the environment"
-    let (cpu, cpus, clock) := (mi.cpu, mi.logicalCpus, mi.clock)
-    let cfg := { cfg with cpu := some (cpu.getD "unknown"), logicalCpus := cpus, clock,
-                          leanThreads := ← IO.getEnv "LEAN_NUM_THREADS", kernelCheck := timing }
-    let base ← match Certificate.build src sig gi.entry gi.facts gi.circuit gi.circuit.grade gi.r
-        gi.n M q.delta cfg feText count mode with
-      | .ok c => pure c
-      | .error e => IO.eprintln s!"cqr certify: {e}"; return 1
-    let hw := prof.map fun (p, h) =>
-      HardwareCheck.of p h base.grade base.delta base.gateCounts.total
-    let cert := { base with
-      proofHash := some (proofHash text cfg.lean cfg.mathlib cfg.physlib), axioms := last.axioms,
-      status, theoremName := some q.theoremName, obligations, hardware := hw, diffusion := diff }
-    -- compact, keys sorted (canonical, as `circuit_hash` and `CertifyTool sample`)
-    IO.FS.writeFile (file "certificate.json") (cert.toJson.compress ++ "\n")
-    IO.FS.writeFile (file s!"{tp.name}.qir") qirText
-    IO.FS.writeFile (file s!"{tp.name}.qasm") (emitQASM tp.name gi.circuit)
-    let statusLine := match status, count with
-      | .certified, .kernelDecided => "certified"
-      | .certified, .hypothesis => s!"certified (conditional on: solution_count = {M})"
-      | _, _ => s!"certificate with tracked obligations: {", ".intercalate obligations}"
-    if report then
-      let dif ← match (match diff with
-          | .tree => diffusion gi.n none .tree mode
-          | .fewLog => diffusionFew gi.n .logDepth) with
-        | .ok c => pure c
-        | .error d => IO.println d.toJson.compress; return 1
-      let rd : RunData :=
-        { name := tp.name, source := path, predicateHash := cert.predicateHash, sig,
-          pattern := gi.entry.name, subst, sides, net := gi.net, oracle := gi.oracle,
-          diffusion := dif, circuit := gi.circuit, n := gi.n, M, r := gi.r, delta := q.delta,
-          theoremName := q.theoremName, certPath, timing,
-          axioms := last.axioms, statusLine, certified := status == .certified,
-          hardware := hw, diffusionShape := diff, count, uncompute := mode }
-      IO.FS.writeFile (file "run_report.md") rd.toMarkdown
-      IO.FS.writeFile (file "run_report.json") (rd.toJson.pretty ++ "\n")
-    let kms := match timing.kernelMs with | some k => s!", {secs k} kernel" | none => ""
-    IO.println s!"kernel check: {certPath} (exit 0, {secs timing.wallMs} wall{kms}; \
-      {timing.statistic})"
-    IO.println s!"axioms: {", ".intercalate last.axioms}"
-    IO.println s!"wrote: {file "certificate.json"}, {file s!"{tp.name}.qir"}, \
-      {file s!"{tp.name}.qasm"}{if report then s!", {file "run_report.md"}, \
-      {file "run_report.json"}" else ""}"
-    IO.println s!"front end: {feText}"
-    IO.println statusLine
-    if let some h := hw then IO.println h.statusLine
-    return if status == .certified then 0 else 3
+      | .error (.usage msg) => IO.eprintln s!"cqr certify: {msg}"; return 2
+      | .error (.diagnostic d) =>
+        built := built ++ [(c, none)]
+        if firstFailure.isNone then firstFailure := some d
+    if built.all (·.2.isNone) then
+      if let some d := firstFailure then IO.println d.toJson.compress
+      return 1
+    let results : List CandidateResult := built.map fun (c, gi?) => ⟨c, gi?.map (·.circuit.grade)⟩
+    let pool : List ((Candidate × GroverInstance) × Grade) :=
+      built.filterMap fun (c, gi?) => gi?.map fun gi => ((c, gi), gi.circuit.grade)
+    match select budget pref pool with
+    | none =>
+      let msg := s!"no candidate fits the budget (w, d, t, a) = {gradeTuple budget}: " ++
+        "; ".intercalate (results.map (·.text budget)) ++ " (PHASE2_SPEC §A.6 amendment (8))"
+      IO.println (Diagnostic.at .synthesis .budgetUnsatisfiable entryPos msg).toJson.compress
+      return 1
+    | some ((c, gi), _) =>
+      let info : SelectionInfo := { budget, pref, results, chosen := c }
+      certifyGrover path src tp entryPos sig subst sides gi solutions out bench report profile
+        c.shape countLimit c.mode (some info)
+
+/-- Stage 21a4 — remove `--budget w,d,t,a` and `--prefer p` from the certify flags (any position);
+`none` on a repeated flag. The remaining flags keep their order, so a flag list without them is
+parsed exactly as before. -/
+def selectionFlags : List String → Option (Option String × Option String × List String)
+  | [] => some (none, none, [])
+  | "--budget" :: b :: rest => do
+    let (b', p, fs) ← selectionFlags rest
+    if b'.isSome then none
+    return (some b, p, fs)
+  | "--prefer" :: p :: rest => do
+    let (b, p', fs) ← selectionFlags rest
+    if p'.isSome then none
+    return (b, some p, fs)
+  | f :: rest => (selectionFlags rest).map fun (b, p, fs) => (b, p, f :: fs)
+
+/-- Parse `w,d,t,a`: exactly four naturals. -/
+def parseBudget (s : String) : Option Grade :=
+  match (s.splitOn ",").map String.toNat? with
+  | [some w, some d, some t, some a] => some ⟨w, d, t, a⟩
+  | _ => none
 
 /-- `cqr certify <file> --problem count --precision m [--out dir] [--bench k] [--report]
 [--count-limit k] [--uncompute mbu|coherent]` — PHASE2_SPEC.md §A.5 amendments (5)–(7) and the
@@ -884,6 +997,23 @@ def main (args : List String) : IO UInt32 := do
       | none => IO.eprint usage; return 2
     | none => IO.eprint usage; return 2
   | "certify" :: file :: flags =>
+    -- Stage 21a4 (PHASE2_SPEC.md §A.6 (8)): `--budget` / `--prefer` (both or neither); a flag
+    -- list without them is parsed exactly as before
+    match selectionFlags flags with
+    | none => IO.eprint usage; return 2
+    | some (some bStr, some pStr, flags) =>
+      match parseBudget bStr, Pref.parse? pStr with
+      | some budget, some pref =>
+        if flags.contains "--shape" || flags.contains "--uncompute" || flags.contains "--problem" ||
+            flags.contains "--precision" then
+          IO.eprint usage; return 2
+        match certifyFlags flags with
+        | some (m, r, o, b, p, h, c) =>
+          runCertifySelect file budget pref m r o b p h (c.getD defaultCountLimit)
+        | none => IO.eprint usage; return 2
+      | _, _ => IO.eprint usage; return 2
+    | some (some _, none, _) | some (none, some _, _) => IO.eprint usage; return 2
+    | some (none, none, flags) =>
     -- Stage 21a3 (PHASE2_SPEC.md §A.5 (5)): the request flags `--problem` / `--precision`; a flag
     -- list without them is parsed exactly as before
     match certifyRequest flags with
