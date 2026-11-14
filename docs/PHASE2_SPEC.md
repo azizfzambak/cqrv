@@ -1021,6 +1021,29 @@ and no classical feed-forward (`grade_ext` meas = ff = 0), and that is not part 
 It stays in the candidate space and in `selected`. A budget on `grade_ext` is a question for the
 M3 review, together with Count selection.
 
+**21a4 done ceaf36f, accepted 2026-11-15** (CI 19 PASS, 0 FAIL, 4 n/a; the new step 23
+"Certified selection" took 154 s, step 22 688 s). (8′) holds as written; no statement was false.
+- **The module.** `CQRV/Patterns/Select.lean` is Physlib-free. It defines `Pref`, `Grade.key`,
+  `lexLt` (Mathlib's order on `List ℕ`, decided), the three candidates with their builders, and
+  `select`. `select_spec` is proved once, for any list; its axioms are the standard three.
+- **The certificate.** `selected` quantifies over the builders' outputs. One kernel run audits
+  `cert`, `chosen_fits` and `selected`.
+- **A detail the text did not foresee.** The kernel does not evaluate `groverCircuitFew` directly,
+  because the MCZ plan sorts. So a non-chosen `fewLogMbu` gets its `cand_grade` through
+  `groverCircuitFew_ok_of`, with its own oracle and MCZ literals, as the few:log certificate does.
+- **The committed example.** `examples/certs/grover_pred_037_sel` uses budget (12, 200, 100, 8)
+  and prefer depth. It selects `fewLogMbu`; one of three candidates is admissible. Kernel 25.4 s.
+  Its `.qir` and `.qasm` are byte-identical to `grover_pred_037_few`'s, and removing the selection
+  block gives that directory's `Cert.lean` byte for byte.
+- **Schema 1.11.0** appears only in certificates written with `--budget`. The five older
+  directories are untouched. `order` is written as a string (`"dwta"`), which is accepted.
+- **Invariants.** The search outputs are unchanged (the 126 runs as at 21a2). The `cqr` closure is
+  51 modules.
+
+With 21a4, Stage 21a is complete, and so is milestone M3: two patterns are certified end to end
+(Grover and Count), Proposition 5.1 is proved for the implemented fragment, and selection under a
+budget is certified.
+
 ### A.7 Stretch: measured composition exercised (report Theorem 3.3a)
 
 Counting followed by search with the estimated `M` ("search with an unknown number of
@@ -1030,7 +1053,7 @@ value; a circuit whose iteration count depends on a classical input is not expre
 without classically controlled iteration, so the honest options are (a) a channel family indexed
 by the intermediate outcome, with Theorem 3.3a generalized to that form, or (b) exercising
 Theorem 3.3a on two certified toy stages, as the report's own validation gate did for 3.3b. The
-M3 review decides; the obstacle is recorded either way.
+M3 review decides; the obstacle is recorded either way. Decided at the M3 review: §A.9 (1).
 
 ### A.8 Design choices (decided 2026-10-29) and what the task files still fix
 
@@ -1062,3 +1085,50 @@ M3 review decides; the obstacle is recorded either way.
    that imports Physlib, such a list is parenthesised where it occurs, and the reviewer checks
    the closure at each audit (at 3ec8377: `Lean`, `Mathlib`, 46 local modules). Decided at the
    18b review, 2026-11-01.
+
+### A.9 The M3 review (2026-11-15)
+
+M3 was reached with 21a4 (ceaf36f). The author approved each of the following decisions.
+
+1. **21b runs in two steps.**
+   - **21b1 is a short feasibility probe.** It writes no certificate and changes no committed
+     file outside its probe and its notes. It answers two questions:
+     - Can stage 2 of "search with an unknown number of solutions" be stated as one
+       `GradedChannel` on the encoded estimate? Stage 2 is Grover with `r⋆(ã)` chosen by the
+       classical outcome. The IR has no classically controlled iteration, so the question is about
+       the channel level, with the grade taken as the maximum over branches.
+     - Is there a small instance where the composition by `measured_composition` gives a
+       non-vacuous δ? The domain hypothesis needs `S_g`'s domain to be the estimates within ε of
+       the true a; δ_g is then the worst Grover failure over that range.
+   - **21b2 follows the probe.**
+     - If the probe is positive, 21b2 implements route (a) of §A.7 at that instance.
+     - If it is negative, 21b2 exercises Theorem 3.3a on two small certified stages (route (b)).
+   - The obstacle is recorded either way. 21b1 gets its text at the review of the M3 close task.
+2. **23b is decided at M4**, after Stage 23, since its content depends on Stages 22–23.
+3. **Stage 29 is not run as a stage.** Stage 30 records why: no Coq / SQIR toolchain, and the
+   download and effort it needs. It also gives a comparison with SQIR / VQO from the literature
+   only.
+4. **Count selection gets no Phase 2 stage.** Its order puts precision first (the largest
+   admissible m) and compares composed bounds. Paper 1 lists it as a limitation and future work.
+5. **A budget on `grade_ext`** (no mid-circuit measurement, no feed-forward) gets no stage of its
+   own. It is an input to Stage 24 (the capability flags of `HardwareTarget`) and Stage 26
+   (selection by the physical grade). There, `treeCoherent` is the candidate for a target without
+   mid-circuit measurement.
+6. **The stale header line** "generated by `CertifyTool count-certify`" of the counting
+   certificate is corrected in the M3 close task. This is the one change to a committed
+   `Cert.lean` there.
+7. **The M3 report.** The M3 close task writes `docs/M3_REPORT.md` from measured data, as
+   `docs/M2_REPORT.md` was written at M2. `docs/M2_REPORT.md` stays frozen. The report gives:
+   - what is certified, with the axioms;
+   - the committed certificates, their grades and kernel times;
+   - the scope of Proposition 5.1 and of the selection claim;
+   - the CI with its step times;
+   - the deviations and open items, with the destinations decided here;
+   - the claims Paper 1 may make, each with its evidence and exact scope, and the claims it must
+     not make.
+
+   The text of Paper 1 is revised at Stage 30; nothing is published before then. The M3 report is
+   written from the repository alone; `docs/paper/` is neither read nor edited for it.
+
+Order after M3: the M3 close task, then 21b1, 21b2, then Track B (Stage 22). §B.1 is written
+before Stage 22 starts.
