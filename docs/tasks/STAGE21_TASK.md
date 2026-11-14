@@ -16,7 +16,7 @@ after the reviewer accepts the previous one, from `main`:
 
 **21m**, the M3 close (the header fix and `docs/M3_REPORT.md`), is specified below (written at the
 M3 review, PHASE2_SPEC §A.9). **21b**, the stretch of §A.7, was decided at the M3 review: 21b1 (a
-feasibility probe), then 21b2; 21b1 gets its text at the 21m review.
+feasibility probe), then 21b2; 21b1 is specified below (written at the 21m review).
 
 Precondition: Stage 20 complete; main = c2199db (the 20b3 review commit). `git switch -c
 stage-21a1 main`. The 21a1 commit includes this file and the reviewer's edits to
@@ -820,6 +820,106 @@ Stop and ask in any of these cases:
 - a number would have to be estimated;
 - writing a section would need `docs/paper/`;
 - a Lean process above 8 GB, or a kernel check above 10 minutes.
+
+## 21b1 — The feasibility probe for measured composition (written at the 21m review, 2026-11-15)
+
+PHASE2_SPEC §A.7, §A.9 (1), and the refinement at the 21m review. Precondition: main = the 21m
+review commit. Start with `git switch -c stage-21b1 main`.
+
+**What the probe is.** It answers Q1–Q5 below and recommends the route of 21b2. It writes no
+certificate, adds nothing to `CQRV/`, and changes no committed certificate. Its outputs:
+- `docs/notes/PROBE_21B1.md` (new): the answers, the tables, and the recommendation;
+- `scripts/probes/probe_21b1.py` (new): the numeric table, run with
+  `.venv/Scripts/python.exe -I`;
+- `scripts/probes/Probe21b1.lean` (new): a standalone file, checked with
+  `lake env lean scripts/probes/Probe21b1.lean`. It is outside the build and CI, and holds the
+  statements and proof attempts of Q1, Q2 and Q4.
+
+**The statement route (a) aims at.** It composes two stages:
+- **Stage 1** is the counting channel `groverChannel (n+m) C₁` at precision m, decoded by
+  `countPOVM n m a`. It realizes `CountSpec m a` with (`ae_eps a m`, `ae_delta`); this is the
+  `cert` of a counting certificate.
+- **Stage 2** is a channel Ψ on `CountOut m a`. On input y it runs Grover with r(y) iterations,
+  where:
+  - r(y) := `rStar n (M̃ y)`;
+  - M̃ y := the nearest integer to 2^n · `countEst m a y`, clamped to [1, 2^n].
+
+  Its output is the search register, and its declared grade is the maximum of the Grover
+  circuits' grades over all y.
+- **The search specification** is restricted to the good estimates: `S_g y z :=
+  |countEst m a y − a| ≤ ae_eps a m ∧ P z`, with output `DiscreteOut (Reg n)` and decoding
+  `basisPOVM n`.
+
+Composed by Theorem 3.3a, this gives
+`Realizes (S_g.comp (CountSpec m a)) (basisPOVM n) (measuredComp Φ₁ (countPOVM n m a) Ψ)
+(ae_eps a m) (ae_delta + δ_g) (g₁ + g₂)`, where δ_g is the maximum of `groverDelta (r y) n M`
+over the y in the domain of `S_g`.
+
+**Q1 — Theorem 3.3a on a pseudo-metric.**
+- In the probe file, state `measured_composition` with `[PseudoMetricSpace Y]` and
+  `[PseudoMetricSpace Z]`, and prove it, reusing the existing proof where possible.
+- If a lemma it uses (`relax_comp`, `mixture_union_bound`, the relaxation) needs a metric, name
+  it.
+
+**Q2 — Stage 2 as a `GradedChannel`.**
+- Find the Physlib construction for a measure-and-prepare channel: measure the input in the
+  computational basis, then prepare a state σ_y. Name it (rule 2), or build Ψ from existing
+  pieces, such as `POVM.measureDiscard` followed by a classical-to-quantum map.
+- In the probe file, prove `Ψ.chan (encode y) = (groverChannel n (C (r y))).chan (encode ())`.
+  Here C r is the Grover circuit at r iterations: a family of circuits with their `= .ok` proofs
+  from `groverCircuit N n r`.
+- If nothing exists and building it would take more than about 300 lines, stop at the statement
+  and give the size.
+
+**Q3 — The numbers.** `probe_21b1.py` computes, for (n, M) = (8, 32) (`grover_pred_037`) and
+(6, 30) (`simple_alu_x0_1`), and for m = 4, 5, 6, 7:
+- ε_f = `ae_eps a m`;
+- the domain D: the outcomes y ∈ 0 … 2^m − 1 with |`countEst` − a| ≤ ε_f;
+- r(y) for y ∈ D, with `rStar` exactly as `CQRV.Synthesis.rStar` computes it (the Float
+  formula);
+- δ_g: the maximum of `groverDelta` (exact rational) over D and the ideal point;
+- the composite δ = `ae_delta` + δ_g, and whether it is below 1;
+- the margins: the least |est − a| − ε_f over y ∉ D, and the least ε_f − |est − a| over y ∈ D
+  (the precision a Lean proof of membership needs);
+- the composed grade of stage 1 at that m (from a `cqr certify --problem count` JSON, or from the
+  `counting-sample` of CertifyTool), and the grade of stage 2 (the maximum over y).
+
+The reviewer's arithmetic in the refinement is a guess to check, not a fact.
+
+**Q4 — The Lean cost of the domain.**
+- For the candidate instance, the δ_g bound needs a proof that y ∉ D for every y whose r(y) is not
+  the good r. Each is a strict real inequality between |sin²(π y/2^m) − a| and `ae_eps a m`.
+- Confirm by `#check` the Mathlib bounds on π and on sin (Taylor bounds).
+- In the probe file, prove the tightest exclusion inequality of the candidate instance. Give its
+  size and check time, and the number of such inequalities (y ↔ 2^m − y is a symmetry).
+
+**Q5 — Stage 1 at the candidate m.** Run `cqr certify examples/grover_pred_037.cqr --problem
+count --precision m --out <tmp>` once for the candidate m, without committing. Report the kernel
+time, the peak memory and the composed grade.
+
+**The recommendation for 21b2.** Either:
+- route (a) at a stated instance, with a size estimate and the list of new library pieces
+  (`measured_composition_pseudo`, the measure-and-prepare channel, the domain lemmas, the
+  composite theorem, a committed certificate or not); or
+- route (b), with the reasons.
+
+### 21b1 Docs / Acceptance / Stop
+
+Docs: a DECISIONS.md entry and `docs/PROJECT_STATUS.md`. README is unchanged.
+
+Acceptance:
+- Q1–Q5 answered, each with evidence (the probe file's check output, the script's table, the
+  certify run);
+- the recommendation;
+- `lake build` green and unchanged.
+
+No CI run is required: nothing CI checks changes. The commit holds only the three probe files and
+the two docs.
+
+Stop and ask in any of these cases:
+- a Lean process above 8 GB, or a kernel check above 10 minutes;
+- the probe would need a change to `CQRV/` or to a committed certificate;
+- a statement of mine is false; give the counterexample and the corrected form.
 
 ## Closing reply (each task)
 

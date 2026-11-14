@@ -1132,3 +1132,37 @@ M3 was reached with 21a4 (ceaf36f). The author approved each of the following de
 
 Order after M3: the M3 close task, then 21b1, 21b2, then Track B (Stage 22). §B.1 is written
 before Stage 22 starts.
+
+**21m done dbbfe71, accepted 2026-11-15** (CI 19 PASS, 0 FAIL, 4 n/a; step 22 687 s, step 23 154
+s).
+- The counting certificate's header now names `cqr certify --problem count`. Its `Cert.lean`
+  changed in that line only; `.qir` and `.qasm` are byte-identical.
+- `docs/M3_REPORT.md` (288 lines) has the eight sections of item (7). Every number names its
+  source, and the CI table is the acceptance run of 21m. The errata against report v3 are two
+  kernel times.
+
+From here on, the author has delegated the running of the process up to Stage 30 to the reviewer
+(2026-11-15). The reviewer's recommendations are taken as decisions, recorded as "reviewer
+decisions (delegated)". Downloads, accounts and credentials, anything published, and the final
+text of the papers still go to the author.
+
+**Refinement at the 21m review (2026-11-15), for 21b1.** The reviewer read the code for route (a).
+The probe checks these points; they are not established.
+- `measured_composition` assumes `[MetricSpace Y]`, but the counting output `CountOut m a` is only
+  pseudo-metric: an outcome and its reflection have the same estimate. Route (a) therefore needs
+  Theorem 3.3a on a pseudo-metric, as 20b1 did for 3.3b. The question is whether the existing
+  proof goes through unchanged.
+- `GradedChannel` carries a declared grade. So stage 2 can be a measure-and-prepare channel:
+  measure y, then prepare the output of Grover with r(y) iterations. Its grade is the maximum over
+  the branches.
+- Two of the three hypotheses are free:
+  - Non-expansiveness holds trivially for `S_g y z := |countEst m a y − a| ≤ ε ∧ P z`: take z = z'.
+  - Domain compatibility is `countSpec_relax`.
+- The cost is in δ_g. Bounding the stage-2 failure over the domain needs, for every outcome y
+  whose r(y) is not the good r, a proof that y lies outside the domain. Each such proof is a
+  strict real inequality on sin²(π y/2^m).
+- The reviewer's arithmetic, which the probe recomputes, for n = 8 and M = 32:
+  - At m = 4 the outcome y = 0 (estimate 0) lies in the domain with a bad r, so the composite is
+    vacuous.
+  - At m = 5 and m = 6 the domain seems to contain only outcomes with r(y) = 2, which would give
+    δ ≈ 1 − 8/π² + 7/128 ≈ 0.244.
