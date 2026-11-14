@@ -4,14 +4,15 @@ Implementation of *Applying Certified Quantum Realization: A Practical Implement
 (`docs/cqrv_report_revised_v3.docx`). The report is the specification; `docs/PLAN.md` is the
 stage-by-stage execution plan; `CLAUDE.md` holds the rules every Claude Code session follows.
 
-Status: **M2 reached; Stages 0–21a complete (Stage 21a: the Count entry, Proposition 5.1 proved for the matcher, the QPLP record, `cqr certify --problem count`, certified selection), sorry-free (local CI)**; Phase 2 started (coherent uncomputation mode `--uncompute coherent` for `synthesize` and `certify`, Stages 15a–15b; a fourth certificate `examples/certs/grover_pred_037_coh`; the front end proved and stated in every certificate, Stages 16a–16b; the IR and grade extension — exact phase gates `p` / `cp` in the IR and both emitters, the second resource record `GradeExt` stated in every certificate as `gradeExt_eq` and recorded as `grade_ext`, schema 1.9.0 — Stages 17a–17b; `docs/PHASE2_ROADMAP.md`). Two Grover certificates, `grover_pred_037` and the
+Status: **M3 reached (2026-11-15); Stage 21a complete (Stage 21a: the Count entry, Proposition 5.1 proved for the matcher, the QPLP record, `cqr certify --problem count`, certified selection), sorry-free (local CI)**; Phase 2 started (coherent uncomputation mode `--uncompute coherent` for `synthesize` and `certify`, Stages 15a–15b; a fourth certificate `examples/certs/grover_pred_037_coh`; the front end proved and stated in every certificate, Stages 16a–16b; the IR and grade extension — exact phase gates `p` / `cp` in the IR and both emitters, the second resource record `GradeExt` stated in every certificate as `gradeExt_eq` and recorded as `grade_ext`, schema 1.9.0 — Stages 17a–17b; `docs/PHASE2_ROADMAP.md`). Two Grover certificates, `grover_pred_037` and the
 RevLib benchmark cone `simple_alu_x0_1` (and the few-ancilla variant `grover_pred_037_few`), are
 `certified`: kernel-checked, axioms exactly `propext`, `Classical.choice`, `Quot.sound`, measured
 grades, exact δ, the front end proved (`toNetwork_pred`; `front_end` kernel-checked in every `Cert.lean`, Stage 16b), and since Stage 14a the solution count M is
 decided by the kernel for n ≤ 10 (`hM_count`; `--count-limit k`, default 10 since Stage 14c; larger n stay `certified
 (conditional on: solution_count = M)`) (`examples/certs/`, with run reports). Since Stage 21a4, `cqr certify --budget w,d,t,a --prefer width|depth|t|anc` picks, among the three certified candidates (tree + mbu, tree + coherent, few:log + mbu), the one with the least key that fits the budget, and the certificate's theorem `selected` is kernel-checked against the candidates' builders (`examples/certs/grover_pred_037_sel`, schema 1.11.0). Acceptance is
 the output of `scripts/ci_local.sh` (CI is not run remotely). Summary, open obligations, trust
-boundaries and the report errata: `docs/M2_REPORT.md`.
+boundaries and the report errata: `docs/M2_REPORT.md` (M2, frozen) and `docs/M3_REPORT.md` (M3: two
+certified patterns, Proposition 5.1, certified selection; measured numbers with their sources).
 Current state (Stages 0–21a, one page: machine-checked results, certificates, trust
 boundaries, open items): `docs/PROJECT_STATUS.md`.
 

@@ -65,7 +65,7 @@
   {"verification": "kernel-checked",
    "stage": "7. Certificate Gen",
    "resources":
-   "kernel 18.10 s, wall 28.80 s (single run); axioms: propext, Classical.choice, Quot.sound",
+   "kernel 18.60 s, wall 29.84 s (single run); axioms: propext, Classical.choice, Quot.sound",
    "output":
    "examples/certs/grover_pred_037_count/Cert.lean, certificate.json (theorems CQRV.Cert.grover_pred_037_count.cert, CQRV.Cert.grover_pred_037_count.cert_count)",
    "note":
