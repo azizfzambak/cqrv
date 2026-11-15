@@ -21,6 +21,7 @@ import CQRV.Circuit.Basic
 import CQRV.Circuit.MBUGeneral
 import CQRV.Circuit.MBUClifford
 import CQRV.Circuit.MBUBoundary
+import CQRV.Circuit.RestoreAlgebra
 import CQRV.Synthesis.Basic
 import CQRV.Certify.Basic
 import CQRV.Certify.Specialize
