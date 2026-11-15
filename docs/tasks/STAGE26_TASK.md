@@ -207,6 +207,22 @@ They are specified above, unchanged. Use 26b1's names: `channelDenote_relabel`, 
 - The precondition is main = the 26b1 review commit, on the same branch name `stage-26b` or a new
   `stage-26b2`; say which.
 
+### 26b3 — `applyWitness_sound` and the transfers (note added at the 26b2 review, 2026-11-16)
+
+26b2 stopped at its guard; 26b3 completes X3 and X4 of the 26b text. Precondition: main = the 26b2
+review commit; start with `git switch -c stage-26b3 main`.
+- **`krausOps_swap_migrate_ifBit`**, the conditioned form, and the composition of the
+  layout-tracked relabelings: `swapLay` against `swapPerm`, from the initial layout to the final
+  one.
+- **`applyWitness_sound`**, by the five steps of PHASE2_SPEC "26b2 done": for a well-formed C
+  with `ancCovered` and `applyWitness b C w N = .ok G`,
+  `channelDenote N 0 (physCircuit N G) (embed b σ₀ ρ) = embed b σ_f (channelDenote n a C ρ)`.
+- **The transfers.** `AncRestore.phys`, `realizes_phys`, and `gadgetPhys_correct`:
+  `mbu_channel_correct` transferred to the artifact's physical circuit through
+  `applyWitness_sound`, not through 26b1's hand placement.
+- **The guards.** The same guards: a single proof above about 500 lines (this is the one proof
+  allowed to approach it), or a missing hypothesis, means stop and report.
+
 ## 26c — Per-instance checks, the physical grade, the physical certificate (outline)
 
 - The kernel check of the reconstruction against the exported physical circuit, and of the

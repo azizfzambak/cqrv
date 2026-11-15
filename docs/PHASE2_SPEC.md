@@ -1958,3 +1958,38 @@ component, in the manner of §A.6.
     same bit included. This is stricter than needed, and so sound.
   - A SWAP inside an `if_test` block is three CNOTs under the condition, which is Clifford, so
     well-formedness survives.
+
+**26b2 done, accepted 2026-11-16** (CI below). It stopped at its guard, as allowed: X2 and the data
+of X3 are done, and `applyWitness_sound` with the transfers becomes 26b3.
+
+*X2, in `CQRV/Hardware/Reorder.lean`:*
+- a locality framework (`Supported`, `Local`, `Local.comm`; every IR gate matrix is local,
+  `hMat` included);
+- `gateK_comm_of_disjoint`;
+- `krausOps_reorder`: `validReorder`, the matcher's own acceptance condition, preserves the Kraus
+  operators in every branch. No condition was missing, and two reads of one bit count as
+  dependent (stricter, so sound);
+- `krausOps_swap_migrate`: a SWAP moves past gates relabeled by its transposition.
+
+*X3, the data, in `CQRV/Hardware/Witness.lean` (Physlib-free):*
+- `Witness`, `Witness.ofJson` with the compact remapping, and `applyWitness`, which makes every
+  check of the Python reconstruction explicit;
+- on the MBU gadget's artifact, `applyWitness .cz mbuCircuit w 3 = .ok gadgetPhys` by
+  evaluation, against the artifact's 102-gate physical circuit;
+- two tampered witnesses are refused.
+
+All have the standard three axioms.
+
+**26b3**, `applyWitness_sound` with the transfers, follows the implementer's plan:
+1. migrate the SWAPs to the end, at top level and under `ifBit` inside blocks, where Sabre's
+   restoration collapses them;
+2. undo the element order by `krausOps_reorder`, the independence being preserved by the layout's
+   injectivity;
+3. identify the rest as `physOf σ₀ (translateCircuit b C)`;
+4. apply `channelDenote_embed` and `translate_sound`;
+5. cancel the unit scalars.
+
+It needs two lemmas that are not yet written: the conditioned form of `krausOps_swap_migrate`,
+and the composition of the layout-tracked relabelings (`swapLay` against `swapPerm`). After it
+come `AncRestore.phys`, `realizes_phys`, and the transfer of `mbu_channel_correct` to
+`gadgetPhys`.
