@@ -103,6 +103,9 @@ jobs:
           .venv-hw/bin/python -m pip check
           PYTHON_HW=.venv-hw/bin/python scripts/check_hw_target.sh
 
+      - name: Hardware lowering (Stage 24b; hw/lower.py → Qiskit dynamic circuit, Aer branch by branch = statevector harness on the gadgets, the n ≤ 6 oracles and Grover circuits, the counting circuit)
+        run: PYTHON_HW=.venv-hw/bin/python scripts/check_hw_lower.sh
+
   candidate:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
