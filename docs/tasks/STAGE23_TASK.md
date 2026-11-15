@@ -5,7 +5,7 @@ Written at the 22c review (2026-11-15) by the reviewer, under the author's deleg
 
 Stage 23 has three tasks, one commit each:
 - **23a**, composition laws for clean restoration, is specified here;
-- **23b**, the three regimes, is outlined here and gets its detailed text at the 23a review;
+- **23b**, the three regimes, is specified below (written at the 23a review);
 - **23c**, the 8n − 24 theorem, is outlined in §B.2 and gets its detailed text at the 23b review.
 
 Precondition: main = the 22c review commit. Start with `git switch -c stage-23a main`.
@@ -102,15 +102,92 @@ Stop and ask in any of these cases:
 
 ---
 
-## 23b — The three regimes (outline; detailed at the 23a review)
+## 23b — The three regimes (written at the 23a review, 2026-11-15)
 
-PHASE2_SPEC §B.2.
-- **Dirty.** `AncRestoreDirty`; dirty ⇒ clean; sequential composition; a dirty instance (a phase
-  gadget that uses a dirty ancilla twice so that its value cancels, for example CNOT(x0 → d);
-  CZ(d, x1); CNOT(x0 → d); CZ(d, x1) gives the phase (−1)^{x0 x1} for every d).
-- **Conditionally clean**, defined after Khattar–Gidney §2 against the invariant in
-  `MczFewAll.lean`.
-- **Commutation of blocks on disjoint qubits.**
+PHASE2_SPEC §B.2, the "23a done" paragraph and its refinement. Precondition: main = the 23a review
+commit. Start with `git switch -c stage-23b main`. New module `CQRV/Circuit/RestoreRegimes.lean`
+(Physlib-side), importing `RestoreAlgebra`. The invariants of Stage 23 hold.
+
+### P1. Dirty restoration
+
+- **`AncRestoreDirty n a C U`.** `∀ ρ σ, channelDenote n a C (ρ ⊗ᴹ σ) = (U ◃ ρ) ⊗ᴹ σ`.
+- **`ancRestoreDirty_of_kraus`.** If every Kraus operator is l c • (U.val ⊗ₖ 1) on the whole
+  space, then the circuit is dirty restoring. Reuse the proof of `ancRestoreMix_of_kraus` with the
+  projector replaced by 1. A measurement-free circuit whose `unitaryDenote` is U ⊗ 1 is the
+  common case.
+- **Laws:**
+  - `AncRestoreDirty.toClean` (σ := ancZero a);
+  - `AncRestoreDirty.comp` (sequential composition);
+  - `AncRestoreDirty.widen`, if it follows cheaply from 23a's machinery.
+- **The instance.** A dirty phase gadget on n = 2, a = 1:
+  `[.cnot (.data 0) (.anc 0), .cz (.anc 0) (.data 1), .cnot (.data 0) (.anc 0), .cz (.anc 0)
+  (.data 1)]` is `AncRestoreDirty 2 1 _ czU`. The phase is (−1)^{(d ⊕ x0) x1 ⊕ d x1} =
+  (−1)^{x0 x1} for every ancilla value d. This is the phase form of "toggle detection": the dirty
+  ancilla is used twice, so its value cancels.
+- **`reset_not_dirty`.** A circuit that ends with `measure t j; ifBit j (.x t)` on an ancilla t,
+  with a ≥ 1, is not dirty restoring for any U, because its output ancilla t is |0⟩ in every
+  branch. Corollary: `mbuCircuit` is not dirty restoring. This is the theorem behind the report's
+  "dirty ancillas cannot use MBU" (§6.2.3).
+
+### P2. Conditionally clean restoration
+
+- **`condSubspace cond`.** The projector onto V_cond = span{|x, w⟩ : cond x = true → w = 0}, a
+  diagonal 0/1 matrix on `Reg n × Reg a`.
+- **`AncRestoreCond n a C U cond`.** For every state ω on `Reg n × Reg a` with
+  `condSubspace cond * ω.m * condSubspace cond = ω.m`, the channel acts as
+  `(channelDenote n a C ω).m = (U.val ⊗ₖ 1) * ω.m * (U.val ⊗ₖ 1)ᴴ`.
+- **The hierarchy:**
+  - `AncRestoreDirty.toCond`: dirty is conditionally clean for every cond. Prove that dirty
+    restoration holds on every state, because product states span, or prove it directly through
+    Kraus.
+  - `AncRestoreCond.toClean`: at cond ≡ true, V is the clean subspace, which gives
+    `AncRestore n a C U`.
+  - Each implication is strict, shown by the instances below.
+- **`AncRestoreCond.comp`.** If C₁ is conditionally clean with U₁ under cond, C₂ with U₂ under
+  cond', and U₁ ⊗ 1 maps V_cond into V_cond' (true for instance when U₁ is diagonal and
+  cond' = cond), then the composite is conditionally clean with U₂ U₁ under cond.
+- **Instances:**
+  - `[.cz (.data 0) (.anc 0)]` is conditionally clean with U = 1 under cond = x0. It is not dirty
+    restoring (on x0 = 1, w = 1 it gives −1), and it is clean.
+  - The KG bridge: a lemma that restates `Inv.cond` of `MczFewAll.lean` as "the value of a marked
+    t > 0 is fixed by the indices below it" at the level of basis values, so that Paper 2 can cite
+    the code's invariant in the regime's terms. If this costs more than about 150 lines, write it
+    as a documented remark instead.
+
+### P3. Commutation on disjoint qubits (optional)
+
+`channelDenote_append_comm`: two well-formed circuits acting on disjoint sets of qubits, with
+disjoint classical bits after the shift of `append`, have commuting channels. If this needs more
+than about 300 lines (a split of `Reg n` like 23a's split of the ancillas), skip it and say so in
+(e); it then moves to Stage 23c or the M4 review.
+
+### P4. Tests (`tests/CQRVTests/RestoreRegimes.lean`)
+
+- `#guard_msgs` on the axioms of `ancRestoreDirty_of_kraus`, `AncRestoreDirty.toClean`,
+  `AncRestoreDirty.comp`, `reset_not_dirty`, `AncRestoreDirty.toCond`, `AncRestoreCond.toClean`
+  and `AncRestoreCond.comp`;
+- the dirty gadget is dirty restoring;
+- `mbuCircuit` is not dirty restoring;
+- the conditionally clean instance, with both strictness facts.
+
+### 23b Docs / Acceptance / Stop
+
+Docs:
+- a DECISIONS.md entry;
+- `docs/PROJECT_STATUS.md`;
+- README's status line.
+
+Acceptance:
+- `lake build` green and warning-free;
+- CI 19 PASS, 0 FAIL, 4 n/a;
+- the axioms as in P4.
+
+Stop and ask in any of these cases:
+- the definition of `AncRestoreCond` does not support `toClean` and `comp` as stated (propose the
+  one that does);
+- a statement of mine is false;
+- a single proof above about 400 lines, or the module above about 1 000;
+- a Lean process above 8 GB.
 
 ## Closing reply (each task)
 

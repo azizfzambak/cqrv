@@ -1449,3 +1449,35 @@ the 23b review.
 **Gate.** The three regimes with their composition laws, and the M4 milestone: a draft of Paper 2,
 written after 23c as `docs/notes/PAPER2_DRAFT.md` (the reviewer's draft; the author owns the
 final text).
+
+**23a done, accepted 2026-11-15** (CI below). `CQRV/Circuit/RestoreAlgebra.lean` (593 lines)
+proves:
+- `ancRestore_list`, local restoration implies global restoration for any list of blocks;
+- `ancRestoreMix_of_kraus`, restoration under measurement with a mixed data action, in matrix
+  form (Physlib has no mixture API on `MState`);
+- `sum_norm_sq_eq_one_of_kraus`;
+- `mbu_uncorrected` and `mbu_uncorrected_phase`: MBU without its correction restores the
+  ancilla and dephases the data in the basis of f, ½ ρ + ½ O_f ρ O_f;
+- `AncRestore.widen` and `AncRestore.comp_widen`: ancilla reuse, through
+  `Reg (a + b) ≃ Reg a × Reg b`, transporting the channel equality directly.
+
+All have the standard three axioms. The weight hypothesis ∑ ‖l_c‖² = 1 of the Stage 6b-1
+`ancRestore_of_kraus` turns out to be redundant: it follows from Kraus completeness. The
+hypothesis-free form is `ancRestore_of_kraus'`, and the old statement stays.
+
+**Refinement at the 23a review (2026-11-15), for 23b.** The meaning of "conditionally clean" is
+fixed here.
+- **What the code has.** The invariant of `MczFewAll.lean` (Stage 13a, KG §5.1) is a statement
+  about computational-basis values in an array model. A marked index t > 0 holding 0 is
+  "conditionally clean": its value is determined by the controls below it. It is an internal
+  invariant of the MCZ proof, whose block is cleanly restoring as a whole (`AncRestore`).
+- **Conditionally clean as a regime of restoration** (report Table 4, "conditional factorization
+  under a branch condition"). For a condition cond : Reg n → Bool, the conditionally clean
+  subspace V_cond is spanned by the |x, w⟩ with cond x → w = 0. A block is conditionally clean
+  restoring with U when it acts as Ad(U ⊗ 1) on every state supported on V_cond.
+- **The hierarchy.** Dirty restoration is Ad(U ⊗ 1) on every product state, hence on every state.
+  It implies conditionally clean restoration for every cond, which implies clean restoration
+  (cond ≡ true gives V = {w = 0}).
+- **The KG invariant enters as documentation and one bridge lemma**, not as the definition: in the
+  array model, `Inv.cond` says that a marked t > 0 has a value fixed by a condition on the indices
+  below it.
