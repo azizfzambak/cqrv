@@ -1328,3 +1328,38 @@ but in this IR "MBU is costly beyond degree 2" reads "MBU is not expressible bey
   λ · (phaseDiag f ⊗ 1), has f quadratic. Hence a well-formed `mbuUncompute t j O` with
   `PhaseImpl n a O f` forces `IsQuadratic f`, and in this IR `mbu_general` applies exactly to the
   quadratic f. This needs the conjugation of Paulis by each IR Clifford gate.
+
+**22b done, accepted 2026-11-15** (CI below). `CQRV/Circuit/MBUClifford.lean` (540 lines;
+𝔽₂ = `ZMod 2`) proves:
+- `isQuadratic_iff_deriv_affine`. Its (⇐) half reconstructs the coefficients and goes by
+  induction over indicator vectors; the task's statement needed no change.
+- `phaseCircuitQuad_phaseImpl`: Z and CZ gates, λ = (−1)^c.
+- `mbu_quadratic`: every quadratic f with a compute block has a restoring MBU circuit.
+- `conj_pauliX_phaseDiag`, `phaseDiag_eq_smul_pauliZ_iff` and `clifford_iff_quadratic`.
+
+All have the standard three axioms. The tests show by `decide` that x0 ∧ x1 ∧ x2 is not quadratic,
+and prove `¬ IsCliffordDiag (phaseDiag (x0 ∧ x1 ∧ x2))`: the CCZ matrix is not Clifford, as a
+theorem. `mbu_quadratic` applied to `mbuCircuit` gives the statement of `mbu_channel_correct` a
+third time.
+
+**Refinement at the 22b review (2026-11-15), for 22c.** The Clifford notion of 22b is the
+diagonal one. 22c needs the general notion on the IR's register `Reg n × Reg a`, and the
+restriction from it to the diagonal notion on `Reg n`. The plan is the implementer's (22b (e)):
+- **A Pauli** on `Reg n × Reg a` is λ · monoMat (flip the qubits in S) (s ↦ (−1)^{parity of the
+  qubits in T at s}), with ‖λ‖ = 1.
+- **A unitary is Clifford** when it conjugates every single-qubit X and Z to a Pauli. Closure
+  under products goes through "every Pauli is a product of single-qubit ones".
+- **Every IR Clifford gate is Clifford:**
+  - X, Z, S, Sdg, CNOT and CZ, and `p` / `cp` under the divisibility of `Gate.isClifford`, are
+    monomial, so the conjugation is a computation;
+  - H is the one non-monomial case, through H X H = Z.
+- **The restriction.** If λ · (D ⊗ 1) is Clifford on n + a qubits and D is a diagonal sign
+  matrix, then `IsCliffordDiag D`.
+- **`mbu_wf_forces_quadratic`.** A well-formed circuit containing `mbuUncompute t j O` with
+  `PhaseImpl n a O f` has f quadratic. This holds because `Circuit.bitsOkFrom` demands
+  `isClifford` under `ifBit`.
+- **`mbu_exactly_quadratic`.** For a compute block B for f: a well-formed MBU circuit
+  B ++ [Z t] ++ mbuUncompute t j O with `PhaseImpl n a O f` exists iff f is quadratic.
+  - (⇐) uses `phaseCircuitQuad`, whose gates are Clifford, with its well-formedness.
+
+  This is the sentence Paper 2 states: in this IR, MBU applies exactly to the quadratic f.

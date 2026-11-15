@@ -6,7 +6,7 @@ the 21b2 review (2026-11-15) by the reviewer, under the author's delegation.
 Stage 22 has three tasks, one commit each:
 - **22a**, `mbu_general`, is specified here;
 - **22b**, the Clifford corollary (the mathematics), is specified below (written at the 22a review);
-- **22c**, the IR boundary, is outlined below and gets its detailed text at the 22b review.
+- **22c**, the IR boundary, is specified below (written at the 22b review).
 
 Precondition: main = the 21b2 review commit. Start with `git switch -c stage-22a main`.
 Untracked and not yours: `docs/paper/`, `docs/cqrv_report_revised_v4.docx`. Windows:
@@ -189,17 +189,83 @@ Stop and ask in any of these cases:
 - the induction of L1 (⇐) needs a different statement;
 - a Lean process above 8 GB.
 
-## 22c — The IR boundary (outline; detailed at the 22b review)
+## 22c — The IR boundary (written at the 22b review, 2026-11-15)
 
-PHASE2_SPEC §B.1, the refinement at the 22a review.
-- Pauli conjugation by each IR Clifford gate on `Reg n × Reg a`: H, S, Sdg, X, Z, CNOT, CZ, and
-  `p` with 2^k ∣ 4a.
-- Products of Clifford gates are Clifford.
-- A data-only unitary λ · (phaseDiag f ⊗ 1) that is Clifford on n + a qubits makes
-  `phaseDiag f` `IsCliffordDiag` on n.
-- The theorem `mbu_wf_forces_quadratic`: if C.WF, C.gates contains `mbuUncompute t j O`, and
-  `PhaseImpl n a O f`, then `IsQuadratic f`.
-- Together with 22b: in this IR, `mbu_general` applies exactly to the quadratic f.
+PHASE2_SPEC §B.1, the "22b done" paragraph and the refinement for 22c. Precondition: main = the
+22b review commit. Start with `git switch -c stage-22c main`.
+
+New module `CQRV/Circuit/MBUBoundary.lean` (Physlib-side), importing `MBUClifford`. The
+invariants of Stage 22 hold. In particular, `Circuit.WF`, `Gate.isClifford` and every existing
+statement are unchanged.
+
+### M1. Paulis and Clifford unitaries on `Reg n × Reg a`
+
+- **`pauliMono`.** `pauliMono S T λ : Matrix (Reg n × Reg a) (Reg n × Reg a) ℂ` is λ •
+  monoMat (flip every qubit of S) (s ↦ (−1)^{#{q ∈ T : q.get s}}). Here S and T are finite sets
+  (or lists) of in-range qubits; choose the representation.
+- **`IsPauli P`.** There are S, T and λ with ‖λ‖ = 1 and P = `pauliMono S T λ`.
+- **Basic lemmas:**
+  - the single-qubit X and Z of an in-range qubit are Paulis;
+  - Paulis are closed under products and under conjugate transpose.
+- **`IsClifford U`.** For every in-range qubit q, U · X_q · Uᴴ and U · Z_q · Uᴴ are Paulis.
+- **`IsClifford.conj_pauli`.** A Clifford unitary conjugates every Pauli to a Pauli. It goes by
+  the decomposition of `pauliMono` into single-qubit factors.
+- **`IsClifford.mul`.** Products of Clifford unitaries are Clifford.
+
+### M2. The IR Clifford gates are Clifford
+
+- **`gateU_isClifford`.** For every gate g with `g.isClifford = true` whose qubits are in range
+  (`Gate.qubitsOk`), `IsClifford (gateU n a g)` holds.
+  - X, Z, S, Sdg, CNOT and CZ, and `p` / `cp` under the divisibility of `Gate.isClifford`, are
+    computations on monomial matrices, through `monoMat_mul` and `star_monoMat`.
+  - H goes through H X H = Z and H Z H = X on its qubit, with the other qubits untouched.
+- **`unitaryDenote_isClifford`.** A list of such gates has a Clifford `unitaryDenote`.
+
+### M3. The restriction and the boundary
+
+- **`isCliffordDiag_of_tensor`.** If D is a diagonal sign matrix on `Reg n` and λ • (D ⊗ₖ 1) is
+  Clifford on `Reg n × Reg a`, then `IsCliffordDiag D`.
+  - Conjugating X_{data i} gives (D X_i Dᴴ) ⊗ 1.
+  - Read off the Pauli form: S and T contain no ancilla qubit, because the factor is 1 there.
+- **`mbu_wf_forces_quadratic`.** If C.WF, C.gates = B ++ mbuUncompute t j O (or with [.z t]
+  before the uncompute), and `PhaseImpl n a O f`, then `IsQuadratic f`.
+  - `C.WF` → `bitsOk` → every g ∈ O has `g.isClifford`.
+  - M2 → `unitaryDenote n a O` is Clifford, hence λ • (phaseDiag f ⊗ 1) is Clifford.
+  - `isCliffordDiag_of_tensor` and `clifford_iff_quadratic` finish.
+- **`mbu_exactly_quadratic`.** Fix a compute block B for f, an in-range ancilla t and a bit j.
+  "There are O and a well-formed C with gates B ++ [.z t] ++ mbuUncompute t j O and
+  `PhaseImpl n a O f`" holds iff `IsQuadratic f`.
+  - (⇒) is `mbu_wf_forces_quadratic`.
+  - (⇐) takes O = `phaseCircuitQuad`. The well-formedness of the constructed circuit needs B's
+    own well-formedness (its qubits in range, no measurement) as a hypothesis; state what is
+    needed.
+
+### M4. Tests (`tests/CQRVTests/MBUBoundary.lean`)
+
+- `#guard_msgs` on the axioms of `gateU_isClifford`, `isCliffordDiag_of_tensor`,
+  `mbu_wf_forces_quadratic` and `mbu_exactly_quadratic`;
+- H, S and CNOT are Clifford at a small register, as examples;
+- `mbu_wf_forces_quadratic` applied to `mbuCircuit` gives `IsQuadratic (x0 ∧ x1)`.
+
+### 22c Docs / Acceptance / Stop
+
+Docs:
+- a DECISIONS.md entry;
+- `docs/PROJECT_STATUS.md`;
+- README's status line.
+
+Acceptance:
+- `lake build` green and warning-free;
+- CI 19 PASS, 0 FAIL, 4 n/a;
+- the axioms as in M4.
+
+Stop and ask in any of these cases:
+- a single proof above about 400 lines, or the module above about 1 000 lines (then propose a
+  split);
+- `IsClifford` as defined does not make `IsClifford.mul` provable (propose the definition that
+  does);
+- a statement of mine is false;
+- a Lean process above 8 GB.
 
 ## Closing reply (each task)
 
