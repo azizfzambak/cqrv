@@ -7,9 +7,9 @@
 # setup-python: the local toolchain and the .venv are used; apt install of llvm: only when
 # llvm-as is on PATH, otherwise the QIR check runs with llvmlite only). M2 acceptance is judged on
 # this output. Keep the step list in sync with ci.yml.
-# Pass mark since Stage 24b (the step "Hardware lowering"): 21 PASS, 0 FAIL, 4 n/a (20 PASS since
-# Stage 24a, 19 since 21a4, 18 since 19b, 17 since 18b, 16 before). The two hardware steps run with
-# .venv-hw (hw/README.md) and are n/a when that venv is absent.
+# Pass mark since Stage 25a (the step "Hardware transpile"): 22 PASS, 0 FAIL, 4 n/a (21 PASS since
+# Stage 24b, 20 since 24a, 19 since 21a4, 18 since 19b, 17 since 18b, 16 before). The three hardware
+# steps run with .venv-hw (hw/README.md) and are n/a when that venv is absent.
 #
 # Usage (from anywhere):  scripts/ci_local.sh
 #   PYTHON=<python> scripts/ci_local.sh   # default: .venv/Scripts/python.exe or .venv/bin/python
@@ -85,9 +85,11 @@ step "Certified selection (Stage 21a4)" scripts/check_select.sh
 if [ -x .venv-hw/Scripts/python.exe ] || [ -x .venv-hw/bin/python ]; then
   step "Hardware target (Stage 24a)" scripts/check_hw_target.sh
   step "Hardware lowering (Stage 24b)" scripts/check_hw_lower.sh
+  step "Hardware transpile (Stage 25a)" scripts/check_hw_transpile.sh
 else
   skip "Hardware target (Stage 24a)" "no .venv-hw (hw/README.md)"
   skip "Hardware lowering (Stage 24b)" "no .venv-hw (hw/README.md)"
+  skip "Hardware transpile (Stage 25a)" "no .venv-hw (hw/README.md)"
 fi
 
 echo "ci_local: $pass PASS, $fail FAIL, $na n/a (logs: .lake/ci_local/)"

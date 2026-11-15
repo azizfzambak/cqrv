@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CQRV hardware transpile witness, schema v1.0.0",
+  "description": "PHASE2_SPEC §C.2 (Stage 25a, Track C); report §5.3. The witness of a layout-and-routing run of hw/transpile.py on the basis-translated circuit of hw/decomp.py: the initial and final layouts (logical → physical), the order in which the physical circuit executes the translated elements (plain basis gates, or one block per conditioned IR gate) with every routing swap at its position and physical edge — at the top level in `order`, inside each block in `blocks` — the table entries used, the classical-bit map, the seed and the tool versions. `reconstruct(translated, witness)` of hw/transpile.py rebuilds the physical circuit from the translated gates and this file alone; tests/diff/hw_transpile_check.py checks the equality gate for gate, the coupling edges and the layout restoration of every block. Stage 26 checks the witness in Lean. The transpiler is untrusted; nothing here is certified.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "basis", "target", "n_logical", "initial_layout", "final_layout", "order", "blocks",
+               "swaps", "entries_used", "clbit_map", "seed", "versions"],
+  "$defs": {
+    "nat": {"type": "integer", "minimum": 0},
+    "layout": {"description": "physical qubit of each logical qubit, indexed by the logical qubit", "type": "array", "items": {"$ref": "#/$defs/nat"}},
+    "edge": {"type": "array", "items": {"$ref": "#/$defs/nat"}, "minItems": 2, "maxItems": 2},
+    "topEntry": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["e"], "properties": {"e": {"description": "index of the translated element executed here", "$ref": "#/$defs/nat"}}},
+        {"type": "object", "additionalProperties": false, "required": ["swap"], "properties": {"swap": {"description": "a routing swap on this physical edge, before the next element", "$ref": "#/$defs/edge"}}}
+      ]
+    },
+    "blockEntry": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["g"], "properties": {"g": {"description": "index of the translated basis gate (a member of the block) executed here", "$ref": "#/$defs/nat"}}},
+        {"type": "object", "additionalProperties": false, "required": ["swap"], "properties": {"swap": {"$ref": "#/$defs/edge"}}}
+      ]
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "basis": {"enum": ["cz", "cx"]},
+    "target": {"type": "string", "minLength": 1},
+    "n_logical": {"type": "integer", "minimum": 1},
+    "initial_layout": {"$ref": "#/$defs/layout"},
+    "final_layout": {"$ref": "#/$defs/layout"},
+    "order": {"type": "array", "items": {"$ref": "#/$defs/topEntry"}},
+    "blocks": {
+      "description": "for each block element (key: its element index as a string) the body in execution order, with the swaps inside the block",
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {"^(0|[1-9][0-9]*)$": {"type": "array", "items": {"$ref": "#/$defs/blockEntry"}}}
+    },
+    "swaps": {"description": "the number of routing swaps, top level and inside blocks", "$ref": "#/$defs/nat"},
+    "entries_used": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "clbit_map": {"description": "physical clbit of each IR classical bit (the identity in Stage 25a)", "type": "array", "items": {"$ref": "#/$defs/nat"}},
+    "seed": {"$ref": "#/$defs/nat"},
+    "versions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qiskit", "qiskit_aer", "qiskit_ibm_runtime", "transpile_py", "passes"],
+      "properties": {
+        "qiskit": {"type": "string", "minLength": 1}, "qiskit_aer": {"type": "string", "minLength": 1},
+        "qiskit_ibm_runtime": {"type": "string", "minLength": 1}, "transpile_py": {"type": "string", "minLength": 1},
+        "passes": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

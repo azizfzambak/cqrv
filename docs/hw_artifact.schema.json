@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CQRV physical artifact manifest, schema v1.0.0",
+  "description": "PHASE2_SPEC §C.2 \"The physical artifact\" (Stage 25a, Track C); report §5.3. The hash-linked manifest written by hw/artifact.py next to witness.json and physical.qasm: the SHA3-256 hashes of the committed certificate JSON (when the instance comes from one), of the canonical logical circuit JSON (the form Lean hashes as circuit_hash), of the target's calibration snapshot, of the witness and of the physical circuit's OpenQASM 3 text; the versions and the seed chosen, every seed tried with its figure, the layouts, the physical counts and the bound on the physical circuit δ_hw ≤ δ + Σ_ops rate as exact fractions, with vacuity (≥ 1) and the use of an error-1.0 edge marked. Reported, not certified (Stage 27): the transpiler is untrusted, the witness is checked.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "instance", "source", "synthesize_flags", "uncompute", "grover", "target", "target_class",
+               "basis", "n_logical", "device_width", "seed", "seeds_tried", "versions", "hashes", "layout", "counts", "bound", "status"],
+  "$defs": {
+    "nat": {"type": "integer", "minimum": 0},
+    "sha3": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "fraction": {"description": "an exact non-negative rational as num/den or an integer", "type": "string", "pattern": "^(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"},
+    "edge": {"type": "array", "items": {"$ref": "#/$defs/nat"}, "minItems": 2, "maxItems": 2}
+  },
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "instance": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]+$"},
+    "source": {"description": "the DSL example, or null for a gadget", "oneOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+    "synthesize_flags": {"type": "array", "items": {"type": "string"}},
+    "uncompute": {"enum": ["mbu", "coherent"]},
+    "grover": {
+      "description": "the Grover parameters δ is computed from, or null for a gadget",
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["n", "r", "M", "shape"],
+         "properties": {"n": {"type": "integer", "minimum": 1}, "r": {"$ref": "#/$defs/nat"}, "M": {"type": "integer", "minimum": 1}, "shape": {"type": "string"}}},
+        {"type": "null"}
+      ]
+    },
+    "target": {"type": "string", "minLength": 1},
+    "target_class": {"type": "string", "minLength": 1},
+    "basis": {"enum": ["cz", "cx"]},
+    "n_logical": {"type": "integer", "minimum": 1},
+    "device_width": {"type": "integer", "minimum": 1},
+    "seed": {"$ref": "#/$defs/nat"},
+    "seeds_tried": {
+      "type": "array", "minItems": 1,
+      "items": {"type": "object", "additionalProperties": false,
+                "required": ["seed", "bound", "bound_float", "vacuous", "uses_error_1_edge", "swaps", "used_qubits", "two_qubit"],
+                "properties": {"seed": {"$ref": "#/$defs/nat"}, "bound": {"$ref": "#/$defs/fraction"}, "bound_float": {"type": "number"},
+                               "vacuous": {"type": "boolean"}, "uses_error_1_edge": {"type": "boolean"}, "swaps": {"$ref": "#/$defs/nat"},
+                               "used_qubits": {"$ref": "#/$defs/nat"}, "two_qubit": {"$ref": "#/$defs/nat"}}}
+    },
+    "versions": {"type": "object", "additionalProperties": {"type": "string"}, "required": ["qiskit", "qiskit_aer", "qiskit_ibm_runtime"]},
+    "hashes": {
+      "type": "object", "additionalProperties": false,
+      "required": ["certificate_json", "certificate_dir", "logical_circuit", "target_snapshot", "witness", "physical_qasm3"],
+      "properties": {
+        "certificate_json": {"oneOf": [{"$ref": "#/$defs/sha3"}, {"type": "null"}]},
+        "certificate_dir": {"oneOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+        "logical_circuit": {"$ref": "#/$defs/sha3"},
+        "target_snapshot": {"$ref": "#/$defs/sha3"},
+        "witness": {"$ref": "#/$defs/sha3"},
+        "physical_qasm3": {"$ref": "#/$defs/sha3"}
+      }
+    },
+    "layout": {
+      "type": "object", "additionalProperties": false, "required": ["initial", "final", "data_physical", "used_qubits", "swaps"],
+      "properties": {"initial": {"type": "array", "items": {"$ref": "#/$defs/nat"}}, "final": {"type": "array", "items": {"$ref": "#/$defs/nat"}},
+                     "data_physical": {"type": "array", "items": {"$ref": "#/$defs/nat"}}, "used_qubits": {"type": "array", "items": {"$ref": "#/$defs/nat"}},
+                     "swaps": {"$ref": "#/$defs/nat"}}
+    },
+    "counts": {
+      "type": "object", "additionalProperties": false, "required": ["logical_gates", "translated_basis_gates", "physical"],
+      "properties": {"logical_gates": {"$ref": "#/$defs/nat"}, "translated_basis_gates": {"$ref": "#/$defs/nat"},
+                     "physical": {"type": "object", "additionalProperties": {"$ref": "#/$defs/nat"},
+                                  "required": ["rz", "sx", "x", "measure", "data_readout"]}}
+    },
+    "bound": {
+      "type": "object", "additionalProperties": false,
+      "required": ["delta", "sum", "bound", "bound_float", "vacuous", "uses_error_1_edge", "error_1_edges", "terms", "mid_circuit_assumption"],
+      "properties": {"delta": {"$ref": "#/$defs/fraction"}, "sum": {"$ref": "#/$defs/fraction"}, "bound": {"$ref": "#/$defs/fraction"},
+                     "bound_float": {"type": "number"}, "vacuous": {"type": "boolean"}, "uses_error_1_edge": {"type": "boolean"},
+                     "error_1_edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}},
+                     "terms": {"type": "object", "additionalProperties": {"$ref": "#/$defs/fraction"}},
+                     "mid_circuit_assumption": {"type": "string", "minLength": 1}}
+    },
+    "status": {"type": "string", "pattern": "reported, not certified"}
+  }
+}

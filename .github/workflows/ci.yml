@@ -106,6 +106,9 @@ jobs:
       - name: Hardware lowering (Stage 24b; hw/lower.py → Qiskit dynamic circuit, Aer branch by branch = statevector harness on the gadgets, the n ≤ 6 oracles and Grover circuits, the counting circuit)
         run: PYTHON_HW=.venv-hw/bin/python scripts/check_hw_lower.sh
 
+      - name: Hardware transpile (Stage 25a; our table translation + SabreLayout with a witness; the committed artifacts reproduced byte for byte, reconstruction, coupling edges, hashes, bound from the QASM, ideal equivalence)
+        run: PYTHON_HW=.venv-hw/bin/python scripts/check_hw_transpile.sh
+
   candidate:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
