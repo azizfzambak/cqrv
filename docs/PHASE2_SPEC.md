@@ -1363,3 +1363,89 @@ restriction from it to the diagonal notion on `Reg n`. The plan is the implement
   - (⇐) uses `phaseCircuitQuad`, whose gates are Clifford, with its well-formedness.
 
   This is the sentence Paper 2 states: in this IR, MBU applies exactly to the quadratic f.
+
+**22c done, accepted 2026-11-15** (CI below). `CQRV/Circuit/MBUBoundary.lean` (801 lines) builds a
+Pauli and Clifford layer on the IR's register `Reg n × Reg a`, in the symplectic representation:
+- `pauliMono S T λ` = λ X^S Z^T, where S and T are bit vectors of the register, with the exact
+  product rule;
+- `IsPauli`, closed under products and adjoints;
+- `IsClifford U := ∀ P, IsPauli P → IsPauli (U P Uᴴ)`. This is the standard definition; the
+  generator form of the task text is its corollary. Closure under products is one line.
+
+`gateU_isClifford` holds for every IR Clifford gate, with no range hypothesis (H through
+H = (Z + X)/√2). From there:
+- `isCliffordDiag_of_tensor`;
+- `mbu_wf_forces_quadratic`;
+- `mbu_exactly_quadratic`.
+
+All have the standard three axioms.
+
+**One statement of the task text was false and is corrected.** "Fix a bit j" fails for j ≥ 1. A
+well-formed circuit B ++ [Z t] ++ mbuUncompute t j O has exactly one classical bit, so j = 0. The
+counterexample is j = 1 with f = x0 ∧ x1 and B the temporary AND: no well-formed circuit of that
+shape exists, so the (⇐) direction fails.
+
+The corrected `mbu_exactly_quadratic` makes j existential. It needs only B's well-formedness
+(qubits in range, unitary gates), not that B computes f:
+(∃ j O C, C.nData = n ∧ C.WF ∧ C.gates = B ++ [.z t] ++ mbuUncompute t j O ∧ PhaseImpl n a O f)
+↔ IsQuadratic f.
+
+**Stage 22 is complete.** Paper 2 may state that in this IR, measurement-based uncomputation
+applies exactly to the quadratic f. The cubic case (CCZ) is excluded by `Circuit.WF`, not by
+cost.
+
+### B.2 The restoration algebra (Stage 23)
+
+Written at the 22c review (2026-11-15) by the reviewer, under the author's delegation. Report:
+§6.2.1, §6.2.3 (the three regimes, Table 4), §6.2.4, §6.3.2. PHASE2_ROADMAP row 23; review R1.7
+(the 8n − 24 argument). Stage 22's conventions continue: the symplectic representation, 𝔽₂ =
+`ZMod 2`, and statements on `channelDenote` through Kraus operators.
+
+**What exists.**
+- `AncRestore n a C U`: clean restoration on density operators.
+- `AncRestore.comp`: sequential composition through `Circuit.append`.
+- `ancRestore_of_kraus`: every branch acts as a scalar times U ⊗ |0⟩⟨0| on the clean-ancilla
+  subspace.
+- `ancRestore_foldl`: the iteration in `Grover/Restore.lean`.
+- Stage 22: `mbu_general`, and the IR boundary.
+
+**What Stage 23 adds.** Three tasks.
+
+*23a — composition laws for clean restoration.*
+- **Block lists.** Local restoration implies global restoration for any list of blocks, not only
+  for an iterate.
+- **Restoration under measurement with a mixed data action** (`AncRestoreMix`). If branch c of a
+  circuit acts on the clean-ancilla subspace as l_c · (U_c ⊗ |0⟩⟨0|), then the ancillas are
+  restored and the data undergoes the mixture ρ ↦ ∑_c |l_c|² U_c ρ U_cᴴ. Clean restoration is
+  the case where all the U_c are equal. The example is MBU without its correction: the ancilla
+  is restored, but the data is dephased in the basis of f, with U_0 = 1, U_1 = O_f and weights
+  1/2. This is the precise sense of "restoration under measurement".
+- **Widening, or ancilla reuse.** A block certified on a ancillas, touching only those, is
+  certified on a + b ancillas with the same unitary. So blocks certified with different ancilla
+  counts compose on the larger register.
+
+*23b — the three regimes of §6.2.3.*
+- **Dirty.** `AncRestoreDirty n a C U`: for every data state ρ and every ancilla state σ,
+  `channelDenote n a C (ρ ⊗ σ) = (U ◃ ρ) ⊗ σ`.
+- **Conditionally clean**, after Khattar–Gidney §2. The exact definition is fixed at the 23a
+  review, against the invariant the existing `MczFewAll.lean` uses.
+- **Laws:**
+  - the hierarchy: dirty restoration ⇒ clean restoration;
+  - sequential composition in each regime;
+  - commutation of blocks on disjoint qubits (a gate-level lemma on the qubits a gate acts on);
+  - a dirty instance: a phase gadget that uses a dirty ancilla twice, so that its value cancels.
+
+*23c — the 8n − 24 argument as a theorem.* It formalizes the counting of `docs/MCZ_NOTES.md` on
+Khattar–Gidney Problem 1 schedules, under a stated cost model:
+- 4 T for a conjunction on a clean target, uncomputed by MBU;
+- 8 T for one on a non-clean target, a relative-phase Toffoli pair.
+
+With two clean ancillas, at most two conjunctions target clean qubits, so an MCZ_n needs at least
+4·2 + 8(n − 4) = 8n − 24 T (`problem1_T_lower_bound`). Candidate B (`few:log`) attains it. The
+theorem is about the cost model and the schedules, not a lower bound on the T-count of all
+circuits; Maslov's per-Toffoli 4-T bound is a stated assumption, not proved. 23c gets its text at
+the 23b review.
+
+**Gate.** The three regimes with their composition laws, and the M4 milestone: a draft of Paper 2,
+written after 23c as `docs/notes/PAPER2_DRAFT.md` (the reviewer's draft; the author owns the
+final text).
