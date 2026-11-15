@@ -1806,3 +1806,31 @@ carry the readout error in Aer's noise model; that is the labelled assumption of
   the artifact manifest, and the bound on the physical circuit with the seed search.
 - **25b:** the noisy runs and the run reports, with a small CI subset and the full set as a
   committed report.
+
+**25a done, accepted 2026-11-15** (CI below).
+
+*The table and the routing.*
+- **`hw/decomp.py`.** Every table entry (h, s, sdg, t, tdg, z, x, p, cnot, cz, cp, swap, for
+  both bases) equals its IR matrix up to the recorded global phase, to 10⁻¹⁵.
+- **`hw/transpile.py`.** `SabreLayout` alone does layout and routing in Qiskit 2.6.2. It supports
+  `if_test` blocks, keeps SWAPs, and touches neither basis gates nor parameters; each of these is
+  checked on the output. Sabre reorders commuting gates, so the witness records the execution
+  order. Reconstruction accepts an element only at the head of every dependency queue it touches,
+  which makes the reordering a valid topological one.
+
+*The checks, for all 11 instance and target pairs:*
+- the physical circuit reconstructs from (logical circuit, witness) gate for gate, and every
+  two-qubit gate lies on a coupling edge;
+- the ideal simulation of the physical circuit, with the final layout undone, agrees with the
+  logical circuit branch by branch (max |Δp| 7·10⁻¹⁵, max 1 − F 4·10⁻¹³);
+- the manifests' logical-circuit hash equals the committed certificates' `circuit_hash`.
+
+*The bound on the physical circuit*, with a seed search over 0 … 19 (the chosen seed avoids every
+error-1.0 edge in all 11 cases):
+- **Non-vacuous** for the small instances: the MBU gadget at 0.086, Grover n = 2 at 0.150, and
+  Grover n = 3 at 0.648.
+- **Still vacuous** for the committed examples, at 1.7–7.2, against the pre-layout 121–231. Their
+  15–17 physical qubits carry 260–540 two-qubit gates, routing included.
+
+The artifacts (witness, physical QASM 3, manifest) are committed, 0.5 MB in total. The new CI step
+takes about 79 s.

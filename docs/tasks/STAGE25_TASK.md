@@ -5,7 +5,7 @@ PHASE2_SPEC.md §C.2. Report: §5.3, §3.1.3. PHASE2_ROADMAP row 25. Written at 
 
 Stage 25 has two tasks, one commit each:
 - **25a**, the witness, the artifact and the bound on the physical circuit, is specified here;
-- **25b**, the noisy runs and the reports, is outlined and gets its text at the 25a review.
+- **25b**, the noisy runs and the reports, is specified below (written at the 25a review).
 
 Precondition: main = the 24c review commit. Start with `git switch -c stage-25a main`.
 
@@ -128,13 +128,87 @@ Stop and ask in any of these cases:
 
 ---
 
-## 25b — Noisy runs and run reports (outline)
+## 25b — Noisy runs and run reports (written at the 25a review, 2026-11-15)
 
-- `hw/run.py --sim`: Aer with the fake backend's noise model on the physical circuit, with a
-  fixed seed and shots, and the data readout.
-- The run report: counts, p̂, a Clopper–Pearson interval, the one-sided check against
-  1 − δ_hw − √(ln(1/α) / (2 · shots)), and the table of ideal, noisy and reference.
-- A small CI subset; the full set as a committed report.
+PHASE2_SPEC §C.2 "The runs", and the "25a done" paragraph. Precondition: main = the 25a review
+commit. Start with `git switch -c stage-25b main`. The invariants of Stage 25 hold.
+
+### V1. `hw/run.py --sim`
+
+`python -I hw/run.py --sim <artifact dir> --shots N --seed s [--json out]`.
+- **The circuit.** Load the committed `physical.qasm` and `manifest.json`. Reduce the circuit to
+  its used qubits with the compact mapping of 25a's equivalence check, factored out into a shared
+  helper. Append the readout of the n data qubits at `manifest.layout.data_physical`, into a new
+  classical register; the IR has no final readout.
+- **The noise model.** The fake backend's noise model (`AerSimulator.from_backend`, or
+  `NoiseModel.from_backend` restricted to the used qubits), with the qubit mapping checked.
+  Mid-circuit measurements get the fake's readout error; this is the labelled assumption of 24c,
+  stated in the report.
+- **The success predicate**, per instance:
+  - **Grover instances:** P(x) on the data readout, where P is the instance's predicate.
+  - **The MBU gadget:** it computes a phase, which a computational-basis readout cannot see. The
+    run wraps it: prepare |++⟩ on the data, apply the gadget, then apply the inverse of the ideal
+    output's preparation (H on data 1, CNOT data 0 → data 1, H on data 0, so that CZ|++⟩ goes to
+    |00⟩). Measure the data and the ancilla. Success is the all-zero outcome. Build the wrapped
+    gadget as a logical circuit and send it through 25a's pipeline as its own artifact
+    (`mbu_gadget_wrapped`), so that the wrapper's two-qubit gate is routed too. Do not add gates
+    after routing. State the wrapper in the report.
+- **The run report** (JSON, plus Markdown with `--md`):
+  - the manifest hash, the target snapshot hash, the seed, the shots, and the qiskit / aer
+    versions;
+  - the counts on the readout, and p̂ = successes / shots;
+  - the two-sided 95 % Clopper–Pearson interval and the one-sided 95 % lower bound;
+  - the ideal success probability (Aer without noise on the same compact circuit) and the
+    reference (1 − δ, or 1 for the gadget);
+  - δ_hw from the manifest;
+  - the one-sided check p̂ ≥ 1 − δ_hw − √(ln(1/α) / (2 · shots)), at α = 0.05: "passes",
+    "fails" or "vacuous (δ_hw ≥ 1)".
+
+  The wording is "emulator run on the fake backend's noise model". It never says "verified on
+  hardware" and never claims that the run validates the certificate.
+
+### V2. The full set and the committed report
+
+- `scripts/hw_runs.sh` runs every artifact of 25a at a fixed seed with 4 000 shots (or a smaller
+  count if a run takes more than about 60 s; say which).
+- It writes `docs/hw_runs/RUNS.md` (one table: instance, target, δ, δ_hw, ideal, p̂, interval,
+  check) and the per-run JSONs under `docs/hw_runs/`. Commit them.
+- Comment on the table in `docs/hw_runs/RUNS.md` in a few sentences: where the noisy p̂ sits
+  relative to the bound and to the ideal, and which instances the bound covers.
+
+### V3. Checks and CI
+
+- **`tests/diff/hw_run_check.py`:**
+  - the run report schema (`docs/hw_run.schema.json` 1.0.0, validated with `.venv`'s
+    `jsonschema`);
+  - the noiseless run equals the ideal probability to within the shot noise (a 5-sigma binomial
+    tolerance);
+  - the Clopper–Pearson figures recomputed;
+  - the check's arithmetic recomputed;
+  - the manifest hash link;
+  - determinism: the same seed gives the same counts.
+- **The CI subset:** the MBU gadget, hw_n2 and hw_n3 on FakeTorino, at 2 000 shots, in a new step
+  "Hardware runs (Stage 25b)". The pass mark becomes **23 PASS, 0 FAIL, 4 n/a**. Report the step
+  time; above 300 s, lower the shots and say so.
+
+### 25b Docs / Acceptance / Stop
+
+Docs:
+- a DECISIONS.md entry, with the noise model, the wrapper, the shots and the table summary;
+- `docs/PROJECT_STATUS.md`;
+- README's status line;
+- `hw/README.md`.
+
+Acceptance:
+- CI 23 PASS, 0 FAIL, 4 n/a;
+- `docs/hw_runs/RUNS.md` committed;
+- every non-vacuous check's outcome reported as it is. A "fails" is a finding, not something to
+  fix.
+
+Stop and ask in any of these cases:
+- the noise model cannot be mapped to the compact circuit faithfully;
+- a noiseless run disagrees with the ideal beyond the shot noise;
+- a run of the CI subset takes more than about 120 s.
 
 ## Closing reply (each task)
 
