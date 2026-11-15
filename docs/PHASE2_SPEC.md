@@ -1688,3 +1688,40 @@ gates, two-qubit gates, mid-circuit measurements, final readout.
 - **The schema check** of `hw_target_check.py` uses a built-in validator for the schema's subset
   when `jsonschema` is absent from `.venv-hw`. 24b moves the schema validation to `.venv`'s
   `jsonschema` (no new download).
+
+**24b done, accepted 2026-11-15** (CI below).
+- **The lowering.** `hw/lower.py` lowers the canonical circuit JSON to a Qiskit dynamic circuit
+  (`if_test`, mid-circuit `measure`). The phase convention is checked exactly: `p 1 3` on |1⟩ is
+  e^{iπ/4}, and `cp 1 2` on |11⟩ is i.
+- **The comparison.** `tests/diff/hw_lower_check.py` runs Aer's statevector method on the lowered
+  circuit itself, with native `if_test` and no transpile. Branch probabilities are exact products
+  of per-shot `save_probabilities_dict`; branch states come from `save_statevector` (per shot,
+  with memory). Both are compared with the in-repo statevector harness.
+- **Coverage.** All branches are compared when 2^#measures ≤ 64. Above that, every branch Aer
+  produces is compared, labelled "sampled".
+- **The result.** 18 instances, 190 inputs and 1 937 branches; every branch agrees, with
+  max |Δp| = 4.9·10⁻¹⁵ and max 1 − F = 3.1·10⁻¹⁵. The instances cover:
+  - the MBU gadget and its uncorrected variants;
+  - the parity and dirty gadgets;
+  - the oracles of `search_or` and `simple_alu_x0_1` in both modes;
+  - Grover r = 1 with tree mbu, tree coherent and few:log;
+  - a counting circuit with p / cp, in both modes.
+- **The schema check** now uses `.venv`'s `jsonschema` (Draft 2020-12). The new CI step
+  "Hardware lowering" takes about 62 s.
+
+**Refinement at the 24b review (2026-11-15), for 24c.**
+- **The bound before layout.** The weighted bound needs a rate per operation type, but before
+  Stage 25 the circuit has no layout. The sound pre-layout rate is the worst case over the
+  device's qubits or edges of the relevant basis operation; it holds for any layout. The median
+  is reported next to it, labelled "typical, not a bound". Where the worst case is vacuous (a
+  fake's edge with error 1.0, for example), the report says so. Stage 25's layout then gives the
+  per-used-qubit figure.
+- **Counting.** IR gates are counted through a fixed decomposition table per target basis:
+  - for the cz basis: `h` ↦ rz sx rz; `x` ↦ x; `s`, `sdg`, `t`, `tdg`, `z`, `p` ↦ rz;
+    `cnot` ↦ h(t) cz h(t); `cz` ↦ cz;
+  - for the cx basis analogously; `cp` by its decomposition into cx / cz and rz.
+  The table is stated, not proved; proving it is Stage 26's `decomp_sound`. A conditioned gate
+  counts as executed (a union bound over all branches).
+- **Measurements.** Final readout uses the readout rate. The mid-circuit rate is not in the
+  snapshot: the report gives the bound with the readout rate as a labelled assumption for
+  mid-circuit measurements, and the coefficient of η_mid separately.

@@ -6,7 +6,7 @@ PHASE2_SPEC.md §C, §C.1. Report: §3.1.3, §5.3. PHASE2_ROADMAP row 24. Writte
 Stage 24 has three tasks, one commit each:
 - **24a**, the environment, the target model and `cqr hw capabilities`, is specified here;
 - **24b**, the lowering and the comparison on Aer, is specified below (written at the 24a review);
-- **24c**, the per-operation rates, is outlined and gets its detailed text at the 24b review.
+- **24c**, the per-operation rates, is specified below (written at the 24b review).
 
 Precondition: main = the M4 review commit. Start with `git switch -c stage-24a main`. Untracked
 and not yours: `docs/paper/`, `docs/cqrv_report_revised_v4.docx`. Windows: `LEAN_NUM_THREADS=4`.
@@ -220,12 +220,86 @@ Stop and ask in any of these cases:
 - Aer's dynamic-circuit execution does not support a construct the IR emits;
 - a new download would be needed.
 
-## 24c — Per-operation rates (outline)
+## 24c — Per-operation rates and the weighted bound (written at the 24b review, 2026-11-15)
 
-- The per-operation-type rates from the snapshot.
-- The weighted bound δ + Σ_types count · rate in the run reports (`cqr hw bound`, or an option of
-  `cqr certify --target`), next to the old p̄ form.
-- The Lean side computes the bound exactly from the rates in the target JSON.
+PHASE2_SPEC §C.1 "Per-operation rates", the "24b done" paragraph and its refinement.
+Precondition: main = the 24b review commit. Start with `git switch -c stage-24c main`. The
+invariants of Stage 24 hold, and there is no new download. The committed certificates and their
+JSONs are unchanged; the old p̄ form of Stage 11b stays as it is.
+
+### T1. The decomposition table and the counts (Lean, `CQRV/Hardware/Bound.lean`, Physlib-free)
+
+- **`basisCounts (basis : TargetBasis) (C : Circuit) : BasisCounts`.** It counts, per basis
+  operation, what the circuit becomes under the table of the refinement:
+  - one-qubit basis gates by name;
+  - two-qubit basis gates;
+  - mid-circuit measurements and final measurements.
+
+  A `measure` is mid-circuit when a gate follows it on any qubit or under its bit; otherwise it
+  is final. A conditioned gate counts as executed. `alloc` and `free` count nothing.
+- **`TargetBasis`.** `cz` or `cx`, read from the target's `basis_gates`. A target whose basis is
+  neither is an error with a message.
+
+### T2. The rates and the bound
+
+- **Decimal reader.** `calibration` numbers are decimal strings. Read them exactly into ℚ, reusing
+  or generalizing the decimal reader of `CQRV.Certify.Profile` for p̄.
+- **The rate of each basis operation**, over the device:
+  - **worst:** the maximum over its qubits or edges, a sound bound for any layout;
+  - **median:** labelled "typical, not a bound".
+
+  Readout is the maximum or median over the qubits. The mid-circuit rate is absent from the
+  snapshot, so it is the readout rate as a labelled assumption, and its coefficient is reported
+  separately.
+- **`weightedBound`.** δ_hw ≤ δ + Σ_types count · rate, exact in ℚ for the worst-case form; the
+  median form is printed alongside.
+- **The CLI.** `cqr hw bound <file.cqr> --target <t.json> [--solutions M] [--iterations r]
+  [--shape tree|few:log] [--uncompute mbu|coherent] [--json]`.
+  - It builds the Grover circuit as `cqr certify` does, by the same `groverInstance`, and uses δ
+    from `groverDelta`.
+  - It refuses `--uncompute mbu` on a target without feed-forward: exit 2, "mbu needs
+    feed-forward; the target supports coherent only".
+  - It prints the counts per basis operation, the rates (worst and median), each product, the
+    sum, δ, the worst-case δ_hw (marked vacuous when ≥ 1), the median figure with its label, and
+    the coefficient of η_mid.
+  - It never writes a certificate, and its output says "reported, not certified (Stage 27)".
+
+### T3. Checks
+
+- **`tests/diff/hw_bound_check.py`.** An independent Python recomputation, from the circuit JSON
+  and the target JSON, of the counts, the rates (worst, median) and both bound figures, for:
+  - the committed Grover examples (grover_pred_037 tree mbu, tree coherent and few:log;
+    simple_alu_x0_1);
+  - against both targets, with mbu only on FakeTorino.
+
+  The figures must agree exactly with `cqr hw bound --json` (rationals as fractions; floats only
+  in the median line).
+- **Python only:** the transpiled count of Qiskit for the same circuits against the target (one
+  seeded transpile with optimization level 0) is printed next to the table counts, for
+  information, not compared. It shows how far the table is from the transpiler before Stage 25.
+- **CI.** The checks join the step "Hardware target" (no new step); the pass mark stays 21.
+- **Lean tests:** `basisCounts` on the MBU gadget for both bases; `weightedBound` on a tiny
+  target.
+
+### 24c Docs / Acceptance / Stop
+
+Docs:
+- a DECISIONS.md entry, with the table, the aggregation, the mid-circuit assumption and the
+  numbers for the committed examples;
+- `docs/PROJECT_STATUS.md`;
+- README's status line.
+
+Acceptance:
+- `lake build` green and warning-free;
+- CI 21 PASS, 0 FAIL, 4 n/a;
+- the bound figures reported for every committed example and target, with vacuity marked.
+
+Stop and ask in any of these cases:
+- a fake's calibration has a rate that cannot be read exactly;
+- a statement of mine is false.
+
+Report in (e), without stopping, every example where the table count and the transpiled count
+differ by a factor above 3. Routing SWAPs are expected to cause this; it informs Stage 25.
 
 ## Closing reply (each task)
 
