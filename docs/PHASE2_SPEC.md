@@ -1211,3 +1211,93 @@ decidable and of the kind every committed certificate already checks by kernel. 
 21b2: the library theorem, the instance's domain lemma, and the corollary at (8, 32, 5) with only
 those decidable facts as hypotheses. Paper 1 may say that Theorem 3.3a is exercised at that
 instance in this form, and no more.
+
+**21b2 done, accepted 2026-11-15** (CI 19 PASS, 0 FAIL, 4 n/a; step 22 757 s, step 23 171 s).
+Theorem 3.3a is exercised at `grover_pred_037`, (n, M, m) = (8, 32, 5), in the form of
+refinement (12). Stage 21 is complete.
+- **New library pieces:**
+  - `measured_composition_pseudo` (Composition.lean, 20 lines);
+  - `CQRV/Realizability/MeasurePrepare.lean`, the measure-and-prepare channel, 96 lines;
+  - `CQRV/Grover/SearchUnknownM.lean`, 395 lines: `searchStage`, `SearchAfterCount` and its three
+    lemmas, `searchStage_realizes`, `search_unknown_M` over `countSem` and `groverSem`,
+    `search_unknown_M_rat`, `domain_8_32_5` (118 lines with its helpers, using `pi_gt_d4` /
+    `pi_lt_d4`, `sin_le` and `sin_gt_sub_cube`), and `search_unknown_M_8_32_5`.
+  - All have the standard three axioms.
+- **The numbers at the instance:**
+  - the table r(y) = 12, 8, 3, 2, 2, 1, 1, 1, 0, …, 0, 1, 1, 1, 2, 2, 3, 8;
+  - the honest stage-2 grade is the Grover grade at r = 12, (15, 794, 432, 7);
+  - the composite grade is (21, 2862, 1364, 8) ⊕ (15, 794, 432, 7) = (21, 3656, 1796, 8);
+  - ε ≈ 0.0746, δ = 1 − 8/π² + 7/128 ≈ 0.2441.
+- **Accepted forms:**
+  - The grade bound of (9) is returned as a conjunct on every branch: `Realizes` reads only the
+    declared grade.
+  - The decodings and specifications are written out rather than as record projections, because
+    projected instances break `rw`.
+  - `groverSem.pre` is not needed, since `GroverParams` carries `hM_pos`.
+- **The generic theorem does not tie the two predicates.** Stage 1 may count one predicate and
+  stage 2 search another; the theorem stays true. The corollary at the instance ties them, since
+  both circuits are built on the same network `O.N`. Paper 1 cites the corollary.
+
+## §B. A theory of restoration under measurement (Track B; Paper 2)
+
+Written at the 21b2 review (2026-11-15) by the reviewer, under the author's delegation.
+Report: §6.2.1 (`AncRestore`), §6.2.2 (the temporary logical-AND and MBU), §6.2.4 (the three
+layers), §6.3.2 (Lemma 6.3.2). PHASE2_ROADMAP rows 22, 23, 23b. Track B is Physlib-side
+throughout: no CLI, certificate or CI-step change, and no existing statement changes.
+
+### B.1 The general MBU theorem (Stage 22)
+
+**What exists.** MBU is proved for one gadget. `mbu_channel_correct` (Stage 6b-1) says that
+`TempLogicalAND; Z t; H t; measure t; if 1: CZ; if 1: X t` maps ρ ⊗ |0⟩⟨0| to
+CZ ρ CZ† ⊗ |0⟩⟨0|. The proof is a case split over the four inputs and the two branches. Nothing
+says why CZ is the right correction, and nothing covers any compute block other than the AND.
+
+**The setting.** Fix a data register `Reg n`, an ancilla register `Reg a`, an ancilla qubit `t`
+and a classical bit `j`.
+- **A compute block** for f : Reg n → Bool with phase φ : Reg n → ℂ (|φ x| = 1 for every x) is
+  a list `B` of unitary gates (`Gate.isUnitary`). For every data basis state x, `unitaryDenote
+  n a B` maps |x, 0…0⟩ to φ x · |x, e_t(f x)⟩. Here e_t(b) is the ancilla basis state with t = b
+  and every other ancilla 0. Other ancillas may be used inside B, but come back to 0.
+- **A phase implementation** of f is a list `O` of unitary gates on data qubits only. Its
+  `unitaryDenote` is λ · (diag((−1)^{f x}) ⊗ 1) for some λ with |λ| = 1. The global phase λ is
+  allowed because it lives in one measurement branch only, and a scalar per branch does not
+  disturb restoration (`ancRestore_of_kraus`).
+- **The MBU uncompute** is `mbuUncompute t j O := [.h t, .measure t j] ++ O.map (.ifBit j) ++
+  [.ifBit j (.x t)]`. The §6.2.2 listing is the instance
+  `UncomputeTempLogicalAND a b t m = mbuUncompute t m [.cz a b]`.
+
+**The theorem (`mbu_general`).** Take a well-formed circuit whose gates are
+`B ++ mbuUncompute t j O` and whose only measurement is the one of `mbuUncompute`. Then
+`AncRestore n a C (diagU φ)`. With `Z t` inserted, that is with gates
+`B ++ [.z t] ++ mbuUncompute t j O`, the conclusion is `AncRestore n a C (diagU (φ · (−1)^f))`.
+At φ = 1 the two conclusions are the identity and `phaseOracle f`.
+
+In words:
+- In the X basis, outcome 1 leaves the phase (−1)^{f(x)} on the data, and O removes it. Outcome
+  0 leaves nothing.
+- The reset returns the ancilla to |0⟩.
+- A compute phase φ is *not* removed: MBU needs a phase-exact compute block, or it leaves diag(φ)
+  on the data. The coherent uncompute, the adjoint of B, would remove φ.
+- The temporary AND is phase-exact (`tempLogicalAND_correct_lift`). This is the
+  "relative-phase convention" of the roadmap row.
+
+**The AND instance re-derived.** With B = `TempLogicalAND a b t`, f = a ∧ b, O = `[.cz a b]` and
+φ = 1, the statement of `mbu_channel_correct` follows from `mbu_general`. This is a second proof
+of the same statement; the Stage 6b-1 proof stays.
+
+**The Clifford corollary (Stage 22b).** O can be chosen Clifford iff f has degree ≤ 2 over
+GF(2).
+- (⇐) is constructive. f(x) = c ⊕ ⊕_i a_i x_i ⊕ ⊕_{i<j} b_ij x_i x_j is implemented by Z on x_i
+  where a_i = 1, and CZ on (x_i, x_j) where b_ij = 1; c only contributes the global phase −1.
+- (⇒) For D = diag((−1)^f), D X_i D† = X_i · diag((−1)^{f(x) ⊕ f(x ⊕ e_i)}). This is a Pauli up
+  to phase iff the derivative D_i f is affine, and all derivatives are affine iff f is quadratic.
+- "Clifford" for a diagonal unitary means that conjugation maps every X_i to a Pauli up to a
+  phase; the Z_i commute with D. The definitions are stated explicitly and both directions are
+  proved.
+
+This explains why the MBU of an AND is free (the correction is the Clifford CZ), and why MBU is
+costly beyond degree 2: for a three-input AND the correction is CCZ, with 7 T.
+
+**The split.**
+- 22a: `mbu_general` in both forms, the AND re-derived, the tests.
+- 22b: the Clifford corollary.
