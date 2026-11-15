@@ -1725,3 +1725,84 @@ gates, two-qubit gates, mid-circuit measurements, final readout.
 - **Measurements.** Final readout uses the readout rate. The mid-circuit rate is not in the
   snapshot: the report gives the bound with the readout rate as a labelled assumption for
   mid-circuit measurements, and the coefficient of η_mid separately.
+
+**24c done, accepted 2026-11-15** (CI below).
+- **The bound.** `CQRV/Hardware/Bound.lean` (Physlib-free) provides the decomposition-table
+  counts per basis (`basisCounts`, which separates mid-circuit and final measurements), an exact
+  decimal reader, worst-case and median rates, and `weightedBound`. `cqr hw bound` prints the
+  figures:
+  - the readout of the n data qubits is added as `data_readout = n`, because the IR has no final
+    measurement;
+  - mbu is refused on a target without feed-forward.
+
+  `tests/diff/hw_bound_check.py` recomputes everything independently and agrees exactly on 9
+  bounds and 3 refusals.
+- **Every figure is vacuous.** The worst case is vacuous for every example on both fakes (147 to
+  231), because both fakes have edges with error 1.0. The median figure is also ≥ 0.96: the
+  circuits have 100–230 two-qubit gates at 0.4–1 % and 14–26 measurements at 2–3 %.
+- **The table undercounts the real transpiler.** A seeded level-0 transpile has 3.3–6.0 times the
+  table's two-qubit gates, because of the routing SWAPs on heavy-hex, and 1.0–2.2 times its
+  one-qubit gates. So the pre-layout figure is a bound only for a hypothetical circuit compiled
+  by the table without routing, not for a transpiled circuit, and it is labelled so. The bound
+  that matters is computed on the physical circuit in Stage 25.
+- **Stage 24 is complete.**
+
+### C.2 Transpile with a witness, noisy simulation, run reports (Stage 25)
+
+**The witness.** The transpiler is untrusted, so its output must be reproducible from the logical
+circuit and a small witness, which Stage 26 checks in Lean. To make the witness exact, the
+pipeline separates what we do from what Qiskit does:
+1. **Basis translation is ours**, by an explicit decomposition table: every IR gate to a sequence
+   of basis gates of the target, exact up to a global phase per entry. Stage 26 proves each
+   entry (`decomp_sound`).
+2. **Qiskit does only layout and routing** on the basis-translated circuit, seeded, with no gate
+   optimization. The routing SWAPs are kept as SWAPs and then decomposed by one more table
+   entry.
+3. **The witness records:**
+   - the initial layout (logical → physical);
+   - every inserted SWAP, with its position and physical edge;
+   - the final layout;
+   - the table entries used;
+   - the classical-bit map;
+   - the seed and the tool versions.
+4. **Reconstruction is checked in Python now:** the physical circuit equals the deterministic
+   reconstruction from (logical circuit, witness) gate for gate. Every two-qubit gate lies on a
+   coupling edge.
+
+**The layout and the bound on the physical circuit.** With the layout known, the rates become
+per used qubit and edge. A layout that uses an error-1.0 edge gives a vacuous figure. The seed is
+therefore searched over a fixed list: the witness records the seed chosen, and the report records
+all seeds tried with their figures. The bound on the physical circuit, δ_hw ≤ δ + Σ over the
+physical operations of their rates, is computed and reported, not certified. It is still a union
+bound under the stochastic-noise premise, until Stage 27.
+
+**The physical artifact.** `PhysicalArtifact` is a JSON manifest, hash-linked:
+- the certificate's `certificate.json`, if any;
+- the logical circuit's hash;
+- the target's snapshot hash;
+- the witness's hash;
+- the physical circuit's QASM 3 hash;
+- the tool versions and the seed.
+
+**The runs.** `hw/run.py --sim` runs the physical circuit on Aer with the fake backend's noise
+model, with a fixed seed and shot count. It measures the n data qubits at the end and reports:
+- the counts, and the success frequency p̂ = #{x : P(x)} / shots;
+- a Clopper–Pearson interval;
+- the one-sided check p̂ ≥ 1 − δ_hw − √(ln(1/α) / (2 · shots)), at α = 0.05;
+- ideal against noisy against reference.
+
+It is a Python tool, not a `cqr` subcommand: `cqr` stays free of the Python environment. This
+deviates from the roadmap's `cqr hw run`, and the deviation is recorded. Mid-circuit measurements
+carry the readout error in Aer's noise model; that is the labelled assumption of 24c.
+
+**Instances, progressively:**
+- the MBU gadget;
+- Grover with n = 2 and 3 from small predicates;
+- the committed examples, in both modes;
+- both targets (mbu only where feed-forward exists).
+
+**The split.**
+- **25a:** the table translation, layout and routing with the witness, the reconstruction check,
+  the artifact manifest, and the bound on the physical circuit with the seed search.
+- **25b:** the noisy runs and the run reports, with a small CI subset and the full set as a
+  committed report.
