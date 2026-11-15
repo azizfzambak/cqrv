@@ -62,3 +62,19 @@ installing it. Regenerate the lock only on an approved upgrade.
    ideal-equivalence check of the physical circuit against the statevector harness.
 
 Everything here is reported, not certified; Stage 26 checks the witness in Lean.
+
+## Emulator runs on the fake backends' noise models (Stage 25b)
+
+`hw/run.py --sim <artifact dir> --shots N --seed s [--json out] [--md out]` runs a committed physical
+artifact on Aer with `NoiseModel.from_backend(<fake>)` restricted to the used qubits (the mapping is
+checked error by error, as channels), the n data qubits read out at their final physical positions
+into a new register `r` (the IR has no final readout), and reports p̂ with the 95 % Clopper–Pearson
+interval, the ideal (noiseless, same shots) frequency, the reference 1 − δ, δ_hw from the manifest
+and the one-sided check p̂ ≥ 1 − δ_hw − √(ln(1/α)/(2·shots)) at α = 0.05 ("vacuous" when δ_hw ≥ 1).
+The MBU gadget is run in its wrapped form (`mbu_gadget_wrapped`, its own artifact: |++⟩, the gadget,
+then the inverse of the ideal output's preparation; success is the all-zero readout). Mid-circuit
+measurements carry the readout error — the Stage 24c assumption. `scripts/hw_runs.sh` runs the full
+set and writes `docs/hw_runs/RUNS.md` with the per-run JSONs (`docs/hw_run.schema.json`);
+`scripts/check_hw_runs.sh` is the CI step (the three small instances at 2000 shots). Every figure is
+an **emulator run on the fake backend's noise model**: not a device run, not a validation of a
+certificate, and never "verified on hardware".

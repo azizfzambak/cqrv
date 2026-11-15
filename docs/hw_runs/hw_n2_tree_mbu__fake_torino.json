@@ -1,0 +1,79 @@
+{
+ "artifact_dir": "hw/artifacts/hw_n2_tree_mbu__fake_torino",
+ "check": {
+  "alpha": 0.05,
+  "result": "passes",
+  "statement": "p_hat >= 1 - delta_hw - sqrt(ln(1/alpha) / (2 shots))",
+  "threshold": 0.8306606664390264
+ },
+ "circuit": {
+  "compact_qubits": 3,
+  "instructions": 144,
+  "readout_physical_qubits": [
+   99,
+   80
+  ],
+  "readout_register": "r",
+  "used_physical_qubits": [
+   80,
+   92,
+   99
+  ]
+ },
+ "delta": "0",
+ "delta_hw": "1874852446999361839/12500000000000000000",
+ "delta_hw_float": 0.14998819575994896,
+ "delta_hw_vacuous": false,
+ "hashes": {
+  "logical_circuit": "0734c030471e700f23fcb00c4ca7ffd707fbf1de345674b70c4522a0200894fe",
+  "manifest": "24b37b171782fc9ffd8dc3b0ccdb98cdc75d41c9b5bd8e631afca6343226353d",
+  "physical_qasm3": "08b4eddae8ec6704b8e026d7460fd6fa6d9a18dc8e20ab0c3e4e57b9d3fee4ad",
+  "target_snapshot": "bed94fe37b44870f5a7d144a730bda1d3bf4782c0735430e2c8f069b0e6b33e1"
+ },
+ "ideal": {
+  "note": "Aer without noise on the same compact circuit, same shots and seed",
+  "p_ideal": 1.0,
+  "successes": 4000
+ },
+ "instance": "hw_n2_tree_mbu",
+ "kind": "emulator run on the fake backend's noise model; reported, not certified (Stage 27); not a device run",
+ "noise_model": {
+  "errors_checked_against_full_model": 19,
+  "errors_kept": 19,
+  "mapping_checked": true,
+  "mid_circuit_assumption": "mid-circuit measurements carry the fake backend's readout error in Aer's noise model (the labelled assumption of Stage 24c: the snapshot gives no mid-circuit error)",
+  "source": "NoiseModel.from_backend(FakeTorino()) restricted to the used qubits"
+ },
+ "noisy": {
+  "clopper_pearson_95": [
+   0.871338466720371,
+   0.8916001905867043
+  ],
+  "counts": {
+   "00": 86,
+   "01": 158,
+   "10": 229,
+   "11": 3527
+  },
+  "one_sided_lower_95": 0.8730198593352818,
+  "p_hat": 0.88175,
+  "successes": 3527
+ },
+ "reference": "1",
+ "reference_float": 1.0,
+ "schema_version": "1.0.0",
+ "seed": 25,
+ "shots": 4000,
+ "success_predicate": {
+  "description": "P(x) on the data readout; truth table of examples/hw_n2.cqr (bit k of x = data qubit k)",
+  "kind": "truth_table",
+  "truth_table": "0001"
+ },
+ "target": "fake_torino",
+ "target_class": "qiskit_ibm_runtime.fake_provider.backends.torino.fake_torino.FakeTorino",
+ "versions": {
+  "qiskit": "2.6.2",
+  "qiskit_aer": "0.18.2",
+  "run_py": "hw/run.py (Stage 25b)"
+ }
+}

@@ -1,0 +1,84 @@
+{
+ "artifact_dir": "hw/artifacts/mbu_gadget_wrapped__fake_torino",
+ "check": {
+  "alpha": 0.05,
+  "result": "passes",
+  "statement": "p_hat >= 1 - delta_hw - sqrt(ln(1/alpha) / (2 shots))",
+  "threshold": 0.8754229835409663
+ },
+ "circuit": {
+  "compact_qubits": 3,
+  "instructions": 103,
+  "readout_physical_qubits": [
+   92,
+   80,
+   99
+  ],
+  "readout_register": "r",
+  "used_physical_qubits": [
+   80,
+   92,
+   99
+  ]
+ },
+ "delta": "0",
+ "delta_hw": "2630646966450225907/25000000000000000000",
+ "delta_hw_float": 0.10522587865800903,
+ "delta_hw_vacuous": false,
+ "hashes": {
+  "logical_circuit": "b3b7947f6cea947d3199fab09d7da99d0aca1769205a8168272767f54c6e214f",
+  "manifest": "7a0b6be6de0e1a9bbf5018daf30fa2e74db385e69c65ee49b09191c055d6be41",
+  "physical_qasm3": "281e0eb97382f41cc22c1b8af3e1b0c46beb01c4fcebf09c901d354b4b603e3c",
+  "target_snapshot": "bed94fe37b44870f5a7d144a730bda1d3bf4782c0735430e2c8f069b0e6b33e1"
+ },
+ "ideal": {
+  "note": "Aer without noise on the same compact circuit, same shots and seed",
+  "p_ideal": 1.0,
+  "successes": 4000
+ },
+ "instance": "mbu_gadget_wrapped",
+ "kind": "emulator run on the fake backend's noise model; reported, not certified (Stage 27); not a device run",
+ "noise_model": {
+  "errors_checked_against_full_model": 19,
+  "errors_kept": 19,
+  "mapping_checked": true,
+  "mid_circuit_assumption": "mid-circuit measurements carry the fake backend's readout error in Aer's noise model (the labelled assumption of Stage 24c: the snapshot gives no mid-circuit error)",
+  "source": "NoiseModel.from_backend(FakeTorino()) restricted to the used qubits"
+ },
+ "noisy": {
+  "clopper_pearson_95": [
+   0.8897636223742136,
+   0.9086482367770242
+  ],
+  "counts": {
+   "000": 3598,
+   "001": 81,
+   "010": 130,
+   "011": 15,
+   "100": 101,
+   "101": 18,
+   "110": 45,
+   "111": 12
+  },
+  "one_sided_lower_95": 0.8913378658096494,
+  "p_hat": 0.8995,
+  "successes": 3598
+ },
+ "reference": "1",
+ "reference_float": 1.0,
+ "schema_version": "1.0.0",
+ "seed": 25,
+ "shots": 4000,
+ "success_predicate": {
+  "description": "the all-zero readout of the two data qubits and the ancilla (the wrapper: |++>, the gadget, then H x1; CNOT x0->x1; H x0 undo the ideal output CZ|++>)",
+  "kind": "all_zero",
+  "truth_table": null
+ },
+ "target": "fake_torino",
+ "target_class": "qiskit_ibm_runtime.fake_provider.backends.torino.fake_torino.FakeTorino",
+ "versions": {
+  "qiskit": "2.6.2",
+  "qiskit_aer": "0.18.2",
+  "run_py": "hw/run.py (Stage 25b)"
+ }
+}

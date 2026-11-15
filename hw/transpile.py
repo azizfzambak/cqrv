@@ -464,6 +464,38 @@ def seed_search(circ, basis, backend, target, seeds, delta):
     return best, trials
 
 
+def compact_from_qiskit(qc_full, used, before_measure=None):
+    """The physical circuit reduced to its used qubits (Stage 25b, shared by the equivalence check
+    and hw/run.py): a copy of `qc_full` (the parsed physical.qasm, device width) on `len(used)`
+    qubits, physical qubit `used[i]` becoming qubit `i`, the classical register kept, `if_test`
+    blocks remapped inside; `before_measure(qc, compact_qubit, k)` is called before the k-th
+    measurement (the equivalence check inserts its save instructions through it). Returns
+    (compact circuit, {physical: compact})."""
+    from qiskit import ClassicalRegister, QuantumCircuit, QuantumRegister
+    from qiskit.circuit import IfElseOp
+    comp = {p: i for i, p in enumerate(used)}
+    qc = QuantumCircuit(QuantumRegister(len(used), "q"), ClassicalRegister(qc_full.num_clbits, "c"))
+    count = [0]
+
+    def copy_into(target, instrs, qmap):
+        for ins in instrs:
+            qs = [qmap[b] for b in ins.qubits]
+            cs = [qc_full.find_bit(b).index for b in ins.clbits]
+            if isinstance(ins.operation, IfElseOp):
+                cond = ins.operation.condition
+                blk = ins.operation.blocks[0]
+                with target.if_test((target.clbits[qc_full.find_bit(cond[0]).index], cond[1])):
+                    copy_into(target, blk.data, {blk.qubits[i]: qs[i] for i in range(len(qs))})
+                continue
+            if ins.operation.name == "measure" and before_measure is not None:
+                before_measure(target, qs[0], count[0])
+                count[0] += 1
+            target.append(ins.operation, [target.qubits[i] for i in qs], [target.clbits[i] for i in cs])
+    copy_into(qc, qc_full.data, {b: comp[qc_full.find_bit(b).index] for b in qc_full.qubits
+                                   if qc_full.find_bit(b).index in comp})
+    return qc, comp
+
+
 def to_qiskit_physical(final_phys, width, n_bits):
     """A Qiskit circuit of the final physical ops on `width` qubits (for the QASM 3 export)."""
     from qiskit import ClassicalRegister, QuantumCircuit, QuantumRegister

@@ -109,6 +109,9 @@ jobs:
       - name: Hardware transpile (Stage 25a; our table translation + SabreLayout with a witness; the committed artifacts reproduced byte for byte, reconstruction, coupling edges, hashes, bound from the QASM, ideal equivalence)
         run: PYTHON_HW=.venv-hw/bin/python scripts/check_hw_transpile.sh
 
+      - name: Hardware runs (Stage 25b; emulator runs on the fake backend's noise model — the CI subset at 2000 shots, the committed run reports' schema and arithmetic)
+        run: PYTHON_HW=.venv-hw/bin/python scripts/check_hw_runs.sh
+
   candidate:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

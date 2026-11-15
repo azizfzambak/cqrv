@@ -18,9 +18,10 @@
     * the bound recomputed independently from the committed physical.qasm (parsed back with
       qiskit.qasm3) and the target JSON, as exact fractions;
     * the ideal-equivalence check for every instance (all use at most 17 physical qubits): Aer's
-      execution of the committed physical circuit, restricted to its used qubits, agrees branch by
-      branch with the statevector harness on the logical circuit after the final layout is undone
-      (the per-shot mechanism of Stage 24b), with the unused physical qubits back in |0⟩.
+      execution of the committed physical.qasm (parsed back and reduced to its used qubits by the
+      shared helper `transpile.compact_from_qiskit`) agrees branch by branch with the statevector
+      harness on the logical circuit after the final layout is undone (the per-shot mechanism of
+      Stage 24b), with the unused physical qubits back in |0⟩.
 """
 
 import argparse
@@ -114,33 +115,31 @@ def bound_from_qasm(qasm_text, target, basis, data_physical, delta):
 
 # --- the ideal-equivalence check (Stage 24b's mechanism on the physical circuit)
 
-def equivalence(circ, final_phys, final_layout, used, n_bits, shots, seed):
-    """Aer on the physical circuit restricted to `used` (compact indices), per shot: exact branch
-    probability and state; the reference is the harness on the logical circuit; the final layout is
-    undone and the unused physical qubits must be |0>. Returns (branches, max dp, max 1-F, max
-    leak, full coverage?)."""
-    import decomp
+def equivalence(circ, qasm_text, final_layout, used, n_bits, shots, seed):
+    """Aer on the committed physical circuit (`qasm_text`, parsed back) restricted to `used`
+    (compact indices, through the shared helper `transpile.compact_from_qiskit`), per shot: exact
+    branch probability and state; the reference is the harness on the logical circuit; the final
+    layout is undone and the unused physical qubits must be |0>. Returns (branches, max dp,
+    max 1-F, max leak, full coverage?)."""
     import hw_lower_check as hl
-    from qiskit import ClassicalRegister, QuantumCircuit, QuantumRegister
+    from qiskit import qasm3
     from qiskit_aer import AerSimulator
-    from transpile import flat_ops
+    from transpile import compact_from_qiskit
     m = len(used)
     compact = {p: i for i, p in enumerate(used)}
     n_logical = circ["n_data"] + circ["n_anc"]
-    qc = QuantumCircuit(QuantumRegister(m, "q"), ClassicalRegister(max(1, n_bits), "c"))
     measures = []
-    k = 0
-    for pop in final_phys:
-        if "if" in pop:
-            with qc.if_test((qc.clbits[pop["if"]], 1)):
-                for b in pop["body"]:
-                    decomp.apply_basis_gate(qc, b, compact)
-        else:
-            if pop["op"] == "measure":
-                qc.save_probabilities_dict(qubits=[compact[pop["q"][0]]], label=f"m{k}", pershot=True)
-                measures.append((k, pop["c"]))
-                k += 1
-            decomp.apply_basis_gate(qc, pop, compact)
+
+    def hook(target, cq, k):
+        target.save_probabilities_dict(qubits=[cq], label=f"m{k}", pershot=True)
+    qc_full = qasm3.loads(qasm_text)
+    qc, comp2 = compact_from_qiskit(qc_full, used, before_measure=hook)
+    assert comp2 == compact
+    # the clbit of the k-th measurement, in order
+    from qiskit.circuit import IfElseOp
+    for ins in qc_full.data:
+        if not isinstance(ins.operation, IfElseOp) and ins.operation.name == "measure":
+            measures.append((len(measures), qc_full.find_bit(ins.clbits[0]).index))
     qc.save_statevector(label="sv", pershot=True)
     sim = AerSimulator(method="statevector")
     data_state = hl.basis_state(circ["n_data"], ())
@@ -270,7 +269,7 @@ def main():
             # ideal equivalence
             eq = ""
             if not a.no_equivalence:
-                nb, dp, df, leak, full = equivalence(circ, best["final_phys"], w["final_layout"], M["layout"]["used_qubits"],
+                nb, dp, df, leak, full = equivalence(circ, cq, w["final_layout"], M["layout"]["used_qubits"],
                                                      best["n_bits"], a.shots, 25)
                 check(dp <= hl_tol() and df <= hl_tol() and leak <= hl_tol(),
                       f"{label}: ideal equivalence on {len(M['layout']['used_qubits'])} physical qubits: {nb} branches "

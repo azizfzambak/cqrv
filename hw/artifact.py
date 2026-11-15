@@ -43,6 +43,7 @@ TARGET_FILES = {"fake_torino": "hw/targets/fake_torino.json", "fake_washington":
 # name, source (None = the MBU gadget), synthesize flags, uncompute mode, targets, committed certificate dir
 INSTANCES = [
     ("mbu_gadget", None, [], "mbu", ["fake_torino"], None),
+    ("mbu_gadget_wrapped", None, [], "mbu", ["fake_torino"], None),
     ("hw_n2_tree_mbu", "examples/hw_n2.cqr", [], "mbu", ["fake_torino"], None),
     ("hw_n3_tree_mbu", "examples/hw_n3.cqr", [], "mbu", ["fake_torino"], None),
     ("grover_pred_037_tree_mbu", "examples/grover_pred_037.cqr", [], "mbu", ["fake_torino"], "examples/certs/grover_pred_037"),
@@ -81,6 +82,8 @@ def logical_circuit(cqr, inst):
     name, src, flags, mode, _, _ = inst
     if src is None:
         from hw_lower_check import GADGETS
+        if name == "mbu_gadget_wrapped":
+            return wrapped_gadget(GADGETS["mbuCircuit"]), None
         return GADGETS["mbuCircuit"], None
     p = subprocess.run([cqr, "synthesize", os.path.join(ROOT, src), "--grover", *flags, "--json"],
                        capture_output=True, text=True, encoding="utf-8")
@@ -89,6 +92,17 @@ def logical_circuit(cqr, inst):
         raise SystemExit(f"cqr synthesize {src} {' '.join(flags)} failed ({p.returncode}): {p.stderr.strip()[:200]}")
     r = json.loads(lines[-1])
     return r["circuit"], {"n": r["n"], "r": r["iterations"], "M": r["solutions"], "shape": r["shape"]}
+
+
+def wrapped_gadget(mbu):
+    """Stage 25b V1 — the MBU gadget wrapped for a computational-basis readout: prepare |++> on the
+    data (H x0, H x1), the gadget (its ideal output is CZ|++> = (I⊗H)·CNOT(x0→x1)·(H⊗I)|00>),
+    then the inverse of that preparation — H x1, CNOT x0→x1, H x0 — so that the ideal output is
+    |00> with the ancilla back in |0>; success is the all-zero readout of the three qubits. The
+    wrapper is part of the logical circuit, so its two-qubit gate is routed with the rest."""
+    pre = [{"op": "h", "q": [0]}, {"op": "h", "q": [1]}]
+    post = [{"op": "h", "q": [1]}, {"op": "cnot", "q": [0, 1]}, {"op": "h", "q": [0]}]
+    return {"n_data": mbu["n_data"], "n_anc": mbu["n_anc"], "gates": pre + mbu["gates"] + post}
 
 
 def delta_of(params):

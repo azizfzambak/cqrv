@@ -1,0 +1,86 @@
+{
+ "artifact_dir": "hw/artifacts/hw_n3_tree_mbu__fake_torino",
+ "check": {
+  "alpha": 0.05,
+  "result": "passes",
+  "statement": "p_hat >= 1 - delta_hw - sqrt(ln(1/alpha) / (2 shots))",
+  "threshold": 0.33226264774976083
+ },
+ "circuit": {
+  "compact_qubits": 5,
+  "instructions": 683,
+  "readout_physical_qubits": [
+   63,
+   64,
+   67
+  ],
+  "readout_register": "r",
+  "used_physical_qubits": [
+   63,
+   64,
+   65,
+   66,
+   67
+  ]
+ },
+ "delta": "7/128",
+ "delta_hw": "4052413840307589821/6250000000000000000",
+ "delta_hw_float": 0.6483862144492144,
+ "delta_hw_vacuous": false,
+ "hashes": {
+  "logical_circuit": "e8981c4a321cc6b745c626c65f60b4fb758cc0606655f18abffd71bba24bbf60",
+  "manifest": "7fbab8fd1b076c8a67c54b8b9bd7c0dd36a11a5f5560348f8b49d88fa94d08bb",
+  "physical_qasm3": "aaf4c5cc77ff41544b4509d4b94982ec0ff6aa0cb299ea29b5859037c20fd02a",
+  "target_snapshot": "bed94fe37b44870f5a7d144a730bda1d3bf4782c0735430e2c8f069b0e6b33e1"
+ },
+ "ideal": {
+  "note": "Aer without noise on the same compact circuit, same shots and seed",
+  "p_ideal": 0.94775,
+  "successes": 3791
+ },
+ "instance": "hw_n3_tree_mbu",
+ "kind": "emulator run on the fake backend's noise model; reported, not certified (Stage 27); not a device run",
+ "noise_model": {
+  "errors_checked_against_full_model": 33,
+  "errors_kept": 33,
+  "mapping_checked": true,
+  "mid_circuit_assumption": "mid-circuit measurements carry the fake backend's readout error in Aer's noise model (the labelled assumption of Stage 24c: the snapshot gives no mid-circuit error)",
+  "source": "NoiseModel.from_backend(FakeTorino()) restricted to the used qubits"
+ },
+ "noisy": {
+  "clopper_pearson_95": [
+   0.574823258926404,
+   0.6055447676149316
+  ],
+  "counts": {
+   "000": 160,
+   "001": 180,
+   "010": 132,
+   "011": 272,
+   "100": 159,
+   "101": 395,
+   "110": 341,
+   "111": 2361
+  },
+  "one_sided_lower_95": 0.5772890508281732,
+  "p_hat": 0.59025,
+  "successes": 2361
+ },
+ "reference": "121/128",
+ "reference_float": 0.9453125,
+ "schema_version": "1.0.0",
+ "seed": 25,
+ "shots": 4000,
+ "success_predicate": {
+  "description": "P(x) on the data readout; truth table of examples/hw_n3.cqr (bit k of x = data qubit k)",
+  "kind": "truth_table",
+  "truth_table": "00000001"
+ },
+ "target": "fake_torino",
+ "target_class": "qiskit_ibm_runtime.fake_provider.backends.torino.fake_torino.FakeTorino",
+ "versions": {
+  "qiskit": "2.6.2",
+  "qiskit_aer": "0.18.2",
+  "run_py": "hw/run.py (Stage 25b)"
+ }
+}

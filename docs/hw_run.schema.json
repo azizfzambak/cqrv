@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CQRV emulator run report, schema v1.0.0",
+  "description": "PHASE2_SPEC §C.2 \"The runs\" (Stage 25b, Track C); report §5.3, §3.3.3. One emulator run on the fake backend's noise model of a committed physical artifact (hw/artifacts/), written by hw/run.py --sim: the hashes that link it to the artifact (manifest, target snapshot, physical QASM 3, logical circuit), the seed, the shots and the versions; the noise model (NoiseModel.from_backend restricted to the used qubits, mapping checked; mid-circuit measurements carry the readout error — the Stage 24c assumption); the success predicate; the counts and p̂ with the 95 % Clopper–Pearson interval and the one-sided 95 % lower bound; the ideal (noiseless, same shots) frequency and the reference (1 − δ, or 1 for the wrapped gadget); δ_hw from the manifest; the one-sided check p̂ ≥ 1 − δ_hw − √(ln(1/α)/(2·shots)) at α = 0.05 with its result (passes, fails, or vacuous when δ_hw ≥ 1). A simulator run is an emulation: nothing here is a device run, a validation of a certificate, or a certified figure.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "instance", "target", "target_class", "artifact_dir", "hashes", "seed", "shots", "versions",
+               "circuit", "noise_model", "success_predicate", "noisy", "ideal", "reference", "reference_float", "delta", "delta_hw",
+               "delta_hw_float", "delta_hw_vacuous", "check"],
+  "$defs": {
+    "nat": {"type": "integer", "minimum": 0},
+    "sha3": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "fraction": {"type": "string", "pattern": "^(0|[1-9][0-9]*)(/[1-9][0-9]*)?$"},
+    "prob": {"type": "number", "minimum": 0, "maximum": 1}
+  },
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "kind": {"type": "string", "pattern": "^emulator run on the fake backend's noise model"},
+    "instance": {"type": "string", "minLength": 1},
+    "target": {"type": "string", "minLength": 1},
+    "target_class": {"type": "string", "minLength": 1},
+    "artifact_dir": {"type": "string", "pattern": "^hw/artifacts/"},
+    "hashes": {
+      "type": "object", "additionalProperties": false, "required": ["manifest", "target_snapshot", "physical_qasm3", "logical_circuit"],
+      "properties": {"manifest": {"$ref": "#/$defs/sha3"}, "target_snapshot": {"$ref": "#/$defs/sha3"},
+                     "physical_qasm3": {"$ref": "#/$defs/sha3"}, "logical_circuit": {"$ref": "#/$defs/sha3"}}
+    },
+    "seed": {"$ref": "#/$defs/nat"},
+    "shots": {"type": "integer", "minimum": 1},
+    "versions": {"type": "object", "additionalProperties": {"type": "string"}, "required": ["qiskit", "qiskit_aer", "run_py"]},
+    "circuit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["used_physical_qubits", "compact_qubits", "readout_physical_qubits", "readout_register", "instructions"],
+      "properties": {"used_physical_qubits": {"type": "array", "items": {"$ref": "#/$defs/nat"}}, "compact_qubits": {"type": "integer", "minimum": 1},
+                     "readout_physical_qubits": {"type": "array", "items": {"$ref": "#/$defs/nat"}, "minItems": 1},
+                     "readout_register": {"const": "r"}, "instructions": {"$ref": "#/$defs/nat"}}
+    },
+    "noise_model": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "errors_kept", "errors_checked_against_full_model", "mapping_checked", "mid_circuit_assumption"],
+      "properties": {"source": {"type": "string", "pattern": "^NoiseModel.from_backend"}, "errors_kept": {"$ref": "#/$defs/nat"},
+                     "errors_checked_against_full_model": {"$ref": "#/$defs/nat"}, "mapping_checked": {"const": true},
+                     "mid_circuit_assumption": {"type": "string", "minLength": 1}}
+    },
+    "success_predicate": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "description", "truth_table"],
+      "properties": {"kind": {"enum": ["truth_table", "all_zero"]}, "description": {"type": "string", "minLength": 1},
+                     "truth_table": {"oneOf": [{"type": "string", "pattern": "^[01]+$"}, {"type": "null"}]}}
+    },
+    "noisy": {
+      "type": "object", "additionalProperties": false, "required": ["counts", "successes", "p_hat", "clopper_pearson_95", "one_sided_lower_95"],
+      "properties": {"counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}, "patternProperties": {"^[01]+$": {}}},
+                     "successes": {"$ref": "#/$defs/nat"}, "p_hat": {"$ref": "#/$defs/prob"},
+                     "clopper_pearson_95": {"type": "array", "items": {"$ref": "#/$defs/prob"}, "minItems": 2, "maxItems": 2},
+                     "one_sided_lower_95": {"$ref": "#/$defs/prob"}}
+    },
+    "ideal": {
+      "type": "object", "additionalProperties": false, "required": ["successes", "p_ideal", "note"],
+      "properties": {"successes": {"$ref": "#/$defs/nat"}, "p_ideal": {"$ref": "#/$defs/prob"}, "note": {"type": "string"}}
+    },
+    "reference": {"$ref": "#/$defs/fraction"},
+    "reference_float": {"$ref": "#/$defs/prob"},
+    "delta": {"$ref": "#/$defs/fraction"},
+    "delta_hw": {"$ref": "#/$defs/fraction"},
+    "delta_hw_float": {"type": "number", "minimum": 0},
+    "delta_hw_vacuous": {"type": "boolean"},
+    "check": {
+      "type": "object", "additionalProperties": false, "required": ["alpha", "statement", "threshold", "result"],
+      "properties": {"alpha": {"const": 0.05}, "statement": {"type": "string", "minLength": 1}, "threshold": {"type": "number"},
+                     "result": {"enum": ["passes", "fails", "vacuous (delta_hw >= 1)"]}}
+    }
+  }
+}
