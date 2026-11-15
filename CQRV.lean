@@ -18,6 +18,7 @@ import CQRV.Patterns.Select
 import CQRV.DSL.Basic
 import CQRV.Matching.Basic
 import CQRV.Circuit.Basic
+import CQRV.Circuit.MBUGeneral
 import CQRV.Synthesis.Basic
 import CQRV.Certify.Basic
 import CQRV.Certify.Specialize
