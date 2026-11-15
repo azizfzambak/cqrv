@@ -1301,3 +1301,30 @@ costly beyond degree 2: for a three-input AND the correction is CCZ, with 7 T.
 **The split.**
 - 22a: `mbu_general` in both forms, the AND re-derived, the tests.
 - 22b: the Clifford corollary.
+
+**22a done, accepted 2026-11-15** (CI below). `CQRV/Circuit/MBUGeneral.lean` (468 lines) proves:
+- `mbu_general` and `mbu_general_phase` for any phase-exact compute block B and any data-only
+  phase implementation O;
+- the φ = 1 corollaries;
+- `mbu_channel_correct_of_general`, the statement of `mbu_channel_correct` word for word, from
+  the general theorem. The Stage 6b-1 proof stays.
+
+All have the standard three axioms. `diagU` is new: neither Mathlib nor Physlib has a
+diagonal-unitary constructor. The hypothesis C.nBits = j + 1 of the task text was dropped: it is
+derivable from the gate list and `C.WF`, so it is redundant, not false. The linear instance
+f = x0 ⊕ x1 is a test.
+
+**A fact of the IR that refines §B.1.** `Circuit.WF` admits only Clifford gates under `ifBit`
+(`Gate.bitOk`: `g.isClifford`). So the corrections O that `mbu_general` can use in a well-formed
+circuit are lists of Clifford gates. The degree-3 example (correction CCZ, 7 T) is therefore not a
+well-formed circuit of this IR; the test was not written, for this reason and not for its cost.
+The §B.1 sentence "for a three-input AND the correction is CCZ, with 7 T" is true of the matrix,
+but in this IR "MBU is costly beyond degree 2" reads "MBU is not expressible beyond degree 2".
+
+**Refinement at the 22a review (2026-11-15), for Stage 22.** The Clifford corollary splits:
+- **22b, the mathematics.** The quadratic characterization, the constructive direction, and
+  `IsCliffordDiag (phaseDiag f) ↔ IsQuadratic f`.
+- **22c, the IR boundary.** A list of IR Clifford gates acting on data only, whose unitary is
+  λ · (phaseDiag f ⊗ 1), has f quadratic. Hence a well-formed `mbuUncompute t j O` with
+  `PhaseImpl n a O f` forces `IsQuadratic f`, and in this IR `mbu_general` applies exactly to the
+  quadratic f. This needs the conjugation of Paulis by each IR Clifford gate.

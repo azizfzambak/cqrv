@@ -3,9 +3,10 @@
 PHASE2_SPEC.md §B.1. Report: §6.2.1, §6.2.2, §6.2.4, §6.3.2. PHASE2_ROADMAP row 22. Written at
 the 21b2 review (2026-11-15) by the reviewer, under the author's delegation.
 
-Stage 22 has two tasks, one commit each:
+Stage 22 has three tasks, one commit each:
 - **22a**, `mbu_general`, is specified here;
-- **22b**, the Clifford corollary, is outlined here and gets its detailed text at the 22a review.
+- **22b**, the Clifford corollary (the mathematics), is specified below (written at the 22a review);
+- **22c**, the IR boundary, is outlined below and gets its detailed text at the 22b review.
 
 Precondition: main = the 21b2 review commit. Start with `git switch -c stage-22a main`.
 Untracked and not yours: `docs/paper/`, `docs/cqrv_report_revised_v4.docx`. Windows:
@@ -112,13 +113,93 @@ Stop and ask in any of these cases:
 
 ---
 
-## 22b — The Clifford corollary (outline; detailed at the 22a review)
+## 22b — The Clifford corollary: the mathematics (written at the 22a review, 2026-11-15)
 
-PHASE2_SPEC §B.1 "The Clifford corollary".
-- `IsQuadratic f`: there are c, a and b with f(x) = c ⊕ ⊕ a_i x_i ⊕ ⊕_{i<j} b_ij x_i x_j.
-- The constructive (⇐): `phaseCircuitQuad` of Z and CZ gates, with `PhaseImpl`.
-- `IsCliffordDiag` for a diagonal unitary: every X_i is conjugated to a Pauli up to a phase.
-- (⇒) through the derivatives D_i f, and the theorem `phaseImpl_clifford_iff_quadratic`.
+PHASE2_SPEC §B.1 "The Clifford corollary", the "22a done" paragraph and its refinement.
+Precondition: main = the 22a review commit. Start with `git switch -c stage-22b main`.
+
+New module `CQRV/Circuit/MBUClifford.lean` (Physlib-side), importing `MBUGeneral`. The invariants
+of Stage 22 hold.
+
+### L1. Quadratic Boolean functions
+
+- **`IsQuadratic (f : Reg n → Bool)`.** There are c : Bool, a : Fin n → Bool and b : Fin n → Fin n
+  → Bool with f x = c ⊕ ⊕_i (a_i ∧ x_i) ⊕ ⊕_{i<j} (b_ij ∧ x_i ∧ x_j) for every x.
+  - Choose the representation: `Bool` with `xor` folds, or `ZMod 2`. Give a form that `decide`
+    can evaluate at small n.
+- **The derivative.** `deriv f i x := f x ⊕ f (flip i x)`.
+- **`IsAffine g`.** There are c and a with g x = c ⊕ ⊕_i (a_i ∧ x_i).
+- **`isQuadratic_iff_deriv_affine`.** `IsQuadratic f ↔ ∀ i, IsAffine (deriv f i)`.
+  - (⇒) is a computation.
+  - (⇐) reconstructs the coefficients:
+    - c = f 0;
+    - a_i = f(e_i) ⊕ f 0;
+    - b_ij = f(e_i ⊕ e_j) ⊕ f(e_i) ⊕ f(e_j) ⊕ f 0.
+
+    It then proves the identity by induction on the support of x.
+
+### L2. The constructive direction
+
+- **`phaseCircuitQuad`.** It builds, from the coefficients, the list of `Z` gates on data qubits
+  where a_i holds and `CZ` gates where b_ij holds.
+- **`phaseCircuitQuad_phaseImpl`.** `PhaseImpl n a (phaseCircuitQuad …) f` with λ = (−1)^c.
+  - Use the 22a lemmas `gateU_z_data`, `gateU_cz_data` and `phaseDiag_mul`, by induction on the
+    gate list.
+- **`mbu_quadratic`.** For every quadratic f and every compute block for f, the MBU circuit with
+  `phaseCircuitQuad` restores its ancilla (`mbu_general_phase_one`). This is the positive half of
+  the corollary as a theorem about circuits.
+
+### L3. Clifford for diagonal unitaries
+
+- **The Paulis.**
+  - `pauliX i : Matrix (Reg n) (Reg n) ℂ` is the permutation matrix of `flip i`.
+  - `pauliZ (b : Fin n → Bool)` is diag((−1)^{⊕_i b_i ∧ x_i}).
+- **`IsCliffordDiag (D : Matrix (Reg n) (Reg n) ℂ)`.** For every i there are λ (‖λ‖ = 1) and b
+  with D · pauliX i · Dᴴ = λ • (pauliX i * pauliZ b).
+  - The doc-comment says why this is the Clifford condition for a diagonal unitary: D commutes
+    with every Z-type Pauli, so only the X_i need checking.
+- **`conj_pauliX_phaseDiag`.** phaseDiag f · pauliX i · (phaseDiag f)ᴴ = pauliX i ·
+  phaseDiag (deriv f i).
+- **`phaseDiag_eq_smul_pauliZ_iff`.** phaseDiag g = λ • pauliZ b for some λ and b iff
+  `IsAffine g`.
+- **`clifford_iff_quadratic`.** `IsCliffordDiag (phaseDiag f) ↔ IsQuadratic f`.
+
+### L4. Tests (`tests/CQRVTests/MBUClifford.lean`)
+
+- `#guard_msgs` on the axioms of `isQuadratic_iff_deriv_affine`, `phaseCircuitQuad_phaseImpl`,
+  `mbu_quadratic` and `clifford_iff_quadratic`;
+- `decide`-level checks that x0 ∧ x1 and x0 ⊕ x1 ⊕ (x1 ∧ x2) are quadratic, and that
+  x0 ∧ x1 ∧ x2 is not (through the derivative criterion);
+- `phaseCircuitQuad` of x0 ∧ x1 is `[.cz x0 x1]`.
+
+### 22b Docs / Acceptance / Stop
+
+Docs:
+- a DECISIONS.md entry;
+- `docs/PROJECT_STATUS.md`;
+- README's status line.
+
+Acceptance:
+- `lake build` green and warning-free;
+- CI 19 PASS, 0 FAIL, 4 n/a;
+- the axioms as in L4.
+
+Stop and ask in any of these cases:
+- a single proof above about 400 lines;
+- the induction of L1 (⇐) needs a different statement;
+- a Lean process above 8 GB.
+
+## 22c — The IR boundary (outline; detailed at the 22b review)
+
+PHASE2_SPEC §B.1, the refinement at the 22a review.
+- Pauli conjugation by each IR Clifford gate on `Reg n × Reg a`: H, S, Sdg, X, Z, CNOT, CZ, and
+  `p` with 2^k ∣ 4a.
+- Products of Clifford gates are Clifford.
+- A data-only unitary λ · (phaseDiag f ⊗ 1) that is Clifford on n + a qubits makes
+  `phaseDiag f` `IsCliffordDiag` on n.
+- The theorem `mbu_wf_forces_quadratic`: if C.WF, C.gates contains `mbuUncompute t j O`, and
+  `PhaseImpl n a O f`, then `IsQuadratic f`.
+- Together with 22b: in this IR, `mbu_general` applies exactly to the quadratic f.
 
 ## Closing reply (each task)
 
