@@ -6,6 +6,7 @@ import CQRV.Emit.Basic
 import CQRV.Patterns.Basic
 import CQRV.Patterns.Select
 import CQRV.Hardware.Target
+import CQRV.Hardware.Bound
 
 /-!
 # `cqr` command-line interface
@@ -55,6 +56,12 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
 * `cqr hw capabilities <target.json>` — Stage 24a (PHASE2_SPEC §C.1): the capability flags of
   a hardware target with their sources, the uncomputation modes it supports, and the snapshot
   hash check (exit 0 ok, 1 mismatch, 2 usage / unreadable target).
+* `cqr hw bound <file.cqr> --target <target.json> …` — Stage 24c (PHASE2_SPEC §C.1): the weighted
+  bound δ_hw ≤ δ + Σ_types count · rate of the Grover circuit (the same `groverInstance` as
+  `cqr certify`) under the decomposition table of the target's basis, with the worst-case rates
+  over the device (a bound for any layout, marked vacuous at ≥ 1) and the median figure (typical,
+  not a bound); reported, not certified. Exit 2: usage, an unreadable target, or `mbu` on a target
+  without feed-forward.
 * `cqr emit <file> --format qir|qasm [--iterations r] [--solutions M] [--oracle]` — report
   §8.4.3 (Stage 8a): match (must be Grover), then print the QIR Adaptive Profile module or the
   OpenQASM 3 program of the Grover circuit (`r` as for `--grover`, default r⋆), with one
@@ -122,7 +129,9 @@ def usage : String :=
     "  certify <file> --budget w,d,t,a --prefer width|depth|t|anc [--solutions M] [--iterations r]\n" ++
     "          [--count-limit k] [--profile name|path] [--bench k] [--report] [--out dir]\n" ++
     "  emit <file> --format qir|qasm [--iterations r] [--solutions M] [--oracle]\n" ++
-    "  hw capabilities <target.json>\n"
+    "  hw capabilities <target.json>\n" ++
+    "  hw bound <file.cqr> --target <target.json> [--solutions M] [--iterations r] [--shape tree|few:log]\n" ++
+    "          [--uncompute mbu|coherent] [--json]\n"
 
 /-- Report §4.2.2 — parse and surface-check a source file; also returns the position of the
 entry `fn` (the last one), used by the `--solutions` diagnostic. -/
@@ -973,6 +982,109 @@ def runHwCapabilities (path : String) : IO UInt32 := do
       IO.println s!"snapshot hash mismatch: file {t.snapshotHash}, computed {computed}"
       return 1
 
+/-- `--target t` and `--json` of `cqr hw bound`, in any position; the other flags are left. -/
+def hwBoundFlags : List String → Option (Option String × Bool × List String)
+  | [] => some (none, false, [])
+  | "--target" :: t :: rest => do
+    let (_, j, r) ← hwBoundFlags rest
+    return (some t, j, r)
+  | "--json" :: rest => do
+    let (t, _, r) ← hwBoundFlags rest
+    return (t, true, r)
+  | f :: rest => do
+    let (t, j, r) ← hwBoundFlags rest
+    return (t, j, f :: r)
+
+/-- PHASE2_SPEC §C.1 "Per-operation rates" (Stage 24c) — `cqr hw bound <file.cqr> --target
+<target.json> [--solutions M] [--iterations r] [--shape tree|few:log] [--uncompute mbu|coherent]
+[--json]`: the Grover circuit by the same `groverInstance` as `cqr certify`, δ by `groverDelta`,
+the counts under the table of the target's basis (`basisCounts`), the rates (worst and median over
+the device) from the snapshot, each product, the sum, the worst-case δ_hw (vacuous at ≥ 1), the
+median figure (typical, not a bound) and the coefficient of η_mid (the mid-circuit measurements,
+which take the readout rate as a labelled assumption); the final readout of the `n` data qubits is
+added. `mbu` on a target without feed-forward: exit 2. Nothing is written; the output says
+"reported, not certified (Stage 27)". -/
+def runHwBound (path target : String) (solutions iters : Option Nat) (dif : CertDiffusion)
+    (mode : UncomputeMode) (json : Bool) : IO UInt32 := do
+  let t ← match ← Hardware.readTarget target with
+    | .error msg => IO.eprintln s!"cqr hw bound: {msg}"; return 2
+    | .ok t => pure t
+  let basis ← match Hardware.TargetBasis.ofGates t.basisGates with
+    | .error msg => IO.eprintln s!"cqr hw bound: {target}: {msg}"; return 2
+    | .ok b => pure b
+  if mode == .mbu && !t.capabilities.feedForward.value then
+    IO.eprintln s!"cqr hw bound: mbu needs feed-forward; the target {t.name} supports coherent only"
+    return 2
+  let rates ← match Hardware.Rates.ofTarget t basis with
+    | .error msg => IO.eprintln s!"cqr hw bound: {target}: {msg}"; return 2
+    | .ok r => pure r
+  match ← frontEnd path, ← signature path solutions with
+  | .error d, _ | _, .error d => IO.println d.toJson.compress; return 1
+  | .ok (tp, _), .ok sig =>
+    let gi ← match groverInstance tp sig iters dif mode with
+      | .ok gi => pure gi
+      | .error (.diagnostic d) => IO.println d.toJson.compress; return 1
+      | .error (.usage msg) => IO.eprintln s!"cqr hw bound: {msg}"; return 2
+    let some M := gi.M
+      | IO.eprintln "cqr hw bound: the bound needs the solution count M (from ℰ or --solutions M)"
+        return 2
+    let delta := groverDelta gi.r gi.n M
+    let R := Hardware.BoundReport.mk' basis gi.circuit gi.n rates delta
+    let c := R.counts
+    let two := basis.twoQubit
+    let shape : String := match dif with | .tree => "tree" | .fewLog => "few:log"
+    let modeS : String := match mode with | .mbu => "mbu" | .coherent => "coherent"
+    let rs := Hardware.ratStr
+    let term (n : Nat) (r : Hardware.Rate) : Rat := n * r.worst
+    let termM (n : Nat) (r : Hardware.Rate) : Rat := n * r.median
+    let meas := c.midMeas + c.finalMeas + R.readoutData
+    let sumW := term c.rz rates.rz + term c.sx rates.sx + term c.x rates.x +
+      term c.twoQubit rates.twoQubit + term meas rates.readout
+    let sumM := termM c.rz rates.rz + termM c.sx rates.sx + termM c.x rates.x +
+      termM c.twoQubit rates.twoQubit + termM meas rates.readout
+    if json then
+      let rate (r : Hardware.Rate) : Lean.Json := Lean.Json.mkObj
+        [("worst", rs r.worst), ("median", rs r.median), ("entries", r.entries)]
+      IO.println (Lean.Json.mkObj
+        [("target", t.name), ("basis", two), ("source", path), ("shape", shape),
+         ("uncompute", modeS), ("n", gi.n), ("r", gi.r), ("M", M),
+         ("counts", Lean.Json.mkObj [("rz", c.rz), ("sx", c.sx), ("x", c.x), (two, c.twoQubit),
+           ("mid_circuit_measurements", c.midMeas), ("final_measurements", c.finalMeas),
+           ("data_readout", R.readoutData), ("measurements_total", meas), ("total", c.total + R.readoutData)]),
+         ("rates", Lean.Json.mkObj [("rz", rate rates.rz), ("sx", rate rates.sx), ("x", rate rates.x),
+           (two, rate rates.twoQubit), ("readout", rate rates.readout)]),
+         ("terms_worst", Lean.Json.mkObj [("rz", rs (term c.rz rates.rz)), ("sx", rs (term c.sx rates.sx)),
+           ("x", rs (term c.x rates.x)), (two, rs (term c.twoQubit rates.twoQubit)),
+           ("measurements", rs (term meas rates.readout)), ("sum", rs sumW)]),
+         ("terms_median", Lean.Json.mkObj [("rz", rs (termM c.rz rates.rz)), ("sx", rs (termM c.sx rates.sx)),
+           ("x", rs (termM c.x rates.x)), (two, rs (termM c.twoQubit rates.twoQubit)),
+           ("measurements", rs (termM meas rates.readout)), ("sum", rs sumM)]),
+         ("delta", rs delta),
+         ("bound", Lean.Json.mkObj [("worst", rs R.worst), ("worst_vacuous", R.vacuous),
+           ("median", rs R.median), ("median_float", Lean.toJson (Hardware.ratFloat R.median)),
+           ("median_label", "typical, not a bound")]),
+         ("eta_mid_coefficient", R.etaMidCoeff),
+         ("mid_circuit_assumption", "mid-circuit measurements take the readout rate (the snapshot gives no mid-circuit error)"),
+         ("status", "reported, not certified (Stage 27)")]).compress
+      return 0
+    IO.println s!"target: {t.name} (basis {two}); {path}: shape {shape}, uncompute {modeS}, n = {gi.n}, r = {gi.r}, M = {M}"
+    IO.println s!"counts under the table: rz {c.rz}, sx {c.sx}, x {c.x}, {two} {c.twoQubit}, mid-circuit measurements {c.midMeas}, final measurements {c.finalMeas}, data readout {R.readoutData} (measurements {meas}; total {c.total + R.readoutData})"
+    let line (name : String) (n : Nat) (r : Hardware.Rate) : IO Unit :=
+      IO.println s!"  {name}: {n} × worst {rs r.worst} = {rs (term n r)}  |  median {rs r.median} ({r.entries} entries)"
+    IO.println "rates over the device (worst | median) and the worst-case terms:"
+    line "rz" c.rz rates.rz
+    line "sx" c.sx rates.sx
+    line "x" c.x rates.x
+    line two c.twoQubit rates.twoQubit
+    line "measurements (readout rate; mid-circuit by assumption)" meas rates.readout
+    IO.println s!"  sum (worst) = {rs sumW}; sum (median) = {rs sumM}"
+    IO.println s!"δ = {rs delta}"
+    IO.println s!"δ_hw ≤ δ + Σ count · rate = {rs R.worst} (worst case over the device, a bound for any layout){if R.vacuous then " — VACUOUS (≥ 1)" else ""}"
+    IO.println s!"median figure: {rs R.median} ≈ {Hardware.ratFloat R.median} (typical, not a bound)"
+    IO.println s!"coefficient of η_mid (mid-circuit measurements, readout rate assumed): {R.etaMidCoeff}"
+    IO.println "reported, not certified (Stage 27)"
+    return 0
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["check", file] => runCheck file
@@ -1096,6 +1208,23 @@ def main (args : List String) : IO UInt32 := do
     | some (some f, r, m, o) => runEmit file f r m o
     | _ => IO.eprint usage; return 2
   | ["hw", "capabilities", target] => runHwCapabilities target
+  | "hw" :: "bound" :: file :: flags =>
+    match hwBoundFlags flags with
+    | some (some target, json, flags) =>
+      match shapeFlag flags with
+      | some (sh, flags) =>
+        match uncomputeFlag flags with
+        | some (mode, flags) =>
+          match certDiffusionOf sh, certifyFlags flags with
+          | some dif, some (m, r, none, none, false, none, none) =>
+            runHwBound file target m r dif mode json
+          | none, _ =>
+            IO.eprintln s!"cqr hw bound: --shape {shapeName sh} has no certificate path (tree, few:log)"
+            return 2
+          | _, _ => IO.eprint usage; return 2
+        | none => IO.eprint usage; return 2
+      | none => IO.eprint usage; return 2
+    | _ => IO.eprint usage; return 2
   | "hw" :: _ => IO.eprint usage; return 2
   | cmd :: _ =>
     match subcommands.lookup cmd with

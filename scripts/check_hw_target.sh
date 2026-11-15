@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Stage 24a — the hardware target model (PHASE2_SPEC §C.1, Track C; report §3.1.3, §5.3).
+# Stage 24a — the hardware target model, and Stage 24c — the weighted bound (PHASE2_SPEC §C.1,
+# Track C; report §3.1.3, §3.3.3, §5.3).
 #
 #   tests/diff/hw_target_check.py   both committed targets of hw/targets/ validate against
 #                                   docs/hardware_target.schema.json (--schema-only, with the
@@ -9,6 +10,11 @@
 #                                   prints the expected modes and `snapshot hash ok` (Lean's
 #                                   canonical form and SHA3 = Python's), exit 0; a corrupted
 #                                   calibration number exits 1; a missing file exits 2
+#   tests/diff/hw_bound_check.py    Stage 24c: `cqr hw bound --json` on the committed Grover examples
+#                                   against both targets (mbu only where feed-forward exists)
+#                                   recomputed independently — counts under the table, worst and
+#                                   median rates, terms, δ, both bound figures, vacuity — exactly
+#                                   equal; the transpiled counts printed for information
 #
 # The schema validation runs with the harness venv (.venv, PYTHON; jsonschema 4.26.0), the rest with
 # the hardware venv (.venv-hw, pinned by hw/requirements.lock; see hw/README.md).
@@ -34,4 +40,5 @@ CQR="$ROOT/.lake/build/bin/cqr"
 [ -f "$CQR" ] || { echo "check_hw_target: $CQR not found (run lake build first)" >&2; exit 2; }
 "$PYTHON" -I "$ROOT/tests/diff/hw_target_check.py" --schema-only
 "$PYTHON_HW" -I "$ROOT/tests/diff/hw_target_check.py" --cqr "$CQR"
+"$PYTHON_HW" -I "$ROOT/tests/diff/hw_bound_check.py" --cqr "$CQR"
 echo "check_hw_target: all checks passed"
