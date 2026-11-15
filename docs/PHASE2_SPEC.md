@@ -1535,3 +1535,55 @@ B.
 - **Candidate B attains it.** Its plan is valid in the model, with `Clean` = {anc 0, anc 1}, and
   costs 8n − 24. The emitted T-count equals the cost: for n = 4…12 by `decide`, and for all n
   only if the induction over the plan stays within a size guard.
+
+**23c done, accepted 2026-11-15** (CI below). `CQRV/Synthesis/Problem1.lean` (362 lines;
+Physlib-free, not imported by the CLI) defines the schedule model:
+- `P1State` (avail, fresh);
+- `P1Op` = (t, x, y), with validity and the step;
+- the costs 4 / 8.
+
+It proves:
+- `live_step`, `nFresh_le`, `cost_add`, `live_run`;
+- the general form `cost_lower_bound`, cost ≥ 8 (n − k) − 4 min(|fresh₀|, n − k);
+- `problem1_T_lower_bound`, cost ≥ 8n − 24 for |fresh₀| = 2, k ≤ 2, n ≥ 4.
+
+Candidate B's plan translates into the model with no exception. Each clean index is targeted at
+most once, since index 0 of an array is never a control.
+- **Validity, end state and emitted T-count** (`planB_valid`, `planB_live`, `planB_tCount`) are
+  proved for n = 4 … 12 by kernel evaluation, through a kernel-evaluable copy of the plan
+  (`plan_eq`), because `List.mergeSort` does not reduce in the kernel.
+- **The T-count 8n − 24** (`planB_cost`) holds for n = 6 … 12.
+- **The all-n forms** were not attempted, being over the guard; their route is recorded.
+- The three-clean-ancilla example costs 8n − 28, so the bound counts the clean ancillas.
+
+**One statement of the task text was false at two values and is corrected.** "Candidate B costs
+8n − 24 for n = 4 … 12" fails at n = 4 and 5, where B costs 8n − 20 (`planB_cost_small`). The
+greedy leaves two unmarked qubits after the first array, so `anc 1` is never targeted and B uses
+one AND instead of two. The bound 8n − 24 is still attained in the model at n = 4, by a
+two-operation schedule in the tests. B attains it from n = 6 on, as
+`tests/CQRVTests/MczFew.lean` already said.
+
+**Stage 23 is complete. M4 is reached** with `docs/notes/PAPER2_DRAFT.md`, the reviewer's draft
+of Paper 2. Every claim in it names its theorem, and the author owns the final text.
+
+### B.3 The M4 review (2026-11-15; reviewer decisions, delegated)
+
+1. **23b is not run as a stage.** Its three points become remarks in Paper 2's discussion:
+   - the relation of the Unqomp / Silq safety conditions to the criterion of Stage 22;
+   - graded realizability as a fibration;
+   - the obstruction theorem, which exists in its concrete form (`no_cloning_obstruction`).
+   None needs new mechanization for the paper's claims.
+2. **The M4 housekeeping list goes to Stage 30's cleanup**, not to a task now:
+   - the duplicated kernel-evaluable schedule (`Grover.FewSchedule` and Problem1's copy);
+   - the layering exception `Circuit/CountingCorrect.lean` → `Grover/Restore.lean`.
+   Both are code quality without a claim attached.
+3. **Open proof items** are listed as open in Paper 2 §10 and in `docs/M3_REPORT.md`'s successor
+   at M5:
+   - clean ⇒ Cond(true);
+   - the dirty widening;
+   - commutation of blocks on disjoint qubits;
+   - the all-n forms of 23c.
+4. **Track C starts with Stage 24.** It needs Qiskit, Aer and the runtime fake provider: a
+   download from PyPI that the author must approve. §C.1 is written after the author's answer.
+   If the download is declined, Track C is reconsidered, and the simulator-only path of the
+   roadmap is the default.
