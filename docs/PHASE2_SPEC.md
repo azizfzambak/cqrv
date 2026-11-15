@@ -1587,3 +1587,82 @@ of Paper 2. Every claim in it names its theorem, and the author owns the final t
    download from PyPI that the author must approve. §C.1 is written after the author's answer.
    If the download is declined, Track C is reconsidered, and the simulator-only path of the
    roadmap is the default.
+
+## §C. Hardware backend, simulator first (Track C; Paper 1)
+
+Written at the M4 review (2026-11-15) by the reviewer, under the author's delegation. Report:
+§3.1.3 (hardware profiles as change of base), §5.3 (the emitter and the trust boundary), §2.3.2
+and §6.6 (noise). PHASE2_ROADMAP rows 24–28.
+
+The architecture is that of the hardware study (PHASE2_ROADMAP, Track C):
+- the Lean certificate is unchanged;
+- the backend is a new layer after it;
+- untrusted tools (Qiskit, Aer) do the work and produce a witness, and Lean checks the witness;
+- the rest becomes named hypotheses.
+
+Two rules apply throughout:
+- **Never "verified on hardware".** A simulator run is an emulation; it validates nothing about a
+  device.
+- **Downloads go to the author.** Qiskit, Aer and the runtime fake provider were approved on
+  2026-11-15. They are installed into a separate git-ignored venv `.venv-hw` and pinned in
+  `hw/requirements.lock`. The harness venv `.venv` and its lock are untouched. Any further
+  download (another package, a newer pin, real calibration data) needs a new approval.
+
+### C.1 Target model and lowering (Stage 24)
+
+**The target model.** A `HardwareTarget` is a JSON file, schema
+`docs/hardware_target.schema.json`, with:
+- `name`, `source` (the fake backend's class and the package version), and `num_qubits`;
+- `basis_gates`, the native gate names, and `coupling_map`, the directed edges;
+- `capabilities`: `mid_circuit_measurement`, `feed_forward` (classically conditioned
+  operations, Qiskit's `if_else` / `if_test`) and `reset`. Each flag is read from the backend's
+  target and says where it was read from;
+- `durations`: per gate and qubit tuple, in ns;
+- `calibration`, a snapshot:
+  - errors per one-qubit gate and qubit, per two-qubit gate and edge;
+  - readout error per qubit;
+  - the mid-circuit measurement error per qubit, if the source gives it. If it does not, the
+    field is null with a note, and the readout error is not silently substituted;
+  - T1 and T2 per qubit;
+- `snapshot`: the timestamp the source gives, and `hash`, the SHA3-256 of the canonical JSON of
+  `calibration`. The canonical form is sorted keys, compact, and numbers as the source gives
+  them.
+
+**`cqr hw capabilities <target.json>`.** It reads a target, validates the fields it needs, and
+prints:
+- the capability flags;
+- which uncomputation modes the target supports: `mbu` needs mid-circuit measurement and feed
+  forward; `coherent` needs neither;
+- the snapshot hash.
+
+Lean reads the JSON, Physlib-free, and checks the hash with the existing SHA3. A target that does
+not support `mbu` is an input to Stage 26's selection, which picks `treeCoherent` there (§A.9
+(5)).
+
+**Lowering.**
+- The canonical circuit JSON of the IR (the JSON `cqr synthesize` and the certificates hash, not
+  the QASM text) is lowered to a Qiskit dynamic circuit. Each `ifBit j g` becomes an `if_test` on
+  the classical bit, and each `measure q j` a mid-circuit measurement into that bit.
+  `alloc` / `free` are bookkeeping.
+- An ideal Aer simulation is compared with the in-repo statevector reference, branch by branch:
+  for each assignment of the classical bits, the post-measurement state of that branch and its
+  probability, up to global phase. The comparison runs on every committed example and generated
+  instance with at most 6 data qubits plus ancillas.
+- The lowering is an untrusted tool. What validates it is the comparison here; Stage 26 later
+  checks witnesses in Lean.
+
+**Per-operation rates.** The hardware bound of Stage 11b, δ_hw ≤ δ + G · p̄, uses one rate p̄ for
+all G operations. It is replaced by
+δ_hw ≤ δ + Σ_types (count of the type) · (the rate of the type, from the snapshot): one-qubit
+gates, two-qubit gates, mid-circuit measurements, final readout.
+- Before transpilation the counts are the logical ones (`gateCounts`, `grade_ext`). After
+  transpilation (Stage 25) they are the physical ones.
+- The bound is still a union bound under a stochastic-noise premise, and it is reported, not
+  certified, until Stage 27's theorem.
+- The old p̄ form stays available for the committed certificates, whose JSONs are unchanged.
+
+**The split.**
+- **24a:** the environment, the `hw/` package skeleton, `HardwareTarget` with its schema, two
+  committed targets extracted from fake backends, and `cqr hw capabilities`.
+- **24b:** the lowering and the branch-by-branch comparison on Aer, as a new CI step.
+- **24c:** the per-operation-type rates and the weighted bound in the run reports.
