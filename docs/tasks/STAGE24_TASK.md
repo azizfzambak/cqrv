@@ -5,8 +5,8 @@ PHASE2_SPEC.md §C, §C.1. Report: §3.1.3, §5.3. PHASE2_ROADMAP row 24. Writte
 
 Stage 24 has three tasks, one commit each:
 - **24a**, the environment, the target model and `cqr hw capabilities`, is specified here;
-- **24b**, the lowering and the comparison on Aer, and **24c**, the per-operation rates, are
-  outlined and get their detailed text at the review of the task before them.
+- **24b**, the lowering and the comparison on Aer, is specified below (written at the 24a review);
+- **24c**, the per-operation rates, is outlined and gets its detailed text at the 24b review.
 
 Precondition: main = the M4 review commit. Start with `git switch -c stage-24a main`. Untracked
 and not yours: `docs/paper/`, `docs/cqrv_report_revised_v4.docx`. Windows: `LEAN_NUM_THREADS=4`.
@@ -132,14 +132,93 @@ Stop and ask in any of these cases:
 
 ---
 
-## 24b — The lowering and the comparison on Aer (outline)
+## 24b — The lowering and the comparison on Aer (written at the 24a review, 2026-11-15)
 
-- `hw/lower.py`: the canonical circuit JSON → a Qiskit dynamic circuit (`if_test`, mid-circuit
-  measure, bookkeeping for alloc / free).
-- `tests/diff/hw_lower_check.py`: an ideal Aer simulation against the statevector reference,
-  branch by branch (per classical assignment: the post-measurement state up to global phase, and
-  the probability), on every committed example and generated instance with at most 6 data qubits.
-- A new CI step; the pass mark becomes 21.
+PHASE2_SPEC §C.1 "Lowering", and the "24a done" paragraph. Precondition: main = the 24a review
+commit. Start with `git switch -c stage-24b main`. The invariants of Stage 24 hold. No new
+download: everything needed is in `.venv-hw` and `.venv`.
+
+### S1. `hw/lower.py`
+
+**`lower(circuit_json) -> QuantumCircuit`.** The input is the canonical circuit JSON of
+`Circuit.toJson`: `n_data`, `n_anc`, and gates with `op`, `q`, `c`, `a`, `k`, `if`. The circuit
+has n_data + n_anc qubits, in the JSON's flat order, and one classical register of nBits bits.
+The mapping:
+
+| IR | Qiskit |
+|---|---|
+| `h s sdg t tdg x z` | the same gates |
+| `cnot` | `cx` |
+| `cz` | `cz` |
+| `p a k` | `p(2πa/2^k)` |
+| `cp a k` | `cp(2πa/2^k)` |
+| `measure q → c` | `measure(q, c)` |
+| `if: k` | `with qc.if_test((clbit k, 1)): <the gate>` |
+| `alloc`, `free` | nothing (bookkeeping) |
+
+The phase convention must match the IR's: `p` multiplies |1⟩ by exp(2πi a/2^k), Qiskit's phase
+gate. Check it numerically on one gate.
+
+**CLI.** `python -I hw/lower.py <circuit.json> [--qasm-out f]`. The QASM export of the lowered
+circuit is for inspection only; the comparison is on the circuit object.
+
+### S2. The branch-by-branch comparison (`tests/diff/hw_lower_check.py`, `.venv-hw` Python)
+
+- For each instance and each assignment c of the classical bits that occurs with nonzero
+  probability, compare the reference and Aer on two things:
+  - the branch probability p_c, to 1e-9;
+  - the normalized post-measurement state of the branch, up to global phase, to 1e-9 in
+    fidelity.
+- **The reference** is the in-repo statevector harness (`tests/diff/statevector.py`, which
+  already enumerates branches).
+- **The Aer side** uses Aer's own dynamic-circuit execution, not a hand evolution with Qiskit
+  operators. Find the exact per-branch mechanism in the installed qiskit-aer 0.18.2, for example
+  `save_statevector` / `save_density_matrix` with `conditional=True`, or
+  `save_probabilities_dict`, and say which you used.
+  - If Aer gives no exact per-branch data, compare instead the exact output density matrix of
+    the whole channel (`save_density_matrix`, ideal), plus the branch probabilities from Aer's
+    exact probabilities. Report that this is the weaker check.
+- **Instances.** Every one whose data register is at most 6 qubits:
+  - the MBU gadget (`mbuCircuit`), and its uncorrected variant;
+  - the Grover circuits of every `examples/*.cqr` with n ≤ 6 that `cqr synthesize --grover`
+    accepts, in both uncomputation modes and with the few:log diffusion where it applies, among
+    them `simple_alu_x0_1`;
+  - one counting circuit with n = 4, m = 2, through CertifyTool `counting-sample`'s IR JSON or
+    `cqr`, which exercises `p` / `cp`;
+  - the 23a and 23b gadgets that are circuits (the parity instance, the dirty gadget).
+- **Inputs.** The all-zero input. For the oracle-level instances, also every computational-basis
+  data input (prepend X gates); state the count.
+
+### S3. The schema check moves to `jsonschema`
+
+`scripts/check_hw_target.sh` runs the schema validation of the two targets with `$PYTHON` (`.venv`,
+which has `jsonschema` 4.26.0). `.venv-hw` keeps the rest of `hw_target_check.py`. The built-in
+subset validator is removed, or kept only as a documented fallback that CI does not use.
+
+### S4. CI
+
+A new step "Hardware lowering (Stage 24b)" in `scripts/ci_local.sh` and `.github/workflows/ci.yml`:
+`scripts/check_hw_lower.sh`, using `.venv-hw`, and n/a with a reason if it is absent. The pass
+mark becomes **21 PASS, 0 FAIL, 4 n/a**. Report the step's time; above 300 s, stop and say what
+takes the time.
+
+### 24b Docs / Acceptance / Stop
+
+Docs:
+- a DECISIONS.md entry, with the Aer mechanism used and the instance count;
+- `docs/PROJECT_STATUS.md`;
+- README's status line.
+
+Acceptance:
+- `lake build` green (no Lean change is expected);
+- CI 21 PASS, 0 FAIL, 4 n/a;
+- every instance agreeing on every branch.
+
+Stop and ask in any of these cases:
+- an instance disagrees on a branch: report the instance, the branch and both values, and do not
+  "fix" the reference;
+- Aer's dynamic-circuit execution does not support a construct the IR emits;
+- a new download would be needed.
 
 ## 24c — Per-operation rates (outline)
 

@@ -1666,3 +1666,25 @@ gates, two-qubit gates, mid-circuit measurements, final readout.
   committed targets extracted from fake backends, and `cqr hw capabilities`.
 - **24b:** the lowering and the branch-by-branch comparison on Aer, as a new CI step.
 - **24c:** the per-operation-type rates and the weighted bound in the run reports.
+
+**24a done, accepted 2026-11-15** (CI below).
+- **The environment.** `.venv-hw` holds qiskit 2.6.2, qiskit-aer 0.18.2 and qiskit-ibm-runtime
+  0.52.1: 39 wheels, 80 MB, from PyPI only, approved by the author directly in the implementer's
+  session. It is pinned in `hw/requirements.lock`, and `.venv` is untouched.
+- **The targets.** `HardwareTarget` has a schema (1.0.0), and `hw/target.py` extracts a target
+  from a fake backend. Two committed targets:
+  - `hw/targets/fake_torino.json` (FakeTorino, 133 qubits, `if_else` in the target, so the
+    uncompute modes are mbu and coherent);
+  - `hw/targets/fake_washington.json` (FakeWashingtonV2, 127 qubits, no `if_else`, so coherent
+    only).
+
+  The second is a real fake backend without feed-forward, so no hand-made variant was needed.
+- **The canonical form.** Every calibration number is a decimal string, so Python's and Lean's
+  SHA3-256 of the compact sorted JSON agree byte for byte. `cqr hw capabilities` prints the flags,
+  the modes and the hash check, with exit codes 0, 1 and 2.
+- **What the fakes cannot tell.** They do not distinguish mid-circuit from final measurement, and
+  give no mid-circuit error. So the `mid_circuit_measurement` flag means "`measure` is in the
+  target", with that caveat in its source string, and Paper 1 says so.
+- **The schema check** of `hw_target_check.py` uses a built-in validator for the schema's subset
+  when `jsonschema` is absent from `.venv-hw`. 24b moves the schema validation to `.venv`'s
+  `jsonschema` (no new download).
