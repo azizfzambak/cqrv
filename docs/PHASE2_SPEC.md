@@ -1912,3 +1912,22 @@ component, in the manner of §A.6.
 - **26c:** the per-instance kernel checks, `PhysGrade` with the timing model, the physical
   certificate of the running example on FakeTorino (committed), the status words, and selection
   by the physical grade.
+
+**26a done, accepted 2026-11-15** (CI below).
+- **The data part.** `CQRV/Hardware/Decomp.lean` (Physlib-free; it joins the cqr closure, now 54
+  modules) has `BasisGate`, `expand`, `decompTable` and `translate`, and `cqr hw table` prints
+  the table. The Lean table and `hw/decomp.py`'s are identical, entry for entry with exact
+  phases (26 entries per basis), and checked in CI.
+- **The proofs.** `CQRV/Hardware/DecompSound.lean` (Physlib-side) proves `decomp_sound` for every
+  entry (parametric in a, k for p and cp), `translate_sound` (well-formedness and channel
+  equality, with the per-branch global phase lemma `channelDenote_eq_of_kraus_smul`), and the
+  transfers `AncRestore.translate` and `realizes_translate`. All have the standard three axioms.
+- **One statement of the task text was false and is corrected.** `decomp_sound` with the table's
+  phase φ fails for h. The table's phase is that of the basis matrices, where rz(θ) =
+  e^{−iθ/2} p(θ), while `expand (rz a k) = p a k` carries no phase. The proved form uses
+  `irPhase` = φ + Σ_rz a / 2^(k+1). For example, h: 1/8 of a turn; cnot in the cz basis: 1/4;
+  p: 0.
+- **My claim on conditioned non-Clifford rz holds exactly.** Every conditioned gate a
+  well-formed circuit contains expands to Clifford gates, so `translate_wf` has no exception.
+- **Left to 26b:** the equality `(translateCircuit b C).nAnc = C.nAnc` is decided per instance,
+  not proved in general.

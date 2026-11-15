@@ -5,8 +5,9 @@ PHASE2_SPEC.md §C.3. Report: §5.3, §3.1.3, §9.1.1. PHASE2_ROADMAP row 26. Wr
 
 Stage 26 has three tasks, one commit each:
 - **26a**, the embedding and the translation, is specified here;
-- **26b**, routing and `applyWitness_sound`, and **26c**, the per-instance checks, the physical
-  grade and the physical certificate, are outlined and detailed at the review of the task before.
+- **26b**, routing and `applyWitness_sound`, is specified below (written at the 26a review);
+- **26c**, the per-instance checks, the physical grade and the physical certificate, is outlined and
+  gets its detailed text at the 26b review.
 
 Precondition: main = the 25b review commit. Start with `git switch -c stage-26a main`.
 
@@ -93,13 +94,106 @@ Stop and ask in any of these cases:
 
 ---
 
-## 26b — Routing and `applyWitness_sound` (outline)
+## 26b — Routing and `applyWitness_sound` (written at the 26a review, 2026-11-15)
 
-- Qubit relabeling and its channel lemma; SWAP as a permutation.
-- `gateK_comm_of_disjoint` and the reordering lemma for a topological order over qubits and
-  classical bits.
-- The witness reader (Physlib-free), `applyWitness`, and `applyWitness_sound`.
-- The transfer theorems for `Realizes` and `AncRestore` under the final-layout permutation.
+PHASE2_SPEC §C.3 (step 2, routing, and step 3, assembly), and the "26a done" paragraph.
+Precondition: main = the 26a review commit. Start with `git switch -c stage-26b main`. The
+invariants of Stage 26 hold.
+
+**The physical register** is the compact register of the used qubits, N = |used qubits|, 3–17 for
+the committed artifacts. Everything is stated on `Reg N` with no ancilla part: the physical
+circuit is an IR circuit with nData = N and nAnc = 0. The logical register `Reg n × Reg a` enters
+through an injection.
+
+### X1. Relabeling, SWAP, embedding (`CQRV/Hardware/Route.lean`, Physlib-side; data parts Physlib-free)
+
+- **`permMat σ`.** For a permutation σ of the qubit positions of a register, `permMat σ` is
+  `monoMat` of the induced permutation of basis states.
+- **`Gate.relabel σ` and `Circuit.relabel σ`** rename the qubits.
+- **`channelDenote_relabel`.** The relabeled circuit's channel is Ad(permMat σ) ∘ channel ∘
+  Ad(permMat σ⁻¹). It goes through `gateU_relabel`: `permMat σ * gateU g * (permMat σ)ᴴ =
+  gateU (g.relabel σ)`, per gate type.
+- **`ud_swapEntry`.** The expansion of the table's SWAP entry is irPhase • permMat (p q), the
+  transposition, in both bases.
+- **`embed`.** For an injection ι from the logical qubits (data, then ancillas) into Fin N, a
+  logical state ρ on `Reg n × Reg a` becomes a state on `Reg N`: ρ at the positions ι(…), |0⟩ at
+  the other positions, as a permuted tensor with |0…0⟩. This generalizes 23a's widening.
+- **`channelDenote_embed`.** A logical circuit relabeled by ι and run on `Reg N` has the channel
+  "embed after the logical channel" on embedded inputs.
+- **`translateCircuit_nAnc`.** `(translateCircuit b C).nAnc = C.nAnc` in general (the 26a open
+  item).
+
+### X2. Commutation and reordering
+
+- **`gateK_comm_of_disjoint`.** Two gates whose qubit sets are disjoint, and that share no
+  classical bit (a `measure` writing j and an `ifBit` reading j share j), have commuting `gateK`
+  in every branch.
+- **`krausOps_reorder`.** If a list `gs'` is a reordering of `gs` in which every element, when
+  taken, is at the head of every dependency queue it touches (the queues per qubit and per
+  classical bit, as the Python matcher accepts them), then the Kraus operators are equal in every
+  branch, hence the channels.
+  - State the queue condition as a Boolean function that the kernel can evaluate per instance
+    (`validReorder`).
+  - Prove that `validReorder gs gs' = true` implies the equality: an induction that moves each
+    taken element to the front through commuting neighbours.
+
+### X3. The witness and the assembly (`CQRV/Hardware/Witness.lean`, data Physlib-free; proofs Physlib-side)
+
+- **`Witness`.** It has the fields of `docs/hw_witness.schema.json`, as far as the reconstruction
+  needs them:
+  - the initial layout (logical → compact physical);
+  - `order`, with gate entries and SWAP entries, and `blocks` for `if_test` bodies;
+  - the final layout;
+  - the classical-bit map;
+  - the table basis.
+
+  `Witness.ofJson` reads it, with the compact remapping of the manifest's `layout.used_qubits`.
+- **`applyWitness b C w : Except String (List BasisGate)`.** The reconstruction of 25a in Lean: a
+  fold over `order` with the current layout, relabeled basis gates, SWAPs expanded by the table,
+  blocks processed recursively, and `validReorder` checked. Any mismatch is an error naming the
+  entry.
+- **`applyWitness_sound`.** If C is well formed and `applyWitness b C w = .ok G`, then for every
+  logical state ρ:
+  `channelDenote N 0 ⟨N, G.flatMap expand⟩ (embed ι ρ) = Ad(permMat π_final) (embed ι
+  (channelDenote n a C ρ))`.
+  Here ι is the initial layout and π_final the permutation from the initial to the final layout.
+  The proof is `translate_sound`, then the relabeling, then moving each SWAP to the end through
+  `channelDenote_relabel` (G · SWAP = SWAP · G relabeled), then `krausOps_reorder`.
+- **The transfer theorems:**
+  - `AncRestore.phys`: if `AncRestore n a C U`, the physical circuit on embedded clean inputs
+    outputs Ad(permMat π_final)(embed ι ((U ρ Uᴴ) ⊗ |0…0⟩)).
+  - `realizes_phys`: for a Grover certificate's `RealizesExact`, the same with the decoding POVM
+    permuted by π_final.
+
+### X4. Tests
+
+**`tests/CQRVTests/HardwareRoute.lean`:**
+- the axioms of `channelDenote_relabel`, `ud_swapEntry`, `krausOps_reorder` and
+  `applyWitness_sound`;
+- `applyWitness` on the MBU gadget artifact's witness (inline, small), equal to its physical
+  circuit by `decide`;
+- the transfer of `mbu_channel_correct` to that physical circuit.
+
+The per-instance kernel checks on all 12 artifacts are 26c.
+
+### 26b Docs / Acceptance / Stop
+
+Docs:
+- a DECISIONS.md entry;
+- `docs/PROJECT_STATUS.md`;
+- README's status line.
+
+Acceptance:
+- `lake build` green and warning-free;
+- CI 23 PASS, 0 FAIL, 4 n/a;
+- the axioms the standard three.
+
+Stop and ask in any of these cases:
+- the module set passes about 1 200 lines (propose the split: 26b1 X1, 26b2 X2–X3);
+- `validReorder` as the matcher defines it does not suffice for `krausOps_reorder` (report the
+  missing condition);
+- a statement of mine is false (give the counterexample and the corrected form);
+- a single proof above about 400 lines.
 
 ## 26c — Per-instance checks, the physical grade, the physical certificate (outline)
 
