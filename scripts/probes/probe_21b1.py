@@ -17,7 +17,8 @@
     Grover circuit at r(y), by `cqr synthesize <file> --grover --iterations r --json`).
 
 Usage: python -I scripts/probes/probe_21b1.py --cqr <cqr.exe> [--samples <dir with
-<name>_m<m>.json>] [--md <out.md>]
+<name>_m<m>.json>] [--md <out.md>] [--table]  (--table, 21b2: the full table y ↦ r(y) at
+(8, 32, 5), the largest r with its Grover grade — the honest g₂ — and the composite grade)
 """
 
 import argparse
@@ -131,13 +132,50 @@ def fmt_g(g):
     return "not measured" if g is None else "(%d, %d, %d, %d)" % g
 
 
+def seq_comp(g1, g2):
+    """Grade ⊕ (report Table 3.1): max w, sum d, sum t, max a."""
+    return (max(g1[0], g2[0]), g1[1] + g2[1], g1[2] + g2[2], max(g1[3], g2[3]))
+
+
+def full_table(name, n, M, m, cqr, samples):
+    """21b2 (PHASE2_SPEC §A.9 (9)): the full table y ↦ (estimate, M̃, r(y), in D) at (n, M, m), the
+    largest r with the Grover grade there (the honest g₂: stage 2 runs on every outcome), and the
+    composite grade stage-1 ⊕ g₂."""
+    x = analyse(name, n, M, m, cqr, samples)
+    lines = [f"### 21b2 — the full table at {name}, (n, M, m) = ({n}, {M}, {m}); a = {x['a']:.6f}, "
+             f"ε_f = {x['eps']:.6f}, rStar = {x['good_r']}\n",
+             "| y | sin²(πy/2^m) | M̃ | r(y) | in D |", "|---|---|---|---|---|"]
+    for y, e, dev, r, ins, _ in x["rows"]:
+        lines.append(f"| {y} | {e:.6f} | {m_tilde(y, m, n)} | {r} | {'yes' if ins else ''} |")
+    lines.append(f"| ideal | {x['a']:.6f} | {M} | {x['good_r']} | yes |")
+    rmax = max(r for y, e, dev, r, ins, _ in x["rows"])
+    ys = [y for y, e, dev, r, ins, _ in x["rows"] if r == rmax]
+    g2 = grade_of(cqr, os.path.join("examples", f"{name}.cqr"), rmax)
+    lines.append("")
+    lines.append(f"Largest r in the table: r = {rmax} (at y = {ys}); the Grover grade at r = {rmax}: {fmt_g(g2)} "
+                 f"— the honest g₂ (refinement (9)).")
+    if x["composed1"] is not None and g2 is not None:
+        lines.append(f"Composite grade: {fmt_g(x['composed1'])} ⊕ {fmt_g(g2)} = {fmt_g(seq_comp(x['composed1'], g2))}.")
+    lines.append(f"Over the domain only (the 21b1 figure): {fmt_g(x['g2'])}.")
+    return "\n".join(lines)
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
     ap.add_argument("--cqr", required=True)
     ap.add_argument("--samples", default=None)
     ap.add_argument("--md", default=None)
+    ap.add_argument("--table", action="store_true",
+                    help="21b2: print only the full table at (8, 32, 5) with the honest g₂")
     args = ap.parse_args()
+    if args.table:
+        text = full_table("grover_pred_037", 8, 32, 5, args.cqr, args.samples)
+        print(text)
+        if args.md:
+            with open(args.md, "w", encoding="utf-8", newline="\n") as f:
+                f.write(text + "\n")
+        return
     lines = []
     for name, n, M in INSTANCES:
         lines.append(f"### {name}: n = {n}, M = {M}, a = {M}/{2 ** n} = {M / 2 ** n:.6f}, rStar = {r_star(n, M)}, "

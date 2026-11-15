@@ -156,3 +156,61 @@ measure-and-prepare channel of Q2.
 What this note does not claim: the composite is for one instance and one precision; the stage-2
 grade is a declared maximum over branches, not a measured grade of one circuit; the IR still has no
 classically controlled iteration, so no single emitted circuit realizes the composite.
+
+## 21b2 — the numbers of the implementation (added at Stage 21b2; PHASE2_SPEC §A.9 (9))
+
+Refinement (9) of the 21b1 review: stage 2 runs the Grover circuit at r(y) on every outcome, so its
+declared grade must bound every branch; the composite grade above, (21, 2996, 1436, 8), took the
+maximum over the domain only. `scripts/probes/probe_21b1.py --table` prints the full table at
+(8, 32, 5) (`rStar 8 (M̃ y)` in IEEE doubles, as `CQRV.Synthesis.rStar`), the largest r with the
+Grover grade there (`cqr synthesize examples/grover_pred_037.cqr --grover --iterations 12 --json`),
+and the composite grade:
+
+### The full table at grover_pred_037, (n, M, m) = (8, 32, 5); a = 0.125000, ε_f = 0.074575, rStar = 2
+
+| y | sin²(πy/2^m) | M̃ | r(y) | in D |
+|---|---|---|---|---|
+| 0 | 0.000000 | 1 | 12 |  |
+| 1 | 0.009607 | 2 | 8 |  |
+| 2 | 0.038060 | 10 | 3 |  |
+| 3 | 0.084265 | 22 | 2 | yes |
+| 4 | 0.146447 | 37 | 2 | yes |
+| 5 | 0.222215 | 57 | 1 |  |
+| 6 | 0.308658 | 79 | 1 |  |
+| 7 | 0.402455 | 103 | 1 |  |
+| 8 | 0.500000 | 128 | 0 |  |
+| 9 | 0.597545 | 153 | 0 |  |
+| 10 | 0.691342 | 177 | 0 |  |
+| 11 | 0.777785 | 199 | 0 |  |
+| 12 | 0.853553 | 219 | 0 |  |
+| 13 | 0.915735 | 234 | 0 |  |
+| 14 | 0.961940 | 246 | 0 |  |
+| 15 | 0.990393 | 254 | 0 |  |
+| 16 | 1.000000 | 256 | 0 |  |
+| 17 | 0.990393 | 254 | 0 |  |
+| 18 | 0.961940 | 246 | 0 |  |
+| 19 | 0.915735 | 234 | 0 |  |
+| 20 | 0.853553 | 219 | 0 |  |
+| 21 | 0.777785 | 199 | 0 |  |
+| 22 | 0.691342 | 177 | 0 |  |
+| 23 | 0.597545 | 153 | 0 |  |
+| 24 | 0.500000 | 128 | 0 |  |
+| 25 | 0.402455 | 103 | 1 |  |
+| 26 | 0.308658 | 79 | 1 |  |
+| 27 | 0.222215 | 57 | 1 |  |
+| 28 | 0.146447 | 37 | 2 | yes |
+| 29 | 0.084265 | 22 | 2 | yes |
+| 30 | 0.038060 | 10 | 3 |  |
+| 31 | 0.009607 | 2 | 8 |  |
+| ideal | 0.125000 | 32 | 2 | yes |
+
+Largest r in the table: r = 12 (at y = [0]); the Grover grade at r = 12: (15, 794, 432, 7) — the honest g₂ (refinement (9)).
+Composite grade: (21, 2862, 1364, 8) ⊕ (15, 794, 432, 7) = (21, 3656, 1796, 8).
+Over the domain only (the 21b1 figure): (15, 134, 72, 7).
+
+So the honest g₂ is the Grover grade at r = 12, **(15, 794, 432, 7)**, and the composite grade of
+`search_unknown_M_8_32_5` is **(21, 3656, 1796, 8)** = (21, 2862, 1364, 8) ⊕ (15, 794, 432, 7).
+The depth and T-count are dominated by stage 1 (the counting circuit at m = 5); stage 2 at r = 12
+costs about six times the search at r = 2. The theorem takes the table as a parameter
+(refinement (10)): only the four outcomes 3, 4, 28, 29 and the ideal point are constrained to the
+circuit at r = 2 (`domain_8_32_5`), the other 28 branches only through the grade bound.

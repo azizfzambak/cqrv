@@ -197,6 +197,34 @@ theorem measured_composition [MetricSpace Y] [MetricSpace Z]
       (prob_mono _ fun _ hz => relax_comp hdom hnonexp hx h hz))
     hδf hδg hδg1
 
+/-- Report §2.3.2, Theorem 3.3a on **pseudo-metric** output spaces (Stage 21b2; PHASE2_SPEC §A.9
+"21b1 done", Q1) — the statement of `measured_composition` with `[PseudoMetricSpace Y]
+[PseudoMetricSpace Z]` in place of `[MetricSpace _]`, and its proof verbatim: no lemma it uses
+needs a metric (`relax_comp` is stated on pseudo-metrics; `mixture_union_bound`, `prob_mixture`,
+`measure_chan_ofClassical`, `prob_mono` need none). This is the form the counting output
+`CountOut m a` needs, whose distance `|countEst y − countEst y'|` is a pseudo-metric (`y` and its
+reflection `2^m − y` have the same estimate). `measured_composition` keeps its statement. -/
+theorem measured_composition_pseudo [PseudoMetricSpace Y] [PseudoMetricSpace Z]
+    {S_f : Spec X Y} {S_g : Spec Y Z} {dec_f : POVM Y dY} {dec_g : POVM Z dZ}
+    {Φ : GradedChannel X dY} {Ψ : GradedChannel Y dZ} {ε_f ε_g δ_f δ_g : ℝ} {r s : Grade}
+    (hf : Realizes S_f dec_f Φ ε_f δ_f r) (hg : Realizes S_g dec_g Ψ ε_g δ_g s)
+    (hdom : ∀ x ∈ S_f.dom, ∀ y, S_f.relax ε_f x y → y ∈ S_g.dom)
+    (hnonexp : ∀ y ∈ S_g.dom, ∀ y' z', S_g y' z' → ∃ z, S_g y z ∧ dist z z' ≤ dist y y')
+    (hδf : 0 ≤ δ_f) (hδg : 0 ≤ δ_g) (hδg1 : δ_g ≤ 1) :
+    Realizes (S_g.comp S_f) dec_g (measuredComp Φ dec_f Ψ) (ε_f + ε_g) (δ_f + δ_g) (r + s) := by
+  classical
+  refine ⟨Grade.seqComp_mono hf.1 hg.1, ?_⟩
+  rintro x ⟨z, y, hxy, -⟩
+  have hx : x ∈ S_f.dom := ⟨y, hxy⟩
+  have hchan : (measuredComp Φ dec_f Ψ).chan (encode x) =
+      Ψ.chan (MState.ofClassical (dec_f.measure (Φ.chan (encode x)))) := by
+    simp [measuredComp, POVM.measureDiscard_apply]
+  rw [hchan, prob_mixture (measure_chan_ofClassical dec_g Ψ.chan _)]
+  exact mixture_union_bound (hf.2 x hx)
+    (fun y' h => (hg.2 y' (hdom x hx y' h)).trans
+      (prob_mono _ fun _ hz => relax_comp hdom hnonexp hx h hz))
+    hδf hδg hδg1
+
 /-- Report §2.3.2 — consistency of the two statements of Theorem 3.3a: on metric output
 spaces, `measured_composition_exact` follows from `measured_composition` at `ε_f = ε_g = 0`
 (`realizes_zero_iff`, `Spec.relax_zero`). The general statement carries the non-expansiveness

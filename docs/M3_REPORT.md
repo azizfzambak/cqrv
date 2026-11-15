@@ -264,7 +264,7 @@ Open items, each with its destination (PHASE2_SPEC §A.9, 2026-11-15):
 | Both patterns are instances of Definition 4.1 with a uniform `Realizes` claim | `groverSem`, `countSem`, `QPLP.Sem.realizes_of_le`; `qplpLibrary_entries` | the Grover output under the discrete metric (ε = 0); the record carries the builders and the proofs, not the CLI |
 | Selection under a budget is certified | `select_spec`; `chosen_fits`, `selected` of `grover_pred_037_sel`; `select_check.py` (step 23) | the three candidates (tree, mbu), (tree, coherent), (few:log, mbu) at the request's r; the key order of (8′); search requests |
 | The front end is proved | `toNetwork_pred`; `front_end` in every `Cert.lean` | typed term → network only; the parser, surface checker and typed-term printer are the declared boundary |
-| Theorems 3.3a / 3.3b are proved; 3.3b is used by the AQFT variant | `measured_composition`, `coherent_composition`, `ae_parametric_lemma_aqft` | 3.3a is not yet exercised on two certified stages (21b) |
+| Theorems 3.3a / 3.3b are proved; 3.3b is used by the AQFT variant | `measured_composition`, `coherent_composition`, `ae_parametric_lemma_aqft` | 3.3a is exercised at `grover_pred_037`, (n, M, m) = (8, 32, 5), in the form of PHASE2_SPEC §A.9 (12) (Stage 21b2): the library theorem `search_unknown_M` over `countSem` and `groverSem`, the instance's domain lemma `domain_8_32_5`, and the corollary `search_unknown_M_8_32_5` whose remaining hypotheses are decidable circuit facts; no committed composition certificate |
 
 Claims not to make: "verified on hardware" or that any hardware run validates a certificate (the
 `hardware` object checks declared figures, §5.3.1); matcher completeness beyond the implemented
