@@ -22,12 +22,14 @@ import CQRV.Circuit.MBUGeneral
 import CQRV.Circuit.MBUClifford
 import CQRV.Circuit.MBUBoundary
 import CQRV.Circuit.RestoreAlgebra
+import CQRV.Circuit.RestoreRegimes
 import CQRV.Synthesis.Basic
 import CQRV.Certify.Basic
 import CQRV.Certify.Specialize
 import CQRV.Emit.Basic
 import CQRV.Grover.Basic
 import CQRV.Grover.SearchUnknownM
+import CQRV.Grover.KGRegime
 
 /-!
 # CQRV
