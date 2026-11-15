@@ -364,13 +364,6 @@ theorem expansion_isUnitary (b : TargetBasis) (g : Gate) (hu : g.isUnitary = tru
     simp [expansion, decompTable, hGates, cnotEntry, czEntry, pEntry, cpEntry, BasisGate.expand,
       Gate.isUnitary] at hu ⊢
 
-theorem expansion_ifBit (b : TargetBasis) (j : ℕ) (g : Gate) :
-    expansion b (.ifBit j g) = (expansion b g).map (Gate.ifBit j) := by
-  simp only [expansion, decompTable]
-  induction (decompTable b g).gates with
-  | nil => rfl
-  | cons bg l ih => simp [List.flatMap_cons, List.map_append, ih, BasisGate.expand]
-
 theorem krausOps_append_list {m : ℕ} (l₁ l₂ : List Gate) (c : Fin m → Bool) :
     krausOps n a m (l₁ ++ l₂) c = krausOps n a m l₂ c * krausOps n a m l₁ c := by
   induction l₁ with

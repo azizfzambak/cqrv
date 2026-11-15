@@ -32,6 +32,8 @@ import CQRV.Hardware.Target
 import CQRV.Hardware.Bound
 import CQRV.Hardware.Decomp
 import CQRV.Hardware.DecompSound
+import CQRV.Hardware.Relabel
+import CQRV.Hardware.Route
 import CQRV.Grover.Basic
 import CQRV.Grover.SearchUnknownM
 import CQRV.Grover.KGRegime

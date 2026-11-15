@@ -159,6 +159,13 @@ def decompTable (b : TargetBasis) : Gate → Entry
 def expansion (b : TargetBasis) (g : Gate) : List Gate :=
   (decompTable b g).gates.flatMap BasisGate.expand
 
+theorem expansion_ifBit (b : TargetBasis) (j : ℕ) (g : Gate) :
+    expansion b (.ifBit j g) = (expansion b g).map (Gate.ifBit j) := by
+  simp only [expansion, decompTable]
+  induction (decompTable b g).gates with
+  | nil => rfl
+  | cons bg l ih => simp [List.flatMap_cons, List.map_append, ih, BasisGate.expand]
+
 /-- PHASE2_SPEC §C.3 — the translation of a circuit, gate by gate, conditions kept. -/
 def translate (b : TargetBasis) (C : Circuit) : List BasisGate :=
   C.gates.flatMap fun g => (decompTable b g).gates
