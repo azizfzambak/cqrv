@@ -1834,3 +1834,81 @@ error-1.0 edge in all 11 cases):
 
 The artifacts (witness, physical QASM 3, manifest) are committed, 0.5 MB in total. The new CI step
 takes about 79 s.
+
+**25b done, accepted 2026-11-15** (CI below).
+- **The runner.** `hw/run.py --sim` runs the committed physical circuits on Aer with the fake
+  backend's noise model, restricted to the used qubits and remapped. The mapping is checked
+  error by error, quantum errors as channels and readout errors exactly. The data readout is
+  appended. Mid-circuit measurements carry the readout error, which is the labelled assumption.
+- **The wrapped gadget.** The MBU gadget, wrapped so that its phase becomes an all-zero
+  outcome, is routed as its own artifact (bound 0.105).
+- **The results** (`docs/hw_runs/RUNS.md`; seed 25; 4 000 shots up to 5 qubits, 2 000 above):
+  - the three non-vacuous checks pass: wrapped gadget p̂ 0.900 against the floor 0.895, Grover
+    n = 2 0.882 against 0.850, Grover n = 3 0.590 against 0.352;
+  - p̂ lies between the ideal and the floor, so the bound is loose by 1.2–3×;
+  - the committed examples are observations without a bound (p̂ 0.14–0.48);
+  - noiseless runs agree with 1 − δ within the shot noise.
+- **CI.** The CI subset takes 35 s; the full set (373 s) is a script.
+
+The wording is "emulator run on the fake backend's noise model" throughout. **Stage 25 is
+complete.**
+
+### C.3 The witness in Lean and the physical grade (Stage 26)
+
+**The embedding.** The basis gates of both targets are IR gates up to a global phase:
+- sx = H S H exactly, as matrices;
+- rz(θ) = e^{−iθ/2} · p(θ);
+- x, cz and cx = cnot are IR gates.
+
+A global phase on a gate multiplies the Kraus operator of each branch by a unit scalar, inside a
+conditioned gate only on the branches where the bit is 1. It leaves the channel unchanged. So a
+physical circuit is an IR circuit on the physical register, and `channelDenote`, `AncRestore` and
+`Realizes` apply to it unchanged. No new semantics is needed.
+
+**The three steps, each a theorem:**
+1. **Translation** (`translate_sound`). The table translation of an IR circuit has the same
+   channel. Each table entry is a fact `decomp_sound`: the expanded basis sequence's
+   `unitaryDenote` equals e^{2πiφ} · `gateU` of the IR gate. The theorem is gate by gate,
+   conditions included.
+2. **Routing** (`route_sound`):
+   - relabeling the qubits of a circuit by a bijection conjugates its channel by the permutation;
+   - a SWAP is that permutation on two qubits;
+   - a reordering that is topological for the dependency queues (qubits and classical bits)
+     preserves the channel, through the commutation of gates on disjoint qubits and bits. This
+     is the open item of 23b, now needed.
+3. **Assembly** (`applyWitness_sound`). `applyWitness C w` (translation, then the initial layout,
+   the recorded order with SWAPs, the classical-bit map) satisfies: its channel is the logical
+   channel, embedded by the initial layout on the used physical qubits (the others idle in |0⟩)
+   and followed by the final-layout permutation. `Realizes` and `AncRestore` transfer, with the
+   decoding POVM and the restoration statement permuted by the final layout.
+
+**Per instance, by kernel evaluation:**
+- the reconstruction `applyWitness C w` equals the tool's physical circuit literally, exported
+  by Python as IR JSON on the compact register;
+- every two-qubit gate lies on a coupling edge of the target (`decide`);
+- the logical circuit is the certificate's `emitted` (linked by the manifest's `circuit_hash`).
+
+**The physical grade** (`PhysGrade`):
+- the physical qubits used;
+- the two-qubit count, the mid-circuit measurements and the feed-forward count;
+- the wall-clock depth from an ASAP schedule with the target's durations and a feed-forward
+  latency. The latency is a named parameter, since the fakes give none.
+
+The status words of a physical certificate:
+- `logical_certified` (the logical certificate);
+- `hardware_compatible` (the edges and the capabilities);
+- `physical_translation_validated` (the theorem chain above, at the instance);
+- `emulator_validated` (the run report, not part of the certificate).
+
+**Selection by the physical grade.** On a target without feed-forward only the coherent mode is
+admissible (§A.9 (5)). Otherwise the mode is chosen by the physical bound, or another physical
+component, in the manner of §A.6.
+
+**The split.**
+- **26a:** the embedding, the Lean table, `decomp_sound` for every entry, `translate_sound`, and
+  the Lean table checked against Python's.
+- **26b:** relabeling, SWAPs, the commutation and reordering lemmas, `applyWitness`,
+  `applyWitness_sound` and the transfer theorems.
+- **26c:** the per-instance kernel checks, `PhysGrade` with the timing model, the physical
+  certificate of the running example on FakeTorino (committed), the status words, and selection
+  by the physical grade.
