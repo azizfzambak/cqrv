@@ -96,6 +96,13 @@ jobs:
       - name: Certified selection (Stage 21a4; --budget / --prefer, the committed grover_pred_037_sel, no fit, refusals, negative kernel tests)
         run: scripts/check_select.sh
 
+      - name: Hardware target (Stage 24a; .venv-hw from hw/requirements.lock; schema, re-extraction byte-identical, snapshot hash Python = Lean, cqr hw capabilities)
+        run: |
+          python -m venv .venv-hw
+          .venv-hw/bin/python -m pip install --no-deps -r hw/requirements.lock
+          .venv-hw/bin/python -m pip check
+          PYTHON_HW=.venv-hw/bin/python scripts/check_hw_target.sh
+
   candidate:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

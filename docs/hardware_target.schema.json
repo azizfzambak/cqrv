@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CQRV hardware target, schema v1.0.0",
+  "description": "PHASE2_SPEC §C.1 (Stage 24a, Track C); report §3.1.3 (hardware profiles as a change of base), §5.3 (the trust boundary). A `HardwareTarget` extracted by the untrusted `hw/target.py` from a Qiskit fake backend and read by `cqr hw capabilities` (CQRV.Hardware.Target, Physlib-free). Every capability flag and every calibration group says where it came from (a `source` string). The file is written in the canonical form (keys sorted by code point, no whitespace, a trailing newline); every number inside `calibration` is a decimal string (Python's repr of the float the source gives), so that `snapshot.hash` — SHA3-256 of the canonical JSON of `calibration` — is computed identically by Python's hashlib and by Lean on the parsed object. Entries whose source gives no value are omitted; a missing mid-circuit measurement error is null with a note, and the readout error is never substituted for it. Figures are a snapshot of fake-backend data, not a device measurement: nothing here is 'verified on hardware'.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "name", "source", "num_qubits", "basis_gates", "coupling_map",
+               "capabilities", "durations", "calibration", "snapshot"],
+  "$defs": {
+    "cite": {"type": "string", "minLength": 1},
+    "decimal": {
+      "description": "A finite decimal as Python's repr prints a float: 0.0001, 8e-05, 35.55555555555556.",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][-+]?[0-9]+)?$"
+    },
+    "perQubitDecimal": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {"^(0|[1-9][0-9]*)$": {"$ref": "#/$defs/decimal"}}
+    },
+    "perEdgeDecimal": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {"^(0|[1-9][0-9]*),(0|[1-9][0-9]*)$": {"$ref": "#/$defs/decimal"}}
+    },
+    "perTupleNumber": {
+      "description": "Keyed by the comma-separated qubit tuple; values are JSON numbers (not hashed).",
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {"^(0|[1-9][0-9]*)(,(0|[1-9][0-9]*))*$": {"type": "number", "minimum": 0}}
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "source"],
+      "properties": {"value": {"type": "boolean"}, "source": {"$ref": "#/$defs/cite"}}
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+    "source": {
+      "description": "The fake backend's class and the package versions it was read with.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class", "qiskit", "qiskit_ibm_runtime", "qiskit_aer", "extracted_by"],
+      "properties": {
+        "class": {"$ref": "#/$defs/cite"},
+        "qiskit": {"$ref": "#/$defs/cite"},
+        "qiskit_ibm_runtime": {"$ref": "#/$defs/cite"},
+        "qiskit_aer": {"$ref": "#/$defs/cite"},
+        "extracted_by": {"$ref": "#/$defs/cite"},
+        "variant": {
+          "description": "Present on a hand-made variant: which flag was changed and why.",
+          "enum": ["feed_forward_off"]
+        },
+        "note": {"type": "string"}
+      }
+    },
+    "num_qubits": {"type": "integer", "minimum": 1},
+    "basis_gates": {
+      "description": "The native gate names (the target's operations that are Gates), sorted.",
+      "type": "array",
+      "items": {"$ref": "#/$defs/cite"},
+      "uniqueItems": true
+    },
+    "coupling_map": {
+      "description": "The directed edges [control, target], sorted.",
+      "type": "array",
+      "items": {"type": "array", "items": {"type": "integer", "minimum": 0}, "minItems": 2, "maxItems": 2}
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mid_circuit_measurement", "feed_forward", "reset"],
+      "properties": {
+        "mid_circuit_measurement": {"$ref": "#/$defs/capability"},
+        "feed_forward": {"description": "Classically conditioned operations (Qiskit's if_else / if_test).", "$ref": "#/$defs/capability"},
+        "reset": {"$ref": "#/$defs/capability"}
+      }
+    },
+    "durations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "unit", "gates", "measure"],
+      "properties": {
+        "source": {"$ref": "#/$defs/cite"},
+        "unit": {"const": "ns"},
+        "gates": {"type": "object", "additionalProperties": {"$ref": "#/$defs/perTupleNumber"}},
+        "measure": {"$ref": "#/$defs/perTupleNumber"}
+      }
+    },
+    "calibration": {
+      "description": "The snapshot that is hashed. All values are decimal strings.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "one_qubit_gate_error", "two_qubit_gate_error", "readout_error",
+                   "mid_circuit_measurement_error", "mid_circuit_measurement_note", "t1_s", "t2_s"],
+      "properties": {
+        "source": {"$ref": "#/$defs/cite"},
+        "one_qubit_gate_error": {"type": "object", "additionalProperties": {"$ref": "#/$defs/perQubitDecimal"}},
+        "two_qubit_gate_error": {"type": "object", "additionalProperties": {"$ref": "#/$defs/perEdgeDecimal"}},
+        "readout_error": {"$ref": "#/$defs/perQubitDecimal"},
+        "mid_circuit_measurement_error": {"oneOf": [{"$ref": "#/$defs/perQubitDecimal"}, {"type": "null"}]},
+        "mid_circuit_measurement_note": {"$ref": "#/$defs/cite"},
+        "t1_s": {"description": "T1 per qubit, in seconds as the source gives it.", "$ref": "#/$defs/perQubitDecimal"},
+        "t2_s": {"description": "T2 per qubit, in seconds as the source gives it.", "$ref": "#/$defs/perQubitDecimal"}
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timestamp", "hash"],
+      "properties": {
+        "timestamp": {"description": "The timestamp the source gives for its calibration data.", "$ref": "#/$defs/cite"},
+        "hash": {"description": "SHA3-256 hex digest of the canonical JSON of `calibration`.", "type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

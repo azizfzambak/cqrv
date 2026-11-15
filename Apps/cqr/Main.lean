@@ -5,6 +5,7 @@ import CQRV.Certify.Basic
 import CQRV.Emit.Basic
 import CQRV.Patterns.Basic
 import CQRV.Patterns.Select
+import CQRV.Hardware.Target
 
 /-!
 # `cqr` command-line interface
@@ -51,6 +52,9 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   Default `r = r⋆ = ⌊π/(4θ)⌋`, `sin²θ = M/2ⁿ` (M from ℰ or `--solutions`). Prints the grades of
   the oracle, the diffusion, one iteration (measured, and the ⊕ of the two measured parts) and
   the full circuit, and `r_star`; `--json` adds `circuit` and `iteration_circuit` (one line).
+* `cqr hw capabilities <target.json>` — Stage 24a (PHASE2_SPEC §C.1): the capability flags of
+  a hardware target with their sources, the uncomputation modes it supports, and the snapshot
+  hash check (exit 0 ok, 1 mismatch, 2 usage / unreadable target).
 * `cqr emit <file> --format qir|qasm [--iterations r] [--solutions M] [--oracle]` — report
   §8.4.3 (Stage 8a): match (must be Grover), then print the QIR Adaptive Profile module or the
   OpenQASM 3 program of the Grover circuit (`r` as for `--grover`, default r⋆), with one
@@ -100,7 +104,8 @@ open CQRV CQRV.DSL CQRV.Matching CQRV.Synthesis CQRV.Certify CQRV.Emit CQRV.Patt
 
 /-- Subcommands and the stage (docs/PLAN.md) that implements each. -/
 def subcommands : List (String × Nat) :=
-  [("check", 3), ("extract", 3), ("match", 4), ("synthesize", 5), ("certify", 8), ("emit", 8)]
+  [("check", 3), ("extract", 3), ("match", 4), ("synthesize", 5), ("certify", 8), ("emit", 8),
+   ("hw", 24)]
 
 def usage : String :=
   "usage: cqr <command> [args]\n\ncommands:\n" ++
@@ -116,7 +121,8 @@ def usage : String :=
     "          [--count-limit k] [--uncompute mbu|coherent]\n" ++
     "  certify <file> --budget w,d,t,a --prefer width|depth|t|anc [--solutions M] [--iterations r]\n" ++
     "          [--count-limit k] [--profile name|path] [--bench k] [--report] [--out dir]\n" ++
-    "  emit <file> --format qir|qasm [--iterations r] [--solutions M] [--oracle]\n"
+    "  emit <file> --format qir|qasm [--iterations r] [--solutions M] [--oracle]\n" ++
+    "  hw capabilities <target.json>\n"
 
 /-- Report §4.2.2 — parse and surface-check a source file; also returns the position of the
 entry `fn` (the last one), used by the `--solutions` diagnostic. -/
@@ -941,6 +947,32 @@ def certifyRequest : List String → Option (Option String × Option Nat × List
     return (q, some m, fs)
   | f :: rest => (certifyRequest rest).map fun (q, m, fs) => (q, m, f :: fs)
 
+/-- PHASE2_SPEC §C.1 (Stage 24a) — `cqr hw capabilities <target.json>`: the name, the three
+capability flags with their sources, the uncomputation modes the target supports (`mbu` needs
+mid-circuit measurement and feed forward; `coherent` needs neither), and the snapshot hash check
+(Lean's SHA3-256 of the canonical `calibration` against `snapshot.hash`): `snapshot hash ok`
+and exit 0, or the mismatch and exit 1. A missing, unreadable or malformed target: message,
+exit 2. -/
+def runHwCapabilities (path : String) : IO UInt32 := do
+  match ← Hardware.readTarget path with
+  | .error msg => IO.eprintln s!"cqr hw capabilities: {msg}"; return 2
+  | .ok t =>
+    IO.println s!"name: {t.name}"
+    IO.println s!"num_qubits: {t.numQubits}"
+    let flag (k : String) (c : Hardware.Capability) : IO Unit :=
+      IO.println s!"{k}: {c.value} (source: {c.source})"
+    flag "mid_circuit_measurement" t.capabilities.midCircuitMeasurement
+    flag "feed_forward" t.capabilities.feedForward
+    flag "reset" t.capabilities.reset
+    IO.println s!"uncompute modes: {", ".intercalate t.uncomputeModes}"
+    let computed := t.calibrationHash
+    if computed == t.snapshotHash then
+      IO.println "snapshot hash ok"
+      return 0
+    else
+      IO.println s!"snapshot hash mismatch: file {t.snapshotHash}, computed {computed}"
+      return 1
+
 def main (args : List String) : IO UInt32 := do
   match args with
   | ["check", file] => runCheck file
@@ -1063,6 +1095,8 @@ def main (args : List String) : IO UInt32 := do
     match emitFlags flags with
     | some (some f, r, m, o) => runEmit file f r m o
     | _ => IO.eprint usage; return 2
+  | ["hw", "capabilities", target] => runHwCapabilities target
+  | "hw" :: _ => IO.eprint usage; return 2
   | cmd :: _ =>
     match subcommands.lookup cmd with
     | some stage =>

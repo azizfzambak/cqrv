@@ -13,3 +13,4 @@ Thumbs.db
 /bench/scaling/out/
 /bench/forms/out/
 /bench/counting/
+.venv-hw/
