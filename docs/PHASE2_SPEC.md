@@ -1931,3 +1931,30 @@ component, in the manner of §A.6.
   well-formed circuit contains expands to Clifford gates, so `translate_wf` has no exception.
 - **Left to 26b:** the equality `(translateCircuit b C).nAnc = C.nAnc` is decided per instance,
   not proved in general.
+
+**26b1 done, accepted 2026-11-16** (CI below). 26b is split, as its guard allowed: 26b1 is X1
+(952 lines with the test), and 26b2 is X2–X3.
+- **`CQRV/Hardware/Relabel.lean`** (Physlib-free) holds the qubit maps: `Gate.map`,
+  `Circuit.map`, `Qubit.relabel` for a permutation of the data qubits, `swapPerm`, and
+  `Circuit.place`, a logical circuit on the compact physical register with nAnc = 0.
+- **`CQRV/Hardware/Route.lean`** (Physlib-side) proves one renaming theorem, `channelDenote_map`,
+  for any map that intertwines basis states. It specializes to:
+  - `channelDenote_relabel`, with `relabel_m_eq_permMat`, which is Ad(permMat σ);
+  - `cnot_cnot_cnot` and `ud_swapEntry`: the table's SWAP is irPhase • permMat of the
+    transposition, with irPhase −i in the cz basis and 1 in the cx basis;
+  - `channelDenote_place`;
+  - `channelDenote_embed`: any injection of the logical qubits is a canonical placement followed
+    by a permutation.
+
+  The MBU gadget, placed on 5 physical qubits, is a test: `mbu_channel_correct` transfers.
+  All have the standard three axioms.
+- **One statement of the task text was false and is corrected.** `translateCircuit_nAnc` "in
+  general" fails: alloc and free vanish in translation, so ⟨1, [alloc (anc 3)]⟩ has nAnc = 4 and
+  its translation 0. The proved form `nAnc_translate` assumes `ancCovered`: every bookkeeping
+  gate's qubit occurs in a non-bookkeeping gate. That is decidable and true of every synthesized
+  circuit.
+- **26b2** keeps X2–X3 of the 26b text unchanged, with two remarks from the implementer:
+  - The matcher's queues treat every gate touching a classical bit as dependent, two reads of the
+    same bit included. This is stricter than needed, and so sound.
+  - A SWAP inside an `if_test` block is three CNOTs under the condition, which is Clifford, so
+    well-formedness survives.

@@ -195,6 +195,18 @@ Stop and ask in any of these cases:
 - a statement of mine is false (give the counterexample and the corrected form);
 - a single proof above about 400 lines.
 
+### 26b2 — X2–X3 (note added at the 26b1 review, 2026-11-16)
+
+26b was split at its guard: 26b1 = X1 (accepted), 26b2 = X2 (commutation and reordering) and X3
+(the witness, `applyWitness`, `applyWitness_sound`, the transfers), with X4's remaining tests.
+They are specified above, unchanged. Use 26b1's names: `channelDenote_relabel`, `ud_swapEntry`,
+`channelDenote_embed`, `physOf`, `embed`, and the compact register `Reg (n + (a + b)) × Reg 0`.
+- The reconstruction's Kraus operators are unit scalars times the relabeled ones: the −i of each
+  cz-basis SWAP is cancelled by 26a's `channelDenote_eq_of_kraus_smul`.
+- Discharge `nAnc_translate`'s hypothesis by `decide` on `ancCovered`.
+- The precondition is main = the 26b1 review commit, on the same branch name `stage-26b` or a new
+  `stage-26b2`; say which.
+
 ## 26c — Per-instance checks, the physical grade, the physical certificate (outline)
 
 - The kernel check of the reconstruction against the exported physical circuit, and of the
