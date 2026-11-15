@@ -1481,3 +1481,57 @@ fixed here.
 - **The KG invariant enters as documentation and one bridge lemma**, not as the definition: in the
   array model, `Inv.cond` says that a marked t > 0 has a value fixed by a condition on the indices
   below it.
+
+**23b done, accepted 2026-11-15** (CI below). `CQRV/Circuit/RestoreRegimes.lean` proves the three
+regimes of report §6.2.3 with their laws.
+
+*Dirty.*
+- `AncRestoreDirty`, with `ancRestoreDirty_of_kraus`, `ancRestoreDirty_of_unitary`, `toClean` and
+  `comp`.
+- `AncRestoreDirty.all`: a dirty block acts as Ad(U ⊗ 1) on every state. It rests on the span of
+  product states, proved by polarization.
+- The phase gadget that uses a dirty ancilla twice is dirty restoring with CZ.
+
+*`reset_not_dirty`.* A circuit that ends by measuring an ancilla, applying a data-only correction
+and resetting it, is not dirty restoring for any U. This is the theorem behind "dirty ancillas
+cannot use MBU"; `mbuCircuit` is the corollary.
+
+*Conditionally clean.*
+- `AncRestoreCond`: Ad(U ⊗ 1) on the states supported on V_cond.
+- The hierarchy is exact: dirty = Cond(false) ⇒ Cond(cond) ⇒ Cond(true) ⇒ clean, with
+  `toDirty`, `mono`, `toClean` for every cond, and `ancRestoreDirty_iff_cond_false`.
+- `AncRestoreCond.comp`, under the matrix form of "U₁ ⊗ 1 maps V_cond into V_cond'".
+- The instance `[cz (data 0) (anc 0)]` under cond = x0 shows that both implications are strict.
+
+*The KG bridge.* `Inv.cond_value` lives in `CQRV/Grover/KGRegime.lean`; the layering rule is that
+Circuit modules do not import Grover modules. It states that a marked target t > 0 has its value
+fixed by the indices below it.
+
+All theorems have the standard three axioms, except the bridge, which uses `propext` only.
+
+*Corrections and skips.*
+- The task text's justification of "not dirty" for the instance was wrong: a phase on a basis
+  vector is not a witness. The witness is |1⟩ ⊗ |+⟩ ↦ |1⟩ ⊗ |−⟩; the statement stands.
+- Skipped as allowed: `AncRestoreDirty.widen` (about 80 lines through the span argument) and the
+  commutation on disjoint qubits (a split of the data register, above its guard).
+- Not proved: clean ⇒ Cond(true). It needs the data block of a state supported on {w = 0} as an
+  `MState`.
+
+**Refinement at the 23b review (2026-11-15), for 23c.** The 8n − 24 theorem is stated in an
+abstract schedule model, not over the code's two-array plan, and is then connected to candidate
+B.
+- **The model.** An array A : Fin L → Bool (true = available as a target, false = holds a live
+  value) and a set `Clean` of indices that start available and fresh. An operation (t, x, y)
+  needs A t, ¬A x, ¬A y and t, x, y distinct. It sets A t := false and A x, A y := true.
+- **The cost model**, the KG family's: 4 T for the first operation that targets a fresh clean
+  index (Gidney's AND, uncomputed by MBU), and 8 T for every other operation (a relative-phase
+  Toffoli pair, Maslov's 4 T each). The 4 T per relative-phase Toffoli is the stated assumption
+  of the model, not a proved lower bound on circuits.
+- **The counting.** Every operation lowers the number of live values by one. So a schedule from
+  n live values to k has n − k operations, and at most |Clean| of them target a fresh clean
+  index.
+- **`problem1_T_lower_bound`.** With |Clean| = 2 and k ≤ 2 (the final phase is a CZ, 0 T, or a
+  Z), the cost is at least 8n − 24 for n ≥ 4.
+- **Candidate B attains it.** Its plan is valid in the model, with `Clean` = {anc 0, anc 1}, and
+  costs 8n − 24. The emitted T-count equals the cost: for n = 4…12 by `decide`, and for all n
+  only if the induction over the plan stays within a size guard.

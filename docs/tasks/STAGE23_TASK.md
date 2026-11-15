@@ -6,7 +6,7 @@ Written at the 22c review (2026-11-15) by the reviewer, under the author's deleg
 Stage 23 has three tasks, one commit each:
 - **23a**, composition laws for clean restoration, is specified here;
 - **23b**, the three regimes, is specified below (written at the 23a review);
-- **23c**, the 8n − 24 theorem, is outlined in §B.2 and gets its detailed text at the 23b review.
+- **23c**, the 8n − 24 theorem, is specified below (written at the 23b review).
 
 Precondition: main = the 22c review commit. Start with `git switch -c stage-23a main`.
 Untracked and not yours: `docs/paper/`, `docs/cqrv_report_revised_v4.docx`. Windows:
@@ -187,6 +187,87 @@ Stop and ask in any of these cases:
   one that does);
 - a statement of mine is false;
 - a single proof above about 400 lines, or the module above about 1 000;
+- a Lean process above 8 GB.
+
+## 23c — The 8n − 24 theorem (written at the 23b review, 2026-11-15)
+
+PHASE2_SPEC §B.2 (23c), the "23b done" paragraph and its refinement. Review R1.7. Precondition:
+main = the 23b review commit. Start with `git switch -c stage-23c main`.
+
+New module `CQRV/Synthesis/Problem1.lean`. It may be Physlib-free if it only needs the schedule
+model and the plan; then it may sit in the cqr closure, but it must not be imported by
+`Apps/cqr/Main.lean`, so the closure is unchanged. The invariants of Stage 23 hold.
+
+### Q1. The schedule model
+
+- **`P1State L`.** An array `avail : Fin L → Bool` and a set `fresh : Finset (Fin L)`: the clean
+  indices not yet targeted.
+- **`P1Op L := Fin L × Fin L × Fin L`** (t, x, y).
+  - Valid when avail t, ¬avail x, ¬avail y, and t, x, y are distinct.
+  - The step sets avail t := false and avail x, avail y := true, and removes t from fresh.
+- **The cost of a step:** 4 if t ∈ fresh, 8 otherwise.
+- **`P1Schedule`.** A list of operations, valid step by step from an initial state. Its cost is
+  the sum of the step costs.
+- **`live s`.** The number of indices with avail = false.
+
+### Q2. The bound
+
+- **`live_step`.** A valid step lowers `live` by exactly one.
+- **`fresh_step`.** `fresh` only shrinks.
+- **`card_fresh_targets_le`.** At most |fresh₀| steps of a valid schedule cost 4.
+- **`problem1_T_lower_bound`.** From an initial state with n live indices and |fresh₀| = 2, a valid
+  schedule ending with at most 2 live indices costs at least 8n − 24, for n ≥ 4.
+- **The general form.** The cost is at least 8 (n − k) − 4 min(|fresh₀|, n − k), where k is the
+  final number of live indices.
+- **The doc-comment states the model's assumptions:**
+  - 4 T per fresh-clean conjunction (AND, MBU uncompute);
+  - 8 T per other conjunction (a relative-phase Toffoli pair, 4 T each — Maslov's count, assumed);
+  - the final phase on at most two live values (CZ, 0 T).
+
+  It is a theorem about the KG Problem 1 family under this model, not a lower bound on the T-count
+  of every MCZ circuit.
+
+### Q3. Candidate B attains it
+
+- **Translation.** Map candidate B's plan (`plan n .logDepth` in `CQRV/Synthesis/MczFew.lean`: the
+  doubling, the §5.2 greedy, then the accumulation over `anc 1`) into the model, with `Clean` =
+  {anc 0, anc 1}. Choose the encoding of the two arrays as one index set.
+- **`planB_valid` and `planB_cost`.** The translated plan is valid and costs 8n − 24. Prove them
+  for n = 4 … 12 by `decide`; prove them for all n ≥ 4 if the induction over the doubling and the
+  greedy stays under about 300 lines, and otherwise state the all-n form as the open item in (e).
+- **`planB_tCount`.** The T-count of the emitted MCZ (`Circuit.tCount`, or the t of `gradeOf`,
+  of `mczFew n .logDepth`) equals the plan's cost, for n = 4 … 12 by `decide`. The existing
+  `#guard`s of `tests/CQRVTests/MczFew.lean` check the diffusion's t for n = 6 … 12; relate to
+  them or supersede them.
+
+### Q4. Tests (`tests/CQRVTests/Problem1.lean`)
+
+- `#guard_msgs` on the axioms of `problem1_T_lower_bound` and `planB_valid`;
+- the bound at n = 8 is 40;
+- a small schedule by hand that reaches the bound;
+- a schedule with three clean indices does better (8n − 28), showing that the number of clean
+  ancillas is what the bound counts.
+
+### 23c Docs / Acceptance / Stop
+
+Docs:
+- a DECISIONS.md entry;
+- `docs/PROJECT_STATUS.md`;
+- README's status line;
+- `docs/MCZ_NOTES.md`: one sentence under "The v2 claim …" saying that the counting is now a
+  theorem under the stated model (`problem1_T_lower_bound`), and that it is still not a lower
+  bound on all circuits.
+
+Acceptance:
+- `lake build` green and warning-free;
+- CI 19 PASS, 0 FAIL, 4 n/a;
+- the axioms as in Q4.
+
+Stop and ask in any of these cases:
+- the translation of the plan does not fit the model, for example because an operation of the
+  plan reuses a target in a way the model forbids; report the plan's actual behaviour;
+- a statement of mine is false;
+- a single proof above about 400 lines;
 - a Lean process above 8 GB.
 
 ## Closing reply (each task)
