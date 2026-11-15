@@ -24,6 +24,7 @@ import CQRV.Circuit.MBUBoundary
 import CQRV.Circuit.RestoreAlgebra
 import CQRV.Circuit.RestoreRegimes
 import CQRV.Synthesis.Basic
+import CQRV.Synthesis.Problem1
 import CQRV.Certify.Basic
 import CQRV.Certify.Specialize
 import CQRV.Emit.Basic

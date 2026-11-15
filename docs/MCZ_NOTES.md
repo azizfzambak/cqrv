@@ -47,6 +47,11 @@ The Grover a = 2 comes from the oracle of grover_pred_037, (10, 27, 8, 2).
 * w = 10, a = 2: reached by B (and w = 9, a = 1 by A); only the t and d components of the v2
   claim are unreachable with these constructions. This is a statement about the surveyed
   constructions, not a lower-bound theorem.
+* Stage 23c: the counting is now a theorem under the stated cost model — `problem1_T_lower_bound`
+  (`CQRV/Synthesis/Problem1.lean`: 4 T per conjunction on a fresh clean target, 8 T per other
+  conjunction, at most two live values at the end) gives 8n − 24 for every valid Problem 1 schedule
+  with two clean indices, and candidate B attains it for n = 6 … 12 (`planB_cost`, `planB_tCount`;
+  at n = 4, 5 it costs 8n − 20). It is still not a lower bound on the T-count of all circuits.
 
 ## Stage 12c — candidate B proved for n = 8
 
