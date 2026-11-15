@@ -30,6 +30,8 @@ import CQRV.Certify.Specialize
 import CQRV.Emit.Basic
 import CQRV.Hardware.Target
 import CQRV.Hardware.Bound
+import CQRV.Hardware.Decomp
+import CQRV.Hardware.DecompSound
 import CQRV.Grover.Basic
 import CQRV.Grover.SearchUnknownM
 import CQRV.Grover.KGRegime

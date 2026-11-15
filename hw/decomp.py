@@ -271,6 +271,40 @@ def n_bits_of(circ):
     return (max(bits) + 1) if bits else 1
 
 
+SAMPLE_ANGLES = [(1, 1), (1, 2), (-1, 3), (3, 3), (5, 4), (-7, 5), (1, 8), (0, 1)]
+
+
+def gate_json(name, roles, f):
+    g = {"op": name, "q": list(roles)}
+    if f is not None:
+        g["angle"] = frac_str(f)
+    return g
+
+
+def entry_json(gates, phase):
+    return {"gates": [gate_json(*g) for g in gates], "phase": frac_str(phase)}
+
+
+def table_json(basis):
+    """The table as canonical JSON, the format `cqr hw table --basis` prints (Stage 26a): the
+    fixed entries on roles 0 / 1, `p a k` and `cp a k` at SAMPLE_ANGLES, and `swap`."""
+    entries = {}
+    for name, (gates, phase) in table(basis).items():
+        if name != "swap":
+            entries[name] = entry_json(gates, phase)
+    for a, k in SAMPLE_ANGLES:
+        f = Fraction(a, 2 ** k)
+        entries[f"p {a} {k}"] = entry_json(*p_entry(f))
+        entries[f"cp {a} {k}"] = entry_json(*cp_entry(basis, f))
+    entries["swap"] = entry_json(*table(basis)["swap"])
+    return {"basis": basis, "entries": entries}
+
+
 if __name__ == "__main__":
-    for b in ("cz", "cx"):
-        print(b, check_table(b))
+    import json
+    import sys as _sys
+    if len(_sys.argv) == 3 and _sys.argv[1] == "--json":
+        print(json.dumps(table_json(_sys.argv[2]), sort_keys=True, separators=(",", ":")))
+    else:
+        for b in ("cz", "cx"):
+            print(b, check_table(b))

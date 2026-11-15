@@ -5,7 +5,8 @@
       and docs/hw_artifact.schema.json (draft 2020-12), and the schemas themselves are valid;
 
   python -I tests/diff/hw_transpile_check.py --cqr <path to cqr>     (.venv-hw)
-    * the decomposition table of hw/decomp.py numerically, both bases, to 1e-12;
+    * the decomposition table of hw/decomp.py numerically, both bases, to 1e-12, and (Stage 26a)
+      the Lean table `cqr hw table --basis` equal to it entry for entry, phases included;
     * for every instance and target of hw/artifact.py: the pipeline rerun with the same seed list
       reproduces the committed witness.json, physical.qasm and manifest.json byte for byte (so the
       seed search is deterministic, and the committed artifact is the pipeline's output); the
@@ -28,6 +29,7 @@ import argparse
 import glob
 import json
 import os
+import subprocess
 import sys
 import time
 import warnings
@@ -224,6 +226,18 @@ def main():
     for basis in ("cz", "cx"):
         ok, dev, worst = decomp.check_table(basis)
         check(ok, f"table {basis}: every entry equals its IR gate up to the recorded phase; max deviation {dev:.2e} ({worst})")
+        # Stage 26a: the Lean table (`cqr hw table`, CQRV.Hardware.decompTable, the one decomp_sound proves)
+        # equals this table entry for entry, phases included
+        p = subprocess.run([a.cqr, "hw", "table", "--basis", basis], capture_output=True, text=True, encoding="utf-8")
+        lean_tab = json.loads(p.stdout.strip().splitlines()[-1]) if p.returncode == 0 and p.stdout.strip() else None
+        py_tab = decomp.table_json(basis)
+        same = lean_tab == py_tab
+        if not same and lean_tab is not None:
+            for k in sorted(set(lean_tab["entries"]) | set(py_tab["entries"])):
+                if lean_tab["entries"].get(k) != py_tab["entries"].get(k):
+                    print(f"      entry {k}: lean {lean_tab['entries'].get(k)} vs python {py_tab['entries'].get(k)}")
+        check(same, f"table {basis}: Lean's decompTable (cqr hw table) = hw/decomp.py's table, "
+                    f"{len(py_tab['entries'])} entries incl. p/cp at 8 angles and swap, phases exact")
     for inst in art.INSTANCES:
         name = inst[0]
         for tname in inst[4]:

@@ -7,6 +7,7 @@ import CQRV.Patterns.Basic
 import CQRV.Patterns.Select
 import CQRV.Hardware.Target
 import CQRV.Hardware.Bound
+import CQRV.Hardware.Decomp
 
 /-!
 # `cqr` command-line interface
@@ -62,6 +63,8 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   over the device (a bound for any layout, marked vacuous at ≥ 1) and the median figure (typical,
   not a bound); reported, not certified. Exit 2: usage, an unreadable target, or `mbu` on a target
   without feed-forward.
+* `cqr hw table --basis cz|cx` — Stage 26a (PHASE2_SPEC §C.3): the Lean decomposition table
+  (`CQRV.Hardware.decompTable`) as JSON in `hw/decomp.py --json`'s format, compared by the harness.
 * `cqr emit <file> --format qir|qasm [--iterations r] [--solutions M] [--oracle]` — report
   §8.4.3 (Stage 8a): match (must be Grover), then print the QIR Adaptive Profile module or the
   OpenQASM 3 program of the Grover circuit (`r` as for `--grover`, default r⋆), with one
@@ -131,7 +134,8 @@ def usage : String :=
     "  emit <file> --format qir|qasm [--iterations r] [--solutions M] [--oracle]\n" ++
     "  hw capabilities <target.json>\n" ++
     "  hw bound <file.cqr> --target <target.json> [--solutions M] [--iterations r] [--shape tree|few:log]\n" ++
-    "          [--uncompute mbu|coherent] [--json]\n"
+    "          [--uncompute mbu|coherent] [--json]\n" ++
+    "  hw table --basis cz|cx\n"
 
 /-- Report §4.2.2 — parse and surface-check a source file; also returns the position of the
 entry `fn` (the last one), used by the `--solutions` diagnostic. -/
@@ -1208,6 +1212,12 @@ def main (args : List String) : IO UInt32 := do
     | some (some f, r, m, o) => runEmit file f r m o
     | _ => IO.eprint usage; return 2
   | ["hw", "capabilities", target] => runHwCapabilities target
+  | ["hw", "table", "--basis", b] =>
+    -- Stage 26a (PHASE2_SPEC §C.3): the Lean decomposition table as JSON, in hw/decomp.py's format
+    match b with
+    | "cz" => IO.println (Hardware.tableJson .cz).compress; return 0
+    | "cx" => IO.println (Hardware.tableJson .cx).compress; return 0
+    | _ => IO.eprint usage; return 2
   | "hw" :: "bound" :: file :: flags =>
     match hwBoundFlags flags with
     | some (some target, json, flags) =>
