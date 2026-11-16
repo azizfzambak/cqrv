@@ -112,6 +112,9 @@ jobs:
       - name: Hardware runs (Stage 25b; emulator runs on the fake backend's noise model — the CI subset at 2000 shots, the committed run reports' schema and arithmetic)
         run: PYTHON_HW=.venv-hw/bin/python scripts/check_hw_runs.sh
 
+      - name: Hardware checks (Stage 26c1b; the twelve per-instance Check.lean files checked by the kernel with lake env lean — reconstruction, WF, coupling edges, the channel theorem —, their literals the artifacts' by hash and regeneration)
+        run: scripts/check_hw_checks.sh
+
   candidate:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

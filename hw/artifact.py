@@ -181,12 +181,59 @@ def write_artifact(d, manifest, witness, qasm):
         f.write(canonical(manifest) + "\n")
 
 
+def write_extra(d, circ, final_phys):
+    """Stage 26c1b (L4) — the two files the Lean per-instance check reads: the canonical logical
+    circuit (its SHA3-256 is the manifest's `hashes.logical_circuit`) and the final physical circuit
+    on the device qubits (`final_phys`, the swaps expanded by the table: the ops `physical.qasm`
+    prints). Existing files are not written."""
+    with open(os.path.join(d, "logical.json"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(canonical(circ) + "\n")
+    with open(os.path.join(d, "physical.json"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(canonical(final_phys) + "\n")
+
+
+def extra(cqr, out, only=None):
+    """Stage 26c1b — re-run every committed artifact with its recorded seed alone, confirm that the
+    witness and the QASM 3 text are byte-identical to the committed files (one differing byte is an
+    error), and write `logical.json` and `physical.json` next to them."""
+    for inst in INSTANCES:
+        if only and inst[0] != only:
+            continue
+        name, src, flags, mode, _, _ = inst
+        for tname in inst[4]:
+            d = artifact_dir(out, name, tname)
+            manifest = json.load(open(os.path.join(d, "manifest.json"), encoding="utf-8"))
+            target = load_target(tname)
+            basis = manifest["basis"]
+            circ, params = logical_circuit(cqr, inst)
+            if sha3(canonical(circ)) != manifest["hashes"]["logical_circuit"]:
+                raise SystemExit(f"{name}__{tname}: the logical circuit differs from the manifest's hash")
+            best = tp.pipeline(circ, basis, backend_of(target), target, manifest["seed"], delta_of(params))
+            from qiskit import qasm3
+            qasm = qasm3.dumps(tp.to_qiskit_physical(best["final_phys"], best["device_width"], best["n_bits"]))
+            committed_w = open(os.path.join(d, "witness.json"), "rb").read()
+            committed_q = open(os.path.join(d, "physical.qasm"), "rb").read()
+            if (canonical(best["witness"]) + "\n").encode("utf-8") != committed_w:
+                raise SystemExit(f"{name}__{tname}: the re-run witness differs from witness.json")
+            if qasm.encode("utf-8") != committed_q:
+                raise SystemExit(f"{name}__{tname}: the re-run QASM 3 differs from physical.qasm")
+            write_extra(d, circ, best["final_phys"])
+            print(f"{name}__{tname}: seed {manifest['seed']} re-run identical; logical.json "
+                  f"({len(circ['gates'])} gates) and physical.json ({len(best['final_phys'])} ops) written")
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--cqr", required=True)
     ap.add_argument("--out", default=os.path.join(ROOT, "hw", "artifacts"))
     ap.add_argument("--only")
+    ap.add_argument("--extra", action="store_true",
+                    help="Stage 26c1b: write logical.json and physical.json from the recorded seeds; "
+                         "existing files are checked byte-identical, not rewritten")
     a = ap.parse_args(argv)
+    if a.extra:
+        return extra(a.cqr, a.out, a.only)
     total = 0
     for inst in INSTANCES:
         if a.only and inst[0] != a.only:

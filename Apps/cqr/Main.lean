@@ -8,6 +8,7 @@ import CQRV.Patterns.Select
 import CQRV.Hardware.Target
 import CQRV.Hardware.Bound
 import CQRV.Hardware.Decomp
+import CQRV.Hardware.CheckGen
 
 /-!
 # `cqr` command-line interface
@@ -135,7 +136,8 @@ def usage : String :=
     "  hw capabilities <target.json>\n" ++
     "  hw bound <file.cqr> --target <target.json> [--solutions M] [--iterations r] [--shape tree|few:log]\n" ++
     "          [--uncompute mbu|coherent] [--json]\n" ++
-    "  hw table --basis cz|cx\n"
+    "  hw table --basis cz|cx\n" ++
+    "  hw check --artifact <dir> --target <target.json> [--out <dir>]\n"
 
 /-- Report §4.2.2 — parse and surface-check a source file; also returns the position of the
 entry `fn` (the last one), used by the `--solutions` diagnostic. -/
@@ -986,6 +988,51 @@ def runHwCapabilities (path : String) : IO UInt32 := do
       IO.println s!"snapshot hash mismatch: file {t.snapshotHash}, computed {computed}"
       return 1
 
+/-- PHASE2_SPEC §C.3 (Stage 26c1b, L4) — `cqr hw check --artifact <dir> --target <target.json>
+[--out <dir>]`: reads the artifact's `logical.json`, `witness.json`, `physical.json` and
+`manifest.json`, re-checks the three hashes (the logical circuit — through the file and the Lean
+literal's own `circuitHash` —, the witness, the target snapshot), compacts the witness and the
+physical circuit through the manifest's `used_qubits`, and writes
+`<out>/<instance>__<target>/Check.lean` (default `examples/hw_checks`): the literals and the
+kernel-checked theorems (`recon`, `phys_wf`, `phys_nBits`, `c_wf`, `edges_ok`, `init_eq`,
+`phys_channel`, `phys_zero`), two tampering theorems and the `#print axioms` lines. The file is
+checked with `lake env lean`, as the certificates are. Exit 0; a hash mismatch or a malformed file:
+message, exit 1; an unreadable file: exit 2. -/
+def runHwCheck (artifactDir target : String) (out : String) : IO UInt32 := do
+  let read (f : String) : IO (Option String) := do
+    try return some (← IO.FS.readFile (System.FilePath.mk artifactDir / f).toString)
+    catch _ => return none
+  let some manifest ← read "manifest.json" | do IO.eprintln s!"cqr hw check: {artifactDir}/manifest.json unreadable"; return 2
+  let some logical ← read "logical.json" | do IO.eprintln s!"cqr hw check: {artifactDir}/logical.json unreadable"; return 2
+  let some witness ← read "witness.json" | do IO.eprintln s!"cqr hw check: {artifactDir}/witness.json unreadable"; return 2
+  let some physical ← read "physical.json" | do IO.eprintln s!"cqr hw check: {artifactDir}/physical.json unreadable"; return 2
+  match ← Hardware.readTarget target with
+  | .error msg => IO.eprintln s!"cqr hw check: {msg}"; return 2
+  | .ok t =>
+    match Hardware.generateCheck manifest logical witness physical t target with
+    | .error msg => IO.eprintln s!"cqr hw check: {msg}"; return 1
+    | .ok (text, r) =>
+      let dir := System.FilePath.mk out / r.name
+      IO.FS.createDirAll dir
+      IO.FS.writeFile (dir / "Check.lean") text
+      IO.println s!"{r.name}: hashes ok; {r.gates} logical gates, {r.order} order entries, \
+        {r.physical} physical gates on {r.usedQubits} qubits; wrote {(dir / "Check.lean").toString}"
+      return 0
+
+/-- `--artifact d`, `--target t`, `--out o` of `cqr hw check`, in any position. -/
+def hwCheckFlags : List String → Option (Option String × Option String × Option String)
+  | [] => some (none, none, none)
+  | "--artifact" :: d :: rest => do
+    let (_, t, o) ← hwCheckFlags rest
+    return (some d, t, o)
+  | "--target" :: t :: rest => do
+    let (d, _, o) ← hwCheckFlags rest
+    return (d, some t, o)
+  | "--out" :: o :: rest => do
+    let (d, t, _) ← hwCheckFlags rest
+    return (d, t, some o)
+  | _ => none
+
 /-- `--target t` and `--json` of `cqr hw bound`, in any position; the other flags are left. -/
 def hwBoundFlags : List String → Option (Option String × Bool × List String)
   | [] => some (none, false, [])
@@ -1217,6 +1264,10 @@ def main (args : List String) : IO UInt32 := do
     match b with
     | "cz" => IO.println (Hardware.tableJson .cz).compress; return 0
     | "cx" => IO.println (Hardware.tableJson .cx).compress; return 0
+    | _ => IO.eprint usage; return 2
+  | "hw" :: "check" :: flags =>
+    match hwCheckFlags flags with
+    | some (some d, some t, o) => runHwCheck d t (o.getD "examples/hw_checks")
     | _ => IO.eprint usage; return 2
   | "hw" :: "bound" :: file :: flags =>
     match hwBoundFlags flags with

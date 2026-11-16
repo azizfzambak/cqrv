@@ -668,20 +668,26 @@ end Nodup
 
 /-! ## The theorem -/
 
-/-- PHASE2_SPEC §C.3 (26c1 L1) — **`applyWitnessQ_ok`**: the linear check implies the
-reconstruction, so `applyWitness_sound` applies to its output unchanged. -/
-theorem applyWitnessQ_ok (b : TargetBasis) (C : Circuit) (hC : C.WF) (w : Witness) (N : ℕ)
-    (G : List BasisGate) (h : applyWitnessQ b C w N = .ok G) : applyWitness b C w N = .ok G := by
-  simp only [applyWitnessQ] at h
+/-- **The simulation of a successful queue fold**: the fold of `applyWitness` succeeds with a state
+of the same layout and steps, whose taken elements are a valid reordering. -/
+theorem applyWitnessQ'_sim (b : TargetBasis) (C : Circuit) (hC : C.WF) (w : Witness) (N : ℕ)
+    (q : QState) (h : applyWitnessQ' b C w N = .ok q) :
+    ∃ st : ApplyState,
+      w.order.foldlM (orderStep b C.nData N (translate b C) (elements b C) w) ⟨w.initial, [], []⟩ = .ok st ∧
+      st.lay = w.final ∧
+      validReorder (Elem.qubits (translate b C)) (Elem.bits (translate b C)) (elements b C) st.taken = true ∧
+      st.steps = q.stepsRev.reverse := by
+  simp only [applyWitnessQ'] at h
   obtain ⟨_, h1, h⟩ := exceptBind_ok h
   obtain ⟨_, h2, h⟩ := exceptBind_ok h
   obtain ⟨_, h3, h⟩ := exceptBind_ok h
   obtain ⟨_, h4, h⟩ := exceptBind_ok h
   obtain ⟨_, h5, h⟩ := exceptBind_ok h
-  obtain ⟨q, hfold, h⟩ := exceptBind_ok h
+  obtain ⟨q', hfold, h⟩ := exceptBind_ok h
   obtain ⟨_, hempty, h⟩ := exceptBind_ok h
   obtain ⟨_, hfinal, h⟩ := exceptBind_ok h
-  have hG := exceptPure_ok h
+  have hq := exceptPure_ok h
+  subst hq
   -- the initial invariant
   set ents := indexedWires C.nData (C.nData + C.nAnc) (elements b C) (translate b C) 0 with hents
   have hW := ensure_ok h5
@@ -703,15 +709,41 @@ theorem applyWitnessQ_ok (b : TargetBasis) (C : Circuit) (hC : C.WF) (w : Witnes
       nodupEl := by rw [hents, indexedWires_map_el]; exact elements_nodup b C hC,
       valid := fun future hf => by rw [hents, indexedWires_map_el] at hf; simpa using hf,
       fresh := fun e he => by simp at he }
-  obtain ⟨st, rem, hst, hinv⟩ := foldlM_sim b C w w.order _ _ q ents hinv₀ hfold
-  have hrem : rem = [] := rem_nil_of_empty b C st q rem hinv (ensure_ok hempty)
+  obtain ⟨st, rem, hst, hinv⟩ := foldlM_sim b C w w.order _ _ q' ents hinv₀ hfold
+  have hrem : rem = [] := rem_nil_of_empty b C st q' rem hinv (ensure_ok hempty)
   subst hrem
   have hvalid : validReorder (Elem.qubits (translate b C)) (Elem.bits (translate b C)) (elements b C) st.taken = true := by
     have := hinv.valid [] (by simp [validReorder])
     simpa using this
   have hlen : st.taken.length = (elements b C).length := (validReorder_perm _ _ _ _ hvalid).length_eq
   have hlay : st.lay = w.final := by rw [← hinv.lay]; exact beq_iff_eq.mp (ensure_ok hfinal)
-  -- assemble the original run
+  exact ⟨st, hst, hlay, hvalid, hinv.steps.symm⟩
+
+/-- The checks of `applyWitness` that precede its fold hold when those of `applyWitnessQ'` do. -/
+theorem applyWitnessQ'_checks (b : TargetBasis) (C : Circuit) (w : Witness) (N : ℕ)
+    (q : QState) (h : applyWitnessQ' b C w N = .ok q) :
+    ensure (w.basis == b) "witness: basis differs from the table's" = .ok () ∧
+    ensure (w.initial.length == C.nData + C.nAnc && w.nLogical == C.nData + C.nAnc)
+      "witness: initial layout length differs from the logical register" = .ok () ∧
+    ensure (w.initial.all (· < N) && w.final.all (· < N)) "witness: a layout position outside the register" = .ok () ∧
+    ensure (decide w.initial.Nodup) "witness: the initial layout is not injective" = .ok () := by
+  simp only [applyWitnessQ'] at h
+  obtain ⟨u1, h1, h⟩ := exceptBind_ok h
+  obtain ⟨u2, h2, h⟩ := exceptBind_ok h
+  obtain ⟨u3, h3, h⟩ := exceptBind_ok h
+  obtain ⟨u4, h4, _⟩ := exceptBind_ok h
+  exact ⟨h1, h2, h3, h4⟩
+
+/-- PHASE2_SPEC §C.3 (26c1 L1) — **`applyWitnessQ_ok`**: the linear check implies the
+reconstruction, so `applyWitness_sound` applies to its output unchanged. -/
+theorem applyWitnessQ_ok (b : TargetBasis) (C : Circuit) (hC : C.WF) (w : Witness) (N : ℕ)
+    (G : List BasisGate) (h : applyWitnessQ b C w N = .ok G) : applyWitness b C w N = .ok G := by
+  simp only [applyWitnessQ] at h
+  obtain ⟨q, hq, hG⟩ := exceptBind_ok h
+  have hG := exceptPure_ok hG
+  obtain ⟨st, hst, hlay, hvalid, hsteps⟩ := applyWitnessQ'_sim b C hC w N q hq
+  obtain ⟨h1, h2, h3, h4⟩ := applyWitnessQ'_checks b C w N q hq
+  have hlen : st.taken.length = (elements b C).length := (validReorder_perm _ _ _ _ hvalid).length_eq
   simp only [applyWitness]
   rw [h1, h2, h3, h4]
   simp only [bind, Except.bind]
@@ -730,8 +762,36 @@ theorem applyWitnessQ_ok (b : TargetBasis) (C : Circuit) (hC : C.WF) (w : Witnes
   dsimp only
   rw [e3]
   dsimp only
-  rw [← hinv.steps, hG]
+  rw [hsteps, hG]
   rfl
+
+/-- PHASE2_SPEC §C.3 (26c1b) — the final layout permutation of a reconstruction, explicit:
+the SWAPs of the steps applied to `σ₀`. -/
+noncomputable def finalPerm (b : TargetBasis) (C : Circuit) (w : Witness) (N : ℕ)
+    (σ₀ : Equiv.Perm (Fin N)) : Equiv.Perm (Fin N) :=
+  irPerm N (stepsOf b C w N) * σ₀
+
+/-- **`applyWitnessQ_sound`**: `applyWitness_sound` for the linear check, with `σ_f = finalPerm …`
+a closed term (`layOf … (finalPerm …) = w.final` is then the kernel's). -/
+theorem applyWitnessQ_sound (b : TargetBasis) (C : Circuit) (w : Witness) (bb : ℕ) (hC : C.WF)
+    (G : List BasisGate) (hG : applyWitnessQ b C w (C.nData + (C.nAnc + bb)) = .ok G)
+    (hWF : (physCircuit (C.nData + (C.nAnc + bb)) G).WF)
+    (hM : (physCircuit (C.nData + (C.nAnc + bb)) G).nBits = C.nBits)
+    (σ₀ : Equiv.Perm (Fin (C.nData + (C.nAnc + bb))))
+    (h₀ : w.initial = layOf (C.nData + (C.nAnc + bb)) (C.nData + C.nAnc) σ₀) :
+    w.final = layOf (C.nData + (C.nAnc + bb)) (C.nData + C.nAnc) (finalPerm b C w _ σ₀) ∧
+      ∀ ρ : MState (Reg C.nData × Reg C.nAnc),
+        channelDenote (C.nData + (C.nAnc + bb)) 0 (physCircuit (C.nData + (C.nAnc + bb)) G) (embed bb σ₀ ρ) =
+          embed bb (finalPerm b C w _ σ₀) (channelDenote C.nData C.nAnc C ρ) := by
+  have h := hG
+  simp only [applyWitnessQ] at h
+  obtain ⟨q, hq, hG'⟩ := exceptBind_ok h
+  have hG' := exceptPure_ok hG'
+  obtain ⟨st, hst, hlay, hvalid, hsteps⟩ := applyWitnessQ'_sim b C hC w _ q hq
+  have hfp : finalPerm b C w _ σ₀ = irPerm _ st.steps * σ₀ := by
+    simp only [finalPerm, stepsOf, hq, hsteps]
+  rw [hfp]
+  exact applyWitness_sound_core b C w bb hC G st hst hlay hvalid (by rw [hsteps]; exact hG') hWF hM σ₀ h₀
 
 /-! ## L2: the layout as a permutation, the embedded |0⟩ -/
 

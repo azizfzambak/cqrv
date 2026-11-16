@@ -119,10 +119,9 @@ def orderStepQ (b : TargetBasis) (n N : ℕ) (T : List BasisGate) (w : Witness) 
             pure { st with Q := popAll ws st.Q, stepsRev := .block LP.1 LP.2 :: st.stepsRev }
       else throw s!"order: element {i} is not at the head of every queue of its wires"
 
-/-- PHASE2_SPEC §C.3 (26c1 L1) — **`applyWitnessQ`**: `applyWitness` with the dependency queues;
-`applyWitnessQ_ok` says it implies `applyWitness`. -/
-def applyWitnessQ (b : TargetBasis) (C : Circuit) (w : Witness) (N : ℕ) :
-    Except String (List BasisGate) :=
+/-- The queue fold with all its checks; the final state (the layout, the empty queues, the steps in
+reverse). `applyWitnessQ` runs the steps; `finalPerm` names the final layout permutation. -/
+def applyWitnessQ' (b : TargetBasis) (C : Circuit) (w : Witness) (N : ℕ) : Except String QState :=
   ensure (w.basis == b) "witness: basis differs from the table's" >>= fun _ =>
   ensure (w.initial.length == C.nData + C.nAnc && w.nLogical == C.nData + C.nAnc)
     "witness: initial layout length differs from the logical register" >>= fun _ =>
@@ -135,21 +134,34 @@ def applyWitnessQ (b : TargetBasis) (C : Circuit) (w : Witness) (N : ℕ) :
       (indexedWires C.nData (C.nData + C.nAnc) (elements b C) (translate b C) 0), []⟩ >>= fun st =>
   ensure (st.Q.all List.isEmpty) "order: not every element is executed" >>= fun _ =>
   ensure (st.lay == w.final) "order: the final layout differs from the witness" >>= fun _ =>
-  pure (runSteps b C.nData st.stepsRev.reverse w.initial).1
+  pure st
+
+/-- PHASE2_SPEC §C.3 (26c1 L1) — **`applyWitnessQ`**: `applyWitness` with the dependency queues;
+`applyWitnessQ_ok` says it implies `applyWitness`. -/
+def applyWitnessQ (b : TargetBasis) (C : Circuit) (w : Witness) (N : ℕ) :
+    Except String (List BasisGate) :=
+  applyWitnessQ' b C w N >>= fun st => pure (runSteps b C.nData st.stepsRev.reverse w.initial).1
+
+/-- The steps of a successful reconstruction (`[]` otherwise). -/
+def stepsOf (b : TargetBasis) (C : Circuit) (w : Witness) (N : ℕ) : List PStep :=
+  match applyWitnessQ' b C w N with
+  | .ok st => st.stepsRev.reverse
+  | .error _ => []
 
 /-! ## L3: the coupling check -/
 
-/-- The two-qubit gates of a basis-gate list, as pairs of compact qubit indices (`ifBit` looked
-inside; a non-data operand gives `none`, which fails the check). -/
-def twoQubitPairs : List BasisGate → List (Option (ℕ × ℕ))
-  | [] => []
-  | g :: gs => match g with
-    | .cz (.data p) (.data q) => some (p, q) :: twoQubitPairs gs
-    | .cx (.data p) (.data q) => some (p, q) :: twoQubitPairs gs
-    | .cz _ _ => none :: twoQubitPairs gs
-    | .cx _ _ => none :: twoQubitPairs gs
-    | .ifBit _ g' => twoQubitPairs (g' :: gs)
-    | _ => twoQubitPairs gs
+/-- The compact qubit pair of a two-qubit basis gate (`ifBit` looked inside): `none` for a one-qubit
+gate, `some none` for a two-qubit gate with a non-data operand (which fails the check). -/
+def BasisGate.pairOf : BasisGate → Option (Option (ℕ × ℕ))
+  | .cz (.data p) (.data q) => some (some (p, q))
+  | .cx (.data p) (.data q) => some (some (p, q))
+  | .cz _ _ => some none
+  | .cx _ _ => some none
+  | .ifBit _ g => g.pairOf
+  | _ => none
+
+/-- The two-qubit gates of a basis-gate list, as pairs of compact qubit indices. -/
+def twoQubitPairs (G : List BasisGate) : List (Option (ℕ × ℕ)) := G.filterMap BasisGate.pairOf
 
 /-- PHASE2_SPEC §C.3 (26c1 L3) — **`edgesOk`**: every two-qubit gate of `G`, mapped through the
 compact → device list `dev`, lies on an edge of the target, in either orientation. -/

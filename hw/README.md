@@ -78,3 +78,18 @@ set and writes `docs/hw_runs/RUNS.md` with the per-run JSONs (`docs/hw_run.schem
 `scripts/check_hw_runs.sh` is the CI step (the three small instances at 2000 shots). Every figure is
 an **emulator run on the fake backend's noise model**: not a device run, not a validation of a
 certificate, and never "verified on hardware".
+
+## The per-instance kernel checks (Stage 26c1b)
+
+Each artifact directory also holds `logical.json` (the canonical logical circuit, whose SHA3-256 is
+the manifest's `logical_circuit`) and `physical.json` (the final physical circuit on the device
+qubits), written by `python -I hw/artifact.py --cqr <cqr> --extra` from the recorded seeds (the
+existing files are checked byte-identical, never rewritten). From them, `cqr hw check --artifact
+<dir> --target <target.json>` re-checks the hashes and writes `examples/hw_checks/<artifact>/Check.lean`,
+which the Lean kernel checks with `lake env lean`: the reconstruction of the physical circuit from
+the logical one and the witness (`recon`), its well-formedness, the coupling edges (`edges_ok`), and
+the channel theorem at the instance (`phys_channel`, `phys_zero`), with the standard three axioms.
+`scripts/check_hw_checks.sh` is the CI step; `examples/hw_checks/README.md` has the theorems and
+the measured kernel times. Nothing is "verified on hardware": the physical circuit is validated
+against the logical one on the target's coupling map.
+

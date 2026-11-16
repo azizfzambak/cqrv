@@ -1020,40 +1020,26 @@ theorem placedIR_flatMap (n : ℕ) {N : ℕ} (τ : Equiv.Perm (Fin N)) (T : List
   | nil => rfl
   | cons e l ih => rw [List.flatMap_cons, List.flatMap_cons, placedIR_append, List.map_append, ih]
 
-/-- **`applyWitness_sound`** (PHASE2_SPEC §C.3): for a well-formed circuit, a reconstruction that
-passes every check, and a permutation `σ₀` of the compact register extending the initial layout,
-the physical circuit on the embedded input gives the embedded output of the logical circuit, laid
-out by `σ_f = irPerm steps * σ₀`, which extends the witness's final layout. The well-formedness of
-the physical circuit and its bit count are hypotheses decided per instance
-(`CQRV.Tests.HardwareWitnessSound`). -/
-theorem applyWitness_sound (hC : C.WF) (G : List BasisGate)
-    (hG : applyWitness b C w (C.nData + (C.nAnc + bb)) = .ok G)
+/-- **The core of `applyWitness_sound`**, with `σ_f` named: for the fold's final state `st` (the
+checks of `applyWitness` as hypotheses), `σ_f = irPerm N st.steps * σ₀`. -/
+theorem applyWitness_sound_core (hC : C.WF) (G : List BasisGate) (st : ApplyState)
+    (hst : w.order.foldlM (orderStep b C.nData (C.nData + (C.nAnc + bb)) (translate b C) (elements b C) w)
+      ⟨w.initial, [], []⟩ = .ok st)
+    (hfinal' : st.lay = w.final)
+    (hvalid' : validReorder (Elem.qubits (translate b C)) (Elem.bits (translate b C)) (elements b C) st.taken = true)
+    (hGeq : (runSteps b C.nData st.steps w.initial).1 = G)
     (hWF : (physCircuit (C.nData + (C.nAnc + bb)) G).WF)
     (hM : (physCircuit (C.nData + (C.nAnc + bb)) G).nBits = C.nBits)
     (σ₀ : Equiv.Perm (Fin (C.nData + (C.nAnc + bb))))
     (h₀ : w.initial = layOf (C.nData + (C.nAnc + bb)) (C.nData + C.nAnc) σ₀) :
-    ∃ σf : Equiv.Perm (Fin (C.nData + (C.nAnc + bb))),
-      w.final = layOf (C.nData + (C.nAnc + bb)) (C.nData + C.nAnc) σf ∧
+    w.final = layOf (C.nData + (C.nAnc + bb)) (C.nData + C.nAnc) (irPerm (C.nData + (C.nAnc + bb)) st.steps * σ₀) ∧
       ∀ ρ : MState (Reg C.nData × Reg C.nAnc),
         channelDenote (C.nData + (C.nAnc + bb)) 0 (physCircuit (C.nData + (C.nAnc + bb)) G) (embed bb σ₀ ρ) =
-          embed bb σf (channelDenote C.nData C.nAnc C ρ) := by
-  -- the checks
-  simp only [applyWitness] at hG
-  obtain ⟨_, _, hG⟩ := exceptBind_ok hG
-  obtain ⟨_, _, hG⟩ := exceptBind_ok hG
-  obtain ⟨_, _, hG⟩ := exceptBind_ok hG
-  obtain ⟨_, _, hG⟩ := exceptBind_ok hG
-  obtain ⟨st, hfold, hG⟩ := exceptBind_ok hG
-  obtain ⟨_, _, hG⟩ := exceptBind_ok hG
-  obtain ⟨_, hfinal, hG⟩ := exceptBind_ok hG
-  obtain ⟨_, hvalid, hG⟩ := exceptBind_ok hG
-  have hGeq := exceptPure_ok hG
-  have hinv := foldlM_inv b C w hC σ₀ w.order _ st (foldInv_init b C w σ₀ h₀) hfold
-  have hfinal' : st.lay = w.final := beq_iff_eq.mp (ensure_ok hfinal)
-  have hvalid' := ensure_ok hvalid
+          embed bb (irPerm (C.nData + (C.nAnc + bb)) st.steps * σ₀) (channelDenote C.nData C.nAnc C ρ) := by
+  have hinv := foldlM_inv b C w hC σ₀ w.order _ st (foldInv_init b C w σ₀ h₀) hst
   obtain ⟨hspec1, hspec2, hspec3⟩ := elements_spec b C hC
   have hT := translate_inRange b C hC
-  refine ⟨irPerm _ st.steps * σ₀, by rw [← hfinal', hinv.lay], fun ρ => ?_⟩
+  refine ⟨by rw [← hfinal', hinv.lay], fun ρ => ?_⟩
   -- the physical gates: the IR run from `σ₀`
   have hgates : (physCircuit (C.nData + (C.nAnc + bb)) G).gates = irRun b C.nData _ st.steps σ₀ := by
     simp only [physCircuit, ← hGeq]
@@ -1122,6 +1108,37 @@ theorem applyWitness_sound (hC : C.WF) (G : List BasisGate)
   rw [hk, Matrix.conjTranspose_smul, Matrix.conjTranspose_mul, Matrix.smul_mul, Matrix.smul_mul,
     Matrix.mul_smul, smul_smul, hz', one_smul]
   simp only [Matrix.mul_assoc]
+
+/-- **`applyWitness_sound`** (PHASE2_SPEC §C.3): for a well-formed circuit, a reconstruction that
+passes every check, and a permutation `σ₀` of the compact register extending the initial layout,
+the physical circuit on the embedded input gives the embedded output of the logical circuit, laid
+out by `σ_f = irPerm steps * σ₀`, which extends the witness's final layout. The well-formedness of
+the physical circuit and its bit count are hypotheses decided per instance
+(`CQRV.Tests.HardwareWitnessSound`). -/
+theorem applyWitness_sound (hC : C.WF) (G : List BasisGate)
+    (hG : applyWitness b C w (C.nData + (C.nAnc + bb)) = .ok G)
+    (hWF : (physCircuit (C.nData + (C.nAnc + bb)) G).WF)
+    (hM : (physCircuit (C.nData + (C.nAnc + bb)) G).nBits = C.nBits)
+    (σ₀ : Equiv.Perm (Fin (C.nData + (C.nAnc + bb))))
+    (h₀ : w.initial = layOf (C.nData + (C.nAnc + bb)) (C.nData + C.nAnc) σ₀) :
+    ∃ σf : Equiv.Perm (Fin (C.nData + (C.nAnc + bb))),
+      w.final = layOf (C.nData + (C.nAnc + bb)) (C.nData + C.nAnc) σf ∧
+      ∀ ρ : MState (Reg C.nData × Reg C.nAnc),
+        channelDenote (C.nData + (C.nAnc + bb)) 0 (physCircuit (C.nData + (C.nAnc + bb)) G) (embed bb σ₀ ρ) =
+          embed bb σf (channelDenote C.nData C.nAnc C ρ) := by
+  -- the checks
+  simp only [applyWitness] at hG
+  obtain ⟨_, _, hG⟩ := exceptBind_ok hG
+  obtain ⟨_, _, hG⟩ := exceptBind_ok hG
+  obtain ⟨_, _, hG⟩ := exceptBind_ok hG
+  obtain ⟨_, _, hG⟩ := exceptBind_ok hG
+  obtain ⟨st, hfold, hG⟩ := exceptBind_ok hG
+  obtain ⟨_, _, hG⟩ := exceptBind_ok hG
+  obtain ⟨_, hfinal, hG⟩ := exceptBind_ok hG
+  obtain ⟨_, hvalid, hG⟩ := exceptBind_ok hG
+  obtain ⟨h1, h2⟩ := applyWitness_sound_core b C w bb hC G st hfold (beq_iff_eq.mp (ensure_ok hfinal))
+    (ensure_ok hvalid) (exceptPure_ok hG) hWF hM σ₀ h₀
+  exact ⟨_, h1, h2⟩
 
 end Sound
 
