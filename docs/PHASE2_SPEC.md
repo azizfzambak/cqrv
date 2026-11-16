@@ -2718,3 +2718,34 @@ declaration name changed.
       synthesizer they prove correct.
 
   A stricter rule, "Circuit never imports Synthesis", is not adopted.
+
+**30b done, accepted 2026-11-16** (CI below). The reports are written from the repository alone.
+
+| file | lines | contents |
+|---|---|---|
+| `docs/M5_REPORT.md` | 307 | what is certified, with axioms, by track; the 18 certificates; the frontier; the chain as a tool-versus-kernel table; the CI; the structure (39 114 lines in 111 modules; the layering rule); the open items; the claims and the claims not to make, per paper; the deviations since M3; the errata |
+| `docs/STAGE29_NOTE.md` | 105 | why Stage 29 is not run; the literature, with the citation rule; what the specialization adds and what it does not |
+| `docs/RELEASE.md` | 180 | the pins, the CI step by step, what reproduces byte for byte, the trust boundary, the release status |
+| `README.md` | 82 | the release README |
+
+**One correction before commit.** STAGE29_NOTE gave CoqQ's authors as "Li Zhou, Gilles Barthe,
+Justin Hsu, Mingsheng Ying, Nengkun Yu" and called the list certain. The reviewer checked it
+against the POPL 2023 programme and arXiv 2207.11350. The authors are Li Zhou, Gilles Barthe,
+Pierre-Yves Strub, Junyi Liu and Mingsheng Ying (PACMPL 7, POPL, article 29, 2023). It is corrected
+in the commit. The other entries the note calls certain match the reviewer's knowledge; the marked
+ones stay "to be checked by the author".
+
+**30c, the reviewer's drafts, are committed with this review in `docs/notes/`:**
+- `REPORT_V5_DRAFT.md`: report v5 as a chapter-by-chapter plan against v3 (v4 not read), with
+  two new chapters (Track B, Track C) and the errata and departures;
+- `PAPER1_REVISION_DRAFT.md`: the thesis as M5 supports it, the claims with evidence and scope
+  (carried, updated, new), the claims not to make, a proposed structure, the numbers with sources,
+  and draft paragraphs;
+- `PAPER2_DRAFT.md` updated: the block commutation is closed by 26b2, the note on Physlib's convex
+  combinations is corrected, and the CI count is 26.
+
+**The author's** are the final text of every paper and the release (30d).
+
+**M5 is ready.** Phase 2's work is done: Tracks A, B and C are certified, and the reports and
+drafts are written. M5 itself is the release, which waits for the author, together with the
+author's answer on Stage 28.

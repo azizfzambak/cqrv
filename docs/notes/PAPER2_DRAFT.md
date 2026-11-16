@@ -8,6 +8,13 @@ Status: the reviewer's draft, written 2026-11-15 under the author's delegation (
 `lake build` and has the standard axioms (`propext`, `Classical.choice`, `Quot.sound`) unless
 stated otherwise. Nothing here is published; the text is revised by the author before Stage 30.
 
+**Updated at Stage 30c (2026-11-16), for the author:**
+- One open item is closed by Track C (§10).
+- The mechanization note on convex combinations is corrected (§8).
+- The CI count is current (26 steps).
+
+The Track B results themselves are unchanged since M4.
+
 ## Abstract (draft)
 
 Measurement-based uncomputation (MBU) returns an ancilla holding a Boolean function f of the data
@@ -172,12 +179,14 @@ multi-controlled-Z circuit. Maslov's 4 T per relative-phase Toffoli is an assump
 - Modules: `MBUGeneral` (468 lines), `MBUClifford` (540), `MBUBoundary` (801),
   `RestoreAlgebra` (593), `RestoreRegimes` (818), `KGRegime` (44), `Problem1` (362); about
   3 600 lines with their tests.
-- No `sorry`; standard axioms; CI 19 steps.
+- No `sorry`; standard axioms. The CI had 19 steps at M4 and has 26 at M5.
 - Conventions that mattered:
   - 𝔽₂ as `ZMod 2`;
   - the symplectic representation of Paulis;
-  - statements on Kraus operators rather than on `MState` mixtures (Physlib has no
-    convex-combination API).
+  - statements on Kraus operators rather than on `MState` mixtures. *Corrected at M5:* the
+    earlier note said Physlib has no convex-combination API. It has one, `CPTPMap.instMixable`,
+    through Choi matrices, used in Stage 27a (`mix_eq_mix_ab`). The Kraus form was chosen before
+    that, and it remains the form of the Track B statements.
 
 ## 9. Related work
 
@@ -198,8 +207,14 @@ multi-controlled-Z circuit. Maslov's 4 T per relative-phase Toffoli is an assump
   classical control. The boundary theorem is relative to that language.
 - Not yet proved:
   - clean ⇒ Cond(true);
-  - the dirty widening;
-  - commutation of blocks on disjoint qubits.
+  - the dirty widening.
+- **Proved since M4:** the commutation of blocks on disjoint qubits, in Track C (Stage 26b2,
+  `CQRV/Hardware/Reorder.lean`):
+  - `gateK_comm_of_disjoint`: gates on disjoint qubits and bits commute in every branch;
+  - `krausOps_reorder`: a reordering that is topological for the dependency queues preserves the
+    Kraus operators.
+
+  Both have the standard three axioms.
 - The 8n − 24 bound is relative to the stated cost model. Its attainment by the compiler's
   candidate is proved per n (6 … 12), not for all n.
 - The KG construction is cleanly restoring as a whole; the conditionally clean regime enters it as
