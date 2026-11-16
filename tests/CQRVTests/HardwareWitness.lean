@@ -1,6 +1,6 @@
 module
 
-import CQRV.Hardware.Reorder
+public import CQRV.Hardware.Reorder
 meta import CQRV.Hardware.Reorder
 
 /-!
@@ -16,6 +16,8 @@ circuit (`hw/transpile.py`'s `expand_swaps`, exported on the compact register), 
 namespace CQRV.Tests.HardwareWitness
 
 open CQRV CQRV.Hardware
+
+@[expose] public section
 
 /-- info: 'CQRV.Hardware.gateK_comm_of_disjoint' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
@@ -191,5 +193,7 @@ def tamper (w : Witness) : Witness :=
 #guard (gadgetWitness?.bind fun w => (applyWitness .cz mbuCircuit { w with final := [0, 1, 2] } 3).toOption) == none
 -- the physical circuit is well formed (decided here; `Circuit.wf` is Physlib-side)
 #guard (physCircuit 3 gadgetPhys).wf
+
+end
 
 end CQRV.Tests.HardwareWitness

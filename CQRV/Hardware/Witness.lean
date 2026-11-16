@@ -22,14 +22,16 @@ Report §5.3, §9.1.1; PHASE2_SPEC §C.3 step 3 (Stage 26b2, Track C) — the ro
 * **`Witness`** and `Witness.ofJson`, with the compact remapping (physical qubit `p` of the device
   becomes its position in the manifest's `used_qubits`, so the physical register is `Reg N` with
   `N` the number of used qubits).
-* **`applyWitness`**: the reconstruction of 25a — a fold over `order` with the current layout
-  (canonical logical position ↦ physical qubit), the relabeled basis gates, the SWAPs expanded by
+* **`applyWitness`**: the reconstruction of 25a — the `order` entries become placement steps
+  (`PStep`: a SWAP, placed gates, a routed block), run by `runSteps` from the initial layout
+  (canonical logical position ↦ physical qubit): the relabeled basis gates, the SWAPs expanded by
   the table (inside a block, under the block's condition), the blocks processed with a local
-  layout that must be restored, every element and member consumed exactly once, the element order
-  and each block's member order checked by `validReorder`, the final layout checked against the
-  witness, and every physical qubit inside the compact register. Any mismatch is an error naming
-  the entry. (`Circuit.wf` is Physlib-side, so well-formedness of the physical circuit is decided
-  where it is needed, in `Reorder` / 26c.) `applyWitness_sound` (26b3) is the semantics.
+  layout that must be restored and SWAPs composing to the identity on the whole register, every
+  element and member consumed exactly once, the element order and each block's member order
+  checked by `validReorder`, the initial layout injective, the final layout checked against the
+  witness. Any mismatch is an error naming the entry. (`Circuit.wf` is Physlib-side, so
+  well-formedness of the physical circuit is decided where it is needed.) `applyWitness_sound`
+  (`CQRV.Hardware.WitnessSound`, 26b3) is the semantics.
 -/
 
 @[expose] public section
@@ -207,81 +209,120 @@ def BasisGate.stripIf : BasisGate → BasisGate
   | .ifBit _ g => g
   | g => g
 
-/-- The physical basis gates of one block body entry; the local layout threaded. -/
-def blockStep (b : TargetBasis) (n : ℕ) (j : ℕ) (T : List BasisGate) (members : List ℕ) :
-    BlockEntry → List ℕ → Except String (List BasisGate × List ℕ)
-  | .gate k, lay =>
+/-- A placement step: a routing SWAP of two physical qubits; logical basis gates to place under the
+current layout; a routed block — its logical gates (the members, in the circuit's order) and its
+physical gates, already placed. -/
+inductive PStep where
+  | swap (p q : ℕ)
+  | place (gs : List BasisGate)
+  | block (L P : List BasisGate)
+  deriving Repr, DecidableEq, Inhabited
+
+/-- PHASE2_SPEC §C.3 — the physical gates of a step list from a layout: a SWAP is expanded by the
+table and updates the layout, placed gates are relabeled by the current layout, a block's physical
+gates are appended as they are. The second component is the layout at the end. -/
+def runSteps (b : TargetBasis) (n : ℕ) : List PStep → List ℕ → List BasisGate × List ℕ
+  | [], lay => ([], lay)
+  | .swap p q :: rest, lay =>
+    let r := runSteps b n rest (swapLay lay p q)
+    ((swapEntry b (.data p) (.data q)).gates ++ r.1, r.2)
+  | .place gs :: rest, lay =>
+    let r := runSteps b n rest lay
+    (gs.map (BasisGate.map (layoutQ n lay)) ++ r.1, r.2)
+  | .block _ P :: rest, lay =>
+    let r := runSteps b n rest lay
+    (P ++ r.1, r.2)
+
+/-- The step of one block body entry: a member (its index checked, the condition stripped: the
+block re-wraps it) or a SWAP of two distinct physical qubits of the register. -/
+def blockEntryStep (N : ℕ) (T : List BasisGate) (members : List ℕ) : BlockEntry → Except String PStep
+  | .gate k =>
     if members.contains k then
       match T[k]? with
-      | some bg => pure ([.ifBit j (bg.stripIf.map (layoutQ n lay))], lay)
+      | some bg => pure (.place [bg.stripIf])
       | none => throw s!"block: gate {k} outside the translated list"
     else throw s!"block: gate {k} is not a member"
-  | .swap p q, lay =>
+  | .swap p q =>
     if p = q then throw s!"block: swap {p} {p}"
-    else pure ((swapEntry b (.data p) (.data q)).gates.map (BasisGate.ifBit j), swapLay lay p q)
+    else if p < N ∧ q < N then pure (.swap p q)
+    else throw s!"block: swap {p} {q} outside the register"
 
-/-- One block: its body in order, with the local layout restored at the end and every member used
-exactly once, in a valid order. -/
-def applyBlock (b : TargetBasis) (n : ℕ) (T : List BasisGate) (j : ℕ) (members : List ℕ)
-    (body : List BlockEntry) (lay : List ℕ) : Except String (List BasisGate) := do
-  let (out, lay') ← body.foldlM (fun (acc : List BasisGate × List ℕ) e => do
-    let (gs, lay') ← blockStep b n j T members e acc.2
-    return (acc.1 ++ gs, lay')) ([], lay)
-  unless lay' == lay do throw "block: the layout is not restored at the end of the block"
-  let taken := body.filterMap fun e => match e with | .gate k => some k | .swap _ _ => none
-  unless validReorder (fun k => (T.getD k default).qubits) (fun _ => []) members taken do
-    throw "block: the member order is not a valid reordering"
-  return out
+/-- A check with its error message. -/
+def ensure (c : Bool) (msg : String) : Except String Unit := if c then pure () else throw msg
 
-/-- The state of the fold over `order`: the layout, the elements consumed (in order), the output. -/
+/-- The steps of a block body, in order. -/
+def blockSteps (N : ℕ) (T : List BasisGate) (members : List ℕ) : List BlockEntry → Except String (List PStep)
+  | [] => pure []
+  | e :: es => do
+    let s ← blockEntryStep N T members e
+    let ss ← blockSteps N T members es
+    pure (s :: ss)
+
+/-- One block: its body as steps, the layout restored at the end, the SWAPs composing to the
+identity on the whole physical register (the layout check alone sees only the logical positions),
+every member used exactly once in a valid order. Returns the logical gates (the members, in the
+circuit's order) and the physical gates, every one under the block's condition. -/
+def applyBlock (b : TargetBasis) (n N : ℕ) (T : List BasisGate) (j : ℕ) (members : List ℕ)
+    (body : List BlockEntry) (lay : List ℕ) : Except String (List BasisGate × List BasisGate) :=
+  blockSteps N T members body >>= fun steps =>
+  ensure ((runSteps b n steps lay).2 == lay) "block: the layout is not restored at the end of the block" >>= fun _ =>
+  ensure ((runSteps b n steps (List.range N)).2 == List.range N)
+    "block: the SWAPs do not compose to the identity on the physical register" >>= fun _ =>
+  ensure (validReorder (fun k => (T.getD k default).qubits) (fun _ => []) members
+      (body.filterMap fun e => match e with | .gate k => some k | .swap _ _ => none))
+    "block: the member order is not a valid reordering" >>= fun _ =>
+  pure (members.map (T.getD · default), (runSteps b n steps lay).1.map (BasisGate.ifBit j))
+
+/-- The state of the fold over `order`: the layout, the elements consumed (in order), the steps. -/
 structure ApplyState where
   lay : List ℕ
   taken : List Elem
-  out : List BasisGate
+  steps : List PStep
 
-/-- PHASE2_SPEC §C.3 — **`applyWitness`**: the physical circuit (a basis-gate list on the compact
-register) reconstructed from the logical circuit and the witness, every check of the Python
-reconstruction made explicit; `.ok` only when all pass. `N` is the width of the compact register. -/
-def applyWitness (b : TargetBasis) (C : Circuit) (w : Witness) (N : ℕ) :
-    Except String (List BasisGate) := do
-  let n := C.nData
-  let T := translate b C
-  let els := elements b C
-  unless w.basis == b do throw "witness: basis differs from the table's"
-  unless w.initial.length == n + C.nAnc ∧ w.nLogical == n + C.nAnc do
-    throw "witness: initial layout length differs from the logical register"
-  unless w.initial.all (· < N) ∧ w.final.all (· < N) do throw "witness: a layout position outside the register"
-  let st ← w.order.foldlM (fun (st : ApplyState) e => do
-    match e with
-    | .swap p q =>
-      if p = q then throw s!"order: swap {p} {p}"
-      return { st with lay := swapLay st.lay p q,
-                       out := st.out ++ (swapEntry b (.data p) (.data q)).gates }
-    | .elem i =>
-      match els[i]? with
-      | none => throw s!"order: element {i} outside the translated circuit"
-      | some el =>
-        if st.taken.contains el then throw s!"order: element {i} taken twice"
-        match el with
+/-- One entry of `order`. -/
+def orderStep (b : TargetBasis) (n N : ℕ) (T : List BasisGate) (els : List Elem) (w : Witness)
+    (st : ApplyState) : OrderEntry → Except String ApplyState
+  | .swap p q =>
+    if p = q then throw s!"order: swap {p} {p}"
+    else if p < N ∧ q < N then
+      pure { st with lay := swapLay st.lay p q, steps := st.steps ++ [.swap p q] }
+    else throw s!"order: swap {p} {q} outside the register"
+  | .elem i =>
+    match els[i]? with
+    | none => throw s!"order: element {i} outside the translated circuit"
+    | some el =>
+      if st.taken.contains el then throw s!"order: element {i} taken twice"
+      else match el with
         | .plain k =>
           match T[k]? with
-          | some bg => return { st with taken := st.taken ++ [el], out := st.out ++ [bg.map (layoutQ n st.lay)] }
+          | some bg => pure { st with taken := st.taken ++ [el], steps := st.steps ++ [.place [bg]] }
           | none => throw s!"order: gate {k} outside the translated list"
         | .block j members =>
           match w.blocks.lookup i with
           | none => throw s!"order: block {i} has no body in the witness"
           | some body =>
-            let gs ← applyBlock b n T j members body st.lay
-            return { st with taken := st.taken ++ [el], out := st.out ++ gs })
-    ⟨w.initial, [], []⟩
-  unless st.taken.length == els.length do throw "order: not every element is executed"
-  unless st.lay == w.final do throw "order: the final layout differs from the witness"
-  unless validReorder (Elem.qubits T) (Elem.bits T) els st.taken do
-    throw "order: not a valid reordering of the dependency queues"
-  unless (st.out.flatMap BasisGate.expand).all fun g => g.qubits.all fun q =>
-      match q with | .data i => decide (i < N) | .anc _ => false do
-    throw "the reconstructed physical circuit has a qubit outside the compact register"
-  return st.out
+            applyBlock b n N T j members body st.lay >>= fun LP =>
+            pure { st with taken := st.taken ++ [el], steps := st.steps ++ [.block LP.1 LP.2] }
+
+/-- PHASE2_SPEC §C.3 — **`applyWitness`**: the physical circuit (a basis-gate list on the compact
+register of width `N`) reconstructed from the logical circuit and the witness, every check of the
+Python reconstruction made explicit, and two it leaves implicit: the initial layout is injective
+(a permutation of the logical positions into the register), and a block's SWAPs compose to the
+identity on the whole register. `.ok` only when all pass (`applyWitness_sound`,
+`CQRV.Hardware.WitnessSound`). -/
+def applyWitness (b : TargetBasis) (C : Circuit) (w : Witness) (N : ℕ) :
+    Except String (List BasisGate) :=
+  ensure (w.basis == b) "witness: basis differs from the table's" >>= fun _ =>
+  ensure (w.initial.length == C.nData + C.nAnc && w.nLogical == C.nData + C.nAnc)
+    "witness: initial layout length differs from the logical register" >>= fun _ =>
+  ensure (w.initial.all (· < N) && w.final.all (· < N)) "witness: a layout position outside the register" >>= fun _ =>
+  ensure (decide w.initial.Nodup) "witness: the initial layout is not injective" >>= fun _ =>
+  w.order.foldlM (orderStep b C.nData N (translate b C) (elements b C) w) ⟨w.initial, [], []⟩ >>= fun st =>
+  ensure (st.taken.length == (elements b C).length) "order: not every element is executed" >>= fun _ =>
+  ensure (st.lay == w.final) "order: the final layout differs from the witness" >>= fun _ =>
+  ensure (validReorder (Elem.qubits (translate b C)) (Elem.bits (translate b C)) (elements b C) st.taken)
+    "order: not a valid reordering of the dependency queues" >>= fun _ =>
+  pure (runSteps b C.nData st.steps w.initial).1
 
 /-- The physical circuit of a reconstruction, as an IR circuit on the compact register. -/
 def physCircuit (N : ℕ) (G : List BasisGate) : Circuit := ⟨N, G.flatMap BasisGate.expand⟩

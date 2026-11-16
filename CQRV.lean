@@ -36,6 +36,7 @@ import CQRV.Hardware.Relabel
 import CQRV.Hardware.Route
 import CQRV.Hardware.Witness
 import CQRV.Hardware.Reorder
+import CQRV.Hardware.WitnessSound
 import CQRV.Grover.Basic
 import CQRV.Grover.SearchUnknownM
 import CQRV.Grover.KGRegime
