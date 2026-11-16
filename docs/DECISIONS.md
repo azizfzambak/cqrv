@@ -1504,3 +1504,9 @@ Decision: (1) **The benchmarks.** `examples/addchk3.cqr` (x + y ≡ z mod 8 on 3
 Why: both reviews found the evidence resting on too few predicates; arithmetic predicates with carries and a counter exercise XOR chains, majority terms and depth-3–5 networks that the conjunction and the ALU bit do not. The memory finding is reported because the paper will cite the kernel's ceiling.
 Rejected: raising the 8 GB guard for cmp4 (A) or shrinking it to a 3-bit comparator (C) — the reviewer kept it as a measured data point; a fold-based counter (the fold's accumulator is one Bool); enumerating every branch (2^13–2^26 per check); adding the four kernel checks to step 22 (already 13 min); a hardware artifact (optional, not cheap).
 Report §: 6.1.2–6.1.4, 8.2, 8.5.3, 9.5.1; REVIEW_RESPONSE_1 §4 R12; docs/tasks/REVC_TASK.md.
+
+## 2026-11-17 — Revision task C review (R12)
+Decision: revision task C accepted (CI on ec06b84: 26 PASS, 0 FAIL, 4 n/a); main fast-forwarded to ec06b84. The guard decision taken during the task (option B: `addchk3` and `wt8_3` certified, the counting certificate on `wt8_3`, `cmp4` kept as harness evidence because its kernel check peaks at 8.6–8.8 GB against the 8 GB guard of this 16 GB machine) is recorded in the implementer's R12 entry; the reviewer confirmed in the CI that `cmp4` is never sent to the kernel (`CERTIFIED = ("addchk3", "wt8_3")`). The sampled-branch harness for checks above 2^13 branches follows the Stage 12a precedent and is accepted together with the all-inputs check of each program against its definition.
+Why: the evidence now includes two arithmetic predicates; the memory finding is reported rather than hidden by raising the guard.
+Rejected: committing `cmp4` with a raised guard (option A); a 3-bit comparator in its place (option C, too little structure).
+Report §: 8.5.3, 9.1; REVIEW_RESPONSE_1 §4.

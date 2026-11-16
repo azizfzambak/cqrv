@@ -145,8 +145,9 @@ These tasks change code or committed files. R13, R14 and R16 are the author's.
 **Status (2026-11-16).** R1, R2, R15: done (revision task A, `docs/tasks/REVA_TASK.md`; commits
 6c66a87, 040e967, 8dfced6; accepted, CI 26 PASS / 4 n/a). R3, R4, R5, R10: done (revision task B,
 `REVB_TASK.md`; commits f648115, d51a975, ba15d9c; accepted 2026-11-17, CI 26 PASS / 4 n/a). R12:
-task C (`REVC_TASK.md`); R11: task D (`REVD_TASK.md`), in that order, by the author's decision of
-2026-11-16. R6–R9 not scheduled.
+done (task C, `REVC_TASK.md`; commit ec06b84; accepted 2026-11-17, CI 26 PASS / 4 n/a): `addchk3`,
+`wt8_3`, `wt8_3_count` certified; the comparator `cmp4` is harness evidence only (kernel peak above
+8 GB). R11: task D (`REVD_TASK.md`). R6–R9 not scheduled.
 
 | Task | Content | Size | Changes committed files? |
 |---|---|---|---|
