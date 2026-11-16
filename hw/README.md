@@ -154,3 +154,19 @@ artifact" otherwise). The CI step "Noise certificates" (`scripts/check_noisecert
 kernel-checks the five Lean files and runs the two Python checks. Conditional on the premises, which
 are assumptions about the device, not facts proved here; nothing is "verified on hardware".
 
+## The feasibility frontier (Stage 27c)
+
+`python -I scripts/frontier.py --cqr <cqr> --series <target>:<mode>:<routing>` (`.venv-hw`) runs one
+series of the family `examples/frontier/fr_n<k>.cqr` (Grover on k ANDs, M = 1, r = r⋆, k = 2…7) in a
+mode (`tree_mbu`, `tree_coherent`, `fewlog_mbu`) and a routing (`a` the full coupling map with the seed
+search 0..19; `b` the edges of calibrated error ≥ 1/2 removed, largest connected component), with the
+early stop after two consecutive vacuous n; the scratch artifacts go to `.lake/frontier/` and the rows
+to `docs/hw_frontier/frontier.json` (from `cqr hw grade` and `cqr hw noise`, no kernel). `--render`
+writes `docs/hw_frontier/FRONTIER.md`: the frontier per (target, mode, routing) — the largest n whose
+`noiseBound` is below 1 —, the full table, and the idle-exposure diagnostic (each used qubit's idle
+time under the ASAP schedule over its T2; reported, not part of any bound). `--promote <row>:<target>`
+copies a scratch artifact into `hw/artifacts/` and prints the certificate commands (`cqr certify`,
+`cqr hw check`, `cqr hw noisecert`). The Qiskit regeneration is by hand; CI checks the committed rows
+and certificates (`tests/diff/hw_frontier_check.py`, in the step "Noise certificates"). Nothing here is
+"verified on hardware".
+

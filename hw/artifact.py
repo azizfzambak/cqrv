@@ -112,8 +112,10 @@ def delta_of(params):
     return grover_delta(params["r"], params["n"], params["M"])
 
 
-def build(cqr, inst, target_name, seeds=SEEDS):
-    """The artifact of one instance on one target: (manifest, witness, qasm text, best result)."""
+def build(cqr, inst, target_name, seeds=SEEDS, coupling_map=None, routing=None):
+    """The artifact of one instance on one target: (manifest, witness, qasm text, best result).
+    Stage 27c: `coupling_map` routes on a subgraph of the target's map and `routing` (a dict) is then
+    recorded in the manifest; both default to 25a's behaviour (the manifest is unchanged)."""
     name, src, flags, mode, _, cert_dir = inst
     target = load_target(target_name)
     basis = "cz" if "cz" in target["basis_gates"] else "cx"
@@ -122,7 +124,7 @@ def build(cqr, inst, target_name, seeds=SEEDS):
     circ, params = logical_circuit(cqr, inst)
     delta = delta_of(params)
     backend = backend_of(target)
-    best, trials = tp.seed_search(circ, basis, backend, target, seeds, delta)
+    best, trials = tp.seed_search(circ, basis, backend, target, seeds, delta, coupling_map)
     w, b = best["witness"], best["bound"]
     from qiskit import qasm3
     qasm = qasm3.dumps(tp.to_qiskit_physical(best["final_phys"], best["device_width"], best["n_bits"]))
@@ -164,6 +166,9 @@ def build(cqr, inst, target_name, seeds=SEEDS):
                                             "(the snapshot gives no mid-circuit error)"},
         "status": "reported, not certified (Stage 27); the transpiler is untrusted, the witness is checked",
     }
+    if routing is not None:
+        manifest["routing"] = routing
+        manifest["schema_version"] = "1.1.0"  # docs/hw_artifact.schema.json: `routing` is the 1.1.0 addition
     return manifest, w, qasm, best
 
 

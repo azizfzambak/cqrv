@@ -56,3 +56,11 @@ and 8 GB per file; the step takes about 4.5 min in total.
 Regenerate after a change of the artifacts or of the generator with
 `for d in hw/artifacts/*/; do .lake/build/bin/cqr hw check --artifact $d --target hw/targets/<target>.json; done`
 (the target is the manifest's `target`), and re-check with `scripts/check_hw_checks.sh`.
+
+## Stage 27c: the frontier artifacts
+
+Three more check files, for the frontier certificates' artifacts (`hw/artifacts/fr_*`; routing (b) of
+`scripts/frontier.py` for the `_rb` ones): `fr_n3_tree_coherent_rb__fake_torino` (909 physical gates on
+5 qubits, kernel 15 s), `fr_n3_fewlog_mbu__fake_torino` (730 gates, 14 s), `fr_n2_tree_coherent_rb__fake_washington`
+(92 gates, 11 s); the standard three axioms; the CI step checks all fifteen files.
+

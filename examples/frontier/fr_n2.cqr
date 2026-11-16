@@ -1,0 +1,2 @@
+-- Stage 27c (PHASE2_SPEC §C.4, the feasibility frontier): Grover on x_0 ∧ … ∧ x_1, n = 2, M = 1 from ℰ.
+fn fr_n2(x: Vec Bool 2) -> Bool { idx(x, 0) and idx(x, 1) }

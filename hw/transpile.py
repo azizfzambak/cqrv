@@ -419,14 +419,15 @@ def versions_dict():
             "passes": "SabreLayout(coupling_map, seed) alone in a PassManager (qiskit 2.6.2)"}
 
 
-def pipeline(circ, basis, backend, target, seed, delta):
+def pipeline(circ, basis, backend, target, seed, delta, coupling_map=None):
     """Translate, route with `seed`, extract, witness, reconstruct (checked), expand the swaps,
-    bound. Returns a dict with everything or raises WitnessError."""
+    bound. Returns a dict with everything or raises WitnessError. `coupling_map` (Stage 27c, routing
+    (b)): a subgraph of the backend's coupling map to route on; default the full map, as 25a."""
     n = circ["n_data"] + circ["n_anc"]
     gates = decomp.translate(circ, basis)
     n_bits = decomp.n_bits_of(circ)
     tqc = decomp.to_qiskit(gates, n, n_bits)
-    cm = backend.target.build_coupling_map()
+    cm = backend.target.build_coupling_map() if coupling_map is None else coupling_map
     tq = route(tqc, cm, seed)
     phys = extract(tq)
     initial = list(tq.layout.initial_index_layout(filter_ancillas=True))
@@ -449,11 +450,11 @@ def pipeline(circ, basis, backend, target, seed, delta):
             "witness": w, "final_phys": final_phys, "bound": bound, "device_width": tq.num_qubits}
 
 
-def seed_search(circ, basis, backend, target, seeds, delta):
+def seed_search(circ, basis, backend, target, seeds, delta, coupling_map=None):
     """Every seed's figure; the choice is the least bound (ties: the smallest seed)."""
     trials, best = [], None
     for s in seeds:
-        r = pipeline(circ, basis, backend, target, s, delta)
+        r = pipeline(circ, basis, backend, target, s, delta, coupling_map)
         b = r["bound"]
         trials.append({"seed": s, "bound": decomp.frac_str(b["bound"]), "bound_float": float(b["bound"]),
                        "vacuous": b["vacuous"], "uses_error_1_edge": b["uses_error_1_edge"],

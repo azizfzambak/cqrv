@@ -4,7 +4,10 @@
 #   tests/diff/hw_noise_check.py --cqr      (.venv): `cqr hw noise --json` = hw/noisebound.py on all twelve artifacts
 #   tests/diff/hw_noisecert_check.py --cqr  (.venv): the three conditional certificates — hashes, premises, bounds,
 #                                                    the emulator comparison at delta', byte-identical regeneration
-#   lake env lean                           examples/certs/hw_n2/Cert.lean, hw_n3/Cert.lean (front_end, cert),
+#   tests/diff/hw_frontier_check.py --cqr   (.venv): Stage 27c — the frontier table's committed rows match cqr hw noise /
+#                                                    cqr hw grade, its frontier rows match the fr_* certificates, FRONTIER.md
+#                                                    is the render of frontier.json (the Qiskit regeneration is by hand)
+#   lake env lean                           examples/certs/hw_n2/Cert.lean, hw_n3/Cert.lean, fr_*/Cert.lean (front_end, cert),
 #                                           hw_n2_torino/PhysCert.lean, hw_n3_torino/PhysCert.lean (emitted_eq axiom-free;
 #                                           front_end, cert, phys_channel, phys_zero, phys_realizes, phys_noisy_inst),
 #                                           mbu_gadget_torino/NoiseCert.lean (c_eq axiom-free; phys_channel, gadget_noisy)
@@ -27,6 +30,7 @@ cd "$ROOT"
 
 "$PYTHON" -I "$ROOT/tests/diff/hw_noise_check.py" --cqr "$CQR" | tail -1
 "$PYTHON" -I "$ROOT/tests/diff/hw_noisecert_check.py" --cqr "$CQR"
+"$PYTHON" -I "$ROOT/tests/diff/hw_frontier_check.py" --cqr "$CQR"
 
 STD="dependsonaxioms:\[propext,Classical.choice,Quot.sound\]"
 fail=0
@@ -51,5 +55,8 @@ check_file examples/certs/hw_n3/Cert.lean 2 0
 check_file examples/certs/hw_n2_torino/PhysCert.lean 6 1
 check_file examples/certs/hw_n3_torino/PhysCert.lean 6 1
 check_file examples/certs/mbu_gadget_torino/NoiseCert.lean 2 1
+# Stage 27c: the frontier certificates (logical: front_end, cert; conditional: emitted_eq axiom-free + six standard-three)
+for f in examples/certs/fr_*/Cert.lean; do check_file "$f" 2 0; done
+for f in examples/certs/fr_*/PhysCert.lean; do check_file "$f" 6 1; done
 [ "$fail" -eq 0 ] || exit 1
 echo "check_noisecerts: all checks passed"

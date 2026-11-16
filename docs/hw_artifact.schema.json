@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "CQRV physical artifact manifest, schema v1.0.0",
+  "title": "CQRV physical artifact manifest, schema v1.1.0",
   "description": "PHASE2_SPEC §C.2 \"The physical artifact\" (Stage 25a, Track C); report §5.3. The hash-linked manifest written by hw/artifact.py next to witness.json and physical.qasm: the SHA3-256 hashes of the committed certificate JSON (when the instance comes from one), of the canonical logical circuit JSON (the form Lean hashes as circuit_hash), of the target's calibration snapshot, of the witness and of the physical circuit's OpenQASM 3 text; the versions and the seed chosen, every seed tried with its figure, the layouts, the physical counts and the bound on the physical circuit δ_hw ≤ δ + Σ_ops rate as exact fractions, with vacuity (≥ 1) and the use of an error-1.0 edge marked. Reported, not certified (Stage 27): the transpiler is untrusted, the witness is checked.",
   "type": "object",
   "additionalProperties": false,
@@ -13,7 +13,7 @@
     "edge": {"type": "array", "items": {"$ref": "#/$defs/nat"}, "minItems": 2, "maxItems": 2}
   },
   "properties": {
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"enum": ["1.0.0", "1.1.0"], "description": "1.0.0: Stage 25a; 1.1.0 (Stage 27c): the optional `routing` of a manifest routed on a subgraph of the coupling map (scripts/frontier.py, routing (b)); a manifest without `routing` is 1.0.0"},
     "instance": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]+$"},
     "source": {"description": "the DSL example, or null for a gadget", "oneOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
     "synthesize_flags": {"type": "array", "items": {"type": "string"}},
@@ -74,6 +74,19 @@
                      "terms": {"type": "object", "additionalProperties": {"$ref": "#/$defs/fraction"}},
                      "mid_circuit_assumption": {"type": "string", "minLength": 1}}
     },
-    "status": {"type": "string", "pattern": "reported, not certified"}
+    "status": {"type": "string", "pattern": "reported, not certified"},
+    "routing": {
+      "description": "Stage 27c, routing (b): the circuit was routed on the subgraph of the target's coupling map whose directed edges have calibrated error below the threshold, restricted to its largest connected component; absent for the full coupling map (25a). The witness and edges_ok are unchanged: an edge of the subgraph is an edge of the target.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "threshold", "edges_removed", "component_qubits", "edges_kept"],
+      "properties": {
+        "kind": {"const": "edges_below_threshold"},
+        "threshold": {"$ref": "#/$defs/fraction"},
+        "edges_removed": {"$ref": "#/$defs/nat"},
+        "component_qubits": {"$ref": "#/$defs/nat"},
+        "edges_kept": {"$ref": "#/$defs/nat"}
+      }
+    }
   }
 }
