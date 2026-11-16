@@ -116,7 +116,11 @@ moves only the `library` fields), and `hashes.library`, the SHA3-256 of the CQRV
 generated against (`CQRV.Certify.libraryHash`; `tests/diff/libhash.py` warns when a recorded hash is not the
 tree's and blocks with `--release`) —, the grades, the
 status words `logical_certified`, `hardware_compatible`, `physical_translation_validated`,
-`emulator_validated` only when the run report passed, and `meaning_physical_translation`: on an ideal
+`emulator_sanity_checked` (R3; `emulator_validated` before: the emulator's noise model is not of the
+(P-stoch) form, so a pass is a sanity check, not evidence for the premise) only when the run report
+passed, `model_premises` (R4: `ideal_device`, `P-prep`, `P-ctrl`, one sentence each; the conditional
+certificates state `P-prep`, `P-ctrl` and replace `ideal_device` by `noise.premises`), and
+`meaning_physical_translation`: on an ideal
 device with these gates and this connectivity, started from all-|0⟩, the physical circuit realizes the
 specification — not a statement about noise).
 
@@ -149,7 +153,9 @@ specification with δ' = `noiseB`); without, the channel form of the bare MBU ga
 four premises, the meaning sentence (conditional on the premises, the device's success probability is
 at least 1 − δ'; the premises are assumptions about the device, not facts proved here) and the
 emulator comparison at δ' from the recorded run (25b's criterion with its recorded margin,
-`threshold' = threshold + δ_hw − δ'`; `emulator_validated` only on a pass; "no run recorded for this
+`threshold' = threshold + δ_hw − δ'`, with the full protocol — α, shots, seed, successes, p̂ = successes/shots,
+the one-sided Hoeffding margin `sqrt(ln(1/α) / (2·shots))` as formula and float, the recorded margin
+actually used — in `emulator_comparison` (R3); `emulator_sanity_checked` only on a pass; "no run recorded for this
 artifact" otherwise). The committed conditional certificates: hw_n2 (δ' 0.1793), hw_n3 (0.7521), the
 gadget (0.0995) and the three frontier instances (section 8). `scripts/check_noisecerts.sh` is the CI
 step "Noise certificates".

@@ -9,7 +9,8 @@ For the certificate directory:
     **modulo `hashes.library`** (`certificate_json_mod_library`, also `logical_certificate.
     certificate_json_sha3_mod_library`; R5), of the target's snapshot and of the target file's bytes,
     and `hashes.library` is the current tree's (`libhash.library_hash`); the status words are among the
-    four of P3 and `emulator_validated` is present iff the artifact's run report passed;
+    four of P3 and `emulator_sanity_checked` (R3) is present iff the artifact's run report passed;
+    `model_premises` names `ideal_device`, `P-prep`, `P-ctrl` (R4);
   * `PhysCert.lean` and `physical.qasm` are byte-identical, and `manifest.json` is identical modulo
     `hashes.library`, to what `cqr hw certify` regenerates (the literals are the artifact's; the logical
     body is the committed `Cert.lean`'s);
@@ -36,7 +37,8 @@ import physgrade  # noqa: E402
 import libhash  # noqa: E402
 
 TARGET_FILES = {"fake_torino": "hw/targets/fake_torino.json", "fake_washington": "hw/targets/fake_washington.json"}
-WORDS = ["logical_certified", "hardware_compatible", "physical_translation_validated", "emulator_validated"]
+WORDS = ["logical_certified", "hardware_compatible", "physical_translation_validated", "emulator_sanity_checked"]
+MODEL_PREMISES = ["ideal_device", "P-prep", "P-ctrl"]  # R4: the physical manifest
 
 
 def sha3(data):
@@ -144,8 +146,11 @@ def main():
         errors.append(f"status words {words} are not an ordered subset of {WORDS}")
     run_path = os.path.join(ROOT, "docs", "hw_runs", f"{amanifest['instance']}__{amanifest['target']}.json")
     passed = os.path.exists(run_path) and json.load(open(run_path, encoding="utf-8"))["check"]["result"] == "passes"
-    if ("emulator_validated" in words) != passed:
-        errors.append(f"emulator_validated present={('emulator_validated' in words)} but the run report passed={passed}")
+    if ("emulator_sanity_checked" in words) != passed:
+        errors.append(f"emulator_sanity_checked present={('emulator_sanity_checked' in words)} but the run report passed={passed}")
+    for k in MODEL_PREMISES:
+        if not man.get("model_premises", {}).get(k):
+            errors.append(f"model_premises.{k} missing (R4)")
     for L, g in man["phys_grade"].items():
         py = physgrade.grade_of_artifact(adir, tpath, L)
         if canonical(py) != canonical(g):

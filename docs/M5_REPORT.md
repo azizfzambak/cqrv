@@ -112,6 +112,8 @@ feed-forward latency L = 0 and 1000 ns; the kernel times from the CI logs of ste
 | `fr_n3_fewlog_mbu_torino` | fr_n3 few:log mbu (FakeTorino) | 5, 89, 6, 264, 18 372 (24 372) | 0.6718 | **0.7776** | the four (no run recorded) | 18 |
 | `fr_n2_tree_coherent_rb_washington` | fr_n2 tree coherent, routing (b) (FakeWashington) | 3, 24, 0, 0, 10 503 | 0.1706 | **0.2110** | the four (no run recorded) | 11 |
 
+**Note (2026-11-16, revision R3; REVIEW_RESPONSE_1 §4).** The status word `emulator_validated` of the rows above was renamed `emulator_sanity_checked` in the generators, the checks and the committed manifests (now schema 1.2.0, with the run protocol — α, shots, seed, successes, the Hoeffding margin as formula and float — in `emulator_comparison`, and the premises `P-prep`, `P-ctrl`, `ideal_device` in `model_premises`, R4), because the emulator's noise model is not of the (P-stoch) form: a passing run is a sanity check of the pipeline, not evidence for the premise. The table keeps the word as recorded at M5.
+
 No committed instance clamps (`clamped: false` everywhere). The emulator comparison of a conditional
 certificate applies 25b's criterion to the recorded run with the recorded margin
 (`threshold' = threshold + δ_hw − δ'`): hw_n2 p̂ = 3527/4000 vs 0.8014 and hw_n3 p̂ = 2361/4000 vs

@@ -33,9 +33,13 @@ about the device, not facts proved here; not verified on hardware.
 new δ', without re-running: 25b's check is `p̂ ≥ 1 − δ_hw − √(ln(1/α) / (2·shots))`; the margin
 `√(ln(1/α) / (2·shots))` is not rational, so "exactly in `Rat`" is read as: the margin is taken from
 the recorded run as the exact rational of its printed decimals, `margin = (1 − δ_hw) − threshold`,
-and the new threshold is `threshold' = 1 − δ' − margin = threshold + δ_hw − δ'`; `emulator_validated`
-is given only when `p̂ ≥ threshold'`. The emulator's noise model is not of the (P-stoch) form, so the
-comparison is a sanity check, not evidence for the premise.
+and the new threshold is `threshold' = 1 − δ' − margin = threshold + δ_hw − δ'`;
+`emulator_sanity_checked` (R3; `emulator_validated` before) is given only when `p̂ ≥ threshold'`. The
+emulator's noise model is not of the (P-stoch) form, so the comparison is a sanity check, not
+evidence for the premise. R3 records the full protocol in `emulator_comparison`: `alpha`, `shots`,
+`seed`, `successes` (`p_hat` = successes / shots), the one-sided Hoeffding margin
+`sqrt(ln(1/alpha) / (2 shots))` as a formula and as a float, the recorded margin actually used, and
+the comparison made (`statement`).
 -/
 
 @[expose] public section
@@ -203,6 +207,16 @@ structure EmulatorCompare where
   deltaOld : Rat
   thresholdNew : Rat
   passes : Bool
+  /-- R3: the run's seed and success count, and the margin: as recorded (`(1 − δ_hw) − threshold`,
+  exact) and as the formula's float -/
+  seed : Nat
+  successes : Nat
+  marginRecorded : Rat
+  marginFloat : Float
+
+/-- R3 — the one-sided Hoeffding margin `sqrt(ln(1/alpha) / (2 shots))` as a float. -/
+def hoeffdingMargin (alpha : Rat) (shots : Nat) : Float :=
+  Float.sqrt (Float.log (1 / ratFloat alpha) / (2 * shots.toFloat))
 
 def jsonRat (ctx : String) (j : Json) : Except String Rat :=
   match j with
@@ -234,10 +248,16 @@ def emulatorCompare (runText : String) (deltaNew : Rat) : Except String Emulator
   let thresholdOld ← jsonRat "run.check.threshold" (← field "run.check" check "threshold")
   let deltaOld ← fracOrDecimal "run.delta_hw" (← strField "run" j "delta_hw")
   let thresholdNew := thresholdOld + deltaOld - deltaNew
-  return { pHat, shots, alpha, thresholdOld, deltaOld, thresholdNew, passes := decide (thresholdNew ≤ pHat) }
+  let seed ← natField "run" j "seed"
+  let successes ← natField "run.noisy" noisy "successes"
+  return { pHat, shots, alpha, thresholdOld, deltaOld, thresholdNew, passes := decide (thresholdNew ≤ pHat),
+           seed, successes, marginRecorded := (1 - deltaOld) - thresholdOld, marginFloat := hoeffdingMargin alpha shots }
 
 def EmulatorCompare.toJson (e : EmulatorCompare) (runFile : String) : Json :=
   Json.mkObj [("run", runFile), ("p_hat", ratStr e.pHat), ("shots", e.shots), ("alpha", ratStr e.alpha),
+    ("seed", e.seed), ("successes", e.successes),
+    ("margin_formula", "sqrt(ln(1/alpha) / (2 * shots))"), ("margin_float", Lean.toJson e.marginFloat),
+    ("margin_recorded", ratStr e.marginRecorded),
     ("threshold_recorded", ratStr e.thresholdOld), ("delta_hw_recorded", ratStr e.deltaOld),
     ("threshold_at_delta_prime", ratStr e.thresholdNew), ("threshold_at_delta_prime_float", Lean.toJson (ratFloat e.thresholdNew)),
     ("statement", "p_hat >= threshold_recorded + delta_hw_recorded - delta_prime (25b's criterion with its recorded margin, not re-run)"),
@@ -279,12 +299,12 @@ def noiseDataOf (rates : RateTable) (dev : List Nat) (G : List BasisGate) (dataP
   let nb ← noiseBound rates dev G dataPhys delta
   return { ps, rs, nb, physBound, deltaRat := delta }
 
-/-- The status words of a conditional certificate: the physical words (never `emulator_validated`
-from the recorded result), `noise_conditional`, and `emulator_validated` only when the comparison at
-δ' passes. -/
+/-- The status words of a conditional certificate: the physical words (never the emulator word from
+the recorded result), `noise_conditional`, and `emulator_sanity_checked` (`emulatorWord`; R3) only
+when the comparison at δ' passes. -/
 def noiseWords (logical hardwareCompatible : Bool) (emuPassed : Bool) : List String :=
   (if logical then ["logical_certified"] else []) ++ (if hardwareCompatible then ["hardware_compatible"] else []) ++
-  ["physical_translation_validated", "noise_conditional"] ++ (if emuPassed then ["emulator_validated"] else [])
+  ["physical_translation_validated", "noise_conditional"] ++ (if emuPassed then [emulatorWord] else [])
 
 /-- PHASE2_SPEC §C.4 (4) — the conditional certificate with a logical certificate (hw_n2, hw_n3):
 `PhysCert.lean` with the noise block, `physical.qasm`, `manifest.json` with the noise part. -/
@@ -308,13 +328,13 @@ def generateNoiseCert (certName certBase : String) (certLeanText certJsonText : 
   let words := noiseWords true d.hardwareCompatible emuPassed
   let d' := { d with emulatorPassed := false }
   let lean := physCertFile d' (noiseBlockLogical nd d.m.basis d.specExpr d.povmExpr d.deltaRealExpr)
-    (["noise_conditional"] ++ (if emuPassed then ["emulator_validated"] else []))
+    (["noise_conditional"] ++ (if emuPassed then [emulatorWord] else []))
   let qasm := qasmOf d.G d.dev deviceWidth nBits
   let emulatorRun := match emu with
     | some e => if e.passes then s!"passes at delta_prime ({runFile})" else s!"fails at delta_prime ({runFile})"
     | none => emuNote
   let manifest := physCertManifest p certName certBase words emulatorRun
-    (noiseJson nd d.targetFile d.m.targetHash (emu.map fun e => (e, runFile)) emuNote)
+    (noiseJson nd d.targetFile d.m.targetHash (emu.map fun e => (e, runFile)) emuNote) (physical := false)
   return (lean, qasm, manifest.compress, nd, emu)
 
 /-- PHASE2_SPEC §C.4 (4) — the channel-form conditional certificate of the bare MBU gadget:
@@ -380,6 +400,7 @@ def generateGadgetNoiseCert (certName : String) (manifestText logicalText witnes
       ("target_snapshot", m.targetHash), ("target_file_sha3", targetFileHash), ("library", libHash)]),
     ("phys_grade", Json.mkObj [("0", g.toJson 0)]),
     ("hardware_compatible", Json.mkObj [("edges_ok", edgesOkB), ("capabilities_ok", capsOk)]),
+    ("model_premises", modelPremisesJson false),
     ("emulator_run", emulatorRun),
     ("status", Json.arr (words.map fun w => (w : Json)).toArray),
     ("meaning_physical_translation", "channel form: on an ideal device, from the embedded input, the physical circuit outputs the embedding of the gadget's correct output (mbu_channel_correct through phys_channel); the noise part is conditional on the premises; not verified on hardware")] : List (String × Json))

@@ -57,7 +57,7 @@
   {"verification": "kernel-checked",
    "stage": "7. Certificate Gen",
    "resources":
-   "kernel 12.20 s, wall 22.89 s (median of 5 (first run excluded)); axioms: propext, Classical.choice, Quot.sound",
+   "kernel 12.20 s, wall 22.97 s (median of 5 (first run excluded)); axioms: propext, Classical.choice, Quot.sound",
    "output":
    "examples/certs/simple_alu_x0_1/Cert.lean, certificate.json (theorem CQRV.Cert.simple_alu_x0_1.cert)",
    "note": "lake env lean exit 0; #print axioms audited; status: certified",

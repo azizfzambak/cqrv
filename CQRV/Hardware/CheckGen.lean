@@ -403,13 +403,27 @@ def rateTableLit (r : RateTable) : String :=
 def physGradeLit (g : PhysGrade) : String :=
   s!"⟨{g.qubits}, {g.twoQubit}, {g.midMeas}, {g.feedForward}, {ratStr g.depth}, {ratStr g.bound}, {g.vacuous}⟩"
 
+/-- R3 — the status word of a passing emulator comparison. -/
+def emulatorWord : String := "emulator_sanity_checked"
+
 /-- The status words (P3): `logical_certified` (the committed certificate), `hardware_compatible`
 (the edges and the capabilities the uncomputation mode needs), `physical_translation_validated`
-(this file's theorems, sorry-free, three axioms), and `emulator_validated` only when the run report
-of this artifact passed its check. -/
+(this file's theorems, sorry-free, three axioms), and `emulator_sanity_checked` only when the run
+report of this artifact passed its check — named `emulator_validated` before revision R3
+(REVIEW_RESPONSE_1 §4): the emulator's noise model is not of the (P-stoch) form, so a passing run is
+a sanity check of the pipeline, not evidence for the premise. -/
 def statusWords (hardwareCompatible : Bool) (emulatorPassed : Bool) : List String :=
   ["logical_certified"] ++ (if hardwareCompatible then ["hardware_compatible"] else []) ++
-  ["physical_translation_validated"] ++ (if emulatorPassed then ["emulator_validated"] else [])
+  ["physical_translation_validated"] ++ (if emulatorPassed then [emulatorWord] else [])
+
+/-- R4 (REVIEW_RESPONSE_1 §4; paper v2 Table 1, §8.3) — the model premises every physical and
+conditional manifest states, one sentence each: `ideal_device` (the physical statement only; the
+conditional certificates replace it by `noise.premises`), `P-prep`, `P-ctrl`. One source of truth: the
+Python checks assert the keys. -/
+def modelPremisesJson (physical : Bool) : Json :=
+  Json.mkObj ((if physical then [("ideal_device", Json.str "the device applies exactly the target's basis gates on its coupling map, without noise (the physical statement phys_realizes; a conditional certificate replaces this premise by noise.premises P-cal, P-stoch, P-ro, P-idle)")] else []) ++
+    [("P-prep", Json.str "every qubit used, data and ancillae, starts in |0> exactly (phys_start: the all-|0> device state is the embedded logical |0>)"),
+     ("P-ctrl", Json.str "mid-circuit outcomes are recorded and fed forward exactly and the classical bookkeeping (bits, layouts) is exact; the feed-forward latency L is an assumption used for the timing (PhysGrade) only")])
 
 /-- The data of a physical certificate, for the file and the manifest. -/
 structure PhysCertData where
@@ -649,9 +663,10 @@ def preparePhysCert (certName : String) (certLeanText certJsonText : String)
     durs, rates := ratesR, grades, hardwareCompatible := edgesOkB && capsOk, emulatorPassed, emulatorNote }
   return { d, grades, certCircuit, deltaStr, uncompute, nsAscii, edgesOkB, capsOk, deviceWidth, nBits }
 
-/-- The manifest of a physical certificate (26c2), with the status `words` and `extra` fields. -/
+/-- The manifest of a physical certificate (26c2), with the status `words` and `extra` fields;
+`physical` selects the `ideal_device` premise (R4). -/
 def physCertManifest (p : PhysCertPrep) (certName certBase : String) (words : List String)
-    (emulatorRun : String) (extra : List (String × Json)) : Json :=
+    (emulatorRun : String) (extra : List (String × Json)) (physical : Bool := true) : Json :=
   let d := p.d
   let gradesJson := Json.mkObj (p.grades.map fun (l, g) => (ratStr l, g.toJson l))
   Json.mkObj (([
@@ -671,6 +686,7 @@ def physCertManifest (p : PhysCertPrep) (certName certBase : String) (words : Li
     ("phys_grade", gradesJson),
     ("bound_note", "delta + sum of the calibrated rates + the data readouts at the final layout (25a's physical_bound); reported, not certified: the noise theorem is Stage 27"),
     ("hardware_compatible", Json.mkObj [("edges_ok", p.edgesOkB), ("capabilities_ok", p.capsOk)]),
+    ("model_premises", modelPremisesJson physical),
     ("emulator_run", emulatorRun),
     ("status", Json.arr (words.map fun w => (w : Json)).toArray),
     ("meaning_physical_translation", "physically validated: on an ideal device with the target's gates and coupling map, started from all-|0> on its used qubits, the physical circuit realizes the specification with the certified delta under the final layout; not a statement about noise; not verified on hardware")] : List (String × Json))

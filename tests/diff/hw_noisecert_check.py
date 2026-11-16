@@ -14,8 +14,11 @@ mbu_gadget_torino (the channel form):
   * `noise.noise_bound`, `clamped`, `noise_vacuous` and `physical_bound_p_eq_r` equal `hw/noisebound.py`'s;
   * the emulator comparison: when a run report exists, `threshold_at_delta_prime` equals the recorded
     threshold + the recorded δ_hw − δ' (exactly, as Fractions of the printed decimals) and the result
-    is `passes` iff p̂ ≥ that threshold; `emulator_validated` is present iff it passes; without a run
-    report the manifest says "no run recorded for this artifact";
+    is `passes` iff p̂ ≥ that threshold; `emulator_sanity_checked` (R3; `emulator_validated` before) is
+    present iff it passes, and the block records the run's protocol — alpha, shots, seed, successes,
+    p̂ = successes/shots, the Hoeffding margin as formula and float, the recorded margin — from the
+    run file; without a run report the manifest says "no run recorded for this artifact";
+  * R4: `model_premises` names `P-prep` and `P-ctrl` (the noise premises replace `ideal_device`);
   * the Lean file and `physical.qasm` are byte-identical, and `manifest.json` identical modulo
     `hashes.library`, to what `cqr hw noisecert` regenerates.
 The kernel check of the Lean files (`lake env lean`) is the bash step's. Conditional on the premises;
@@ -24,6 +27,7 @@ nothing here is a fact about a device or "verified on hardware".
 import argparse
 import hashlib
 import json
+import math
 import os
 import subprocess
 import sys
@@ -40,6 +44,8 @@ TARGET_FILES = {"fake_torino": "hw/targets/fake_torino.json", "fake_washington":
 CERTS = [("hw_n2_torino", "hw_n2", "PhysCert.lean"), ("hw_n3_torino", "hw_n3", "PhysCert.lean"),
          ("mbu_gadget_torino", None, "NoiseCert.lean")]
 PREMISES = ["P-cal", "P-stoch", "P-ro", "P-idle"]
+MODEL_PREMISES = ["P-prep", "P-ctrl"]  # R4: the conditional manifests (noise.premises replace ideal_device)
+MARGIN_FORMULA = "sqrt(ln(1/alpha) / (2 * shots))"
 
 
 def sha3(data):
@@ -94,6 +100,11 @@ def check_cert(cqr, name, logical, lean_file, errors):
     for p in PREMISES:
         if p not in noise.get("premises", {}):
             errors.append(f"{name}: premise {p} missing")
+    for p in MODEL_PREMISES:
+        if not man.get("model_premises", {}).get(p):
+            errors.append(f"{name}: model_premises.{p} missing (R4)")
+    if "ideal_device" in man.get("model_premises", {}):
+        errors.append(f"{name}: model_premises.ideal_device on a conditional certificate (the noise premises replace it)")
     if "not verified on hardware" not in noise.get("meaning", "") or "assumptions about the device" not in noise.get("meaning", ""):
         errors.append(f"{name}: the meaning sentence is not the conditional one")
     py = noisebound.noise_of_artifact(adir, tpath)
@@ -114,10 +125,21 @@ def check_cert(cqr, name, logical, lean_file, errors):
                 errors.append(f"{name}: threshold_at_delta_prime {emu['threshold_at_delta_prime']} differs from {thr}")
             if (emu["result"] == "passes") != passes:
                 errors.append(f"{name}: emulator result {emu['result']} but recomputed passes={passes}")
-        if ("emulator_validated" in words) != passes:
-            errors.append(f"{name}: emulator_validated present={('emulator_validated' in words)} but passes={passes}")
+            # R3: the full protocol, from the run file
+            proto = {"alpha": frac(emu["alpha"]) == frac(r["check"]["alpha"]), "shots": emu["shots"] == r["shots"],
+                     "seed": emu["seed"] == r["seed"], "successes": emu["successes"] == r["noisy"]["successes"],
+                     "p_hat": frac(emu["p_hat"]) == Fraction(r["noisy"]["successes"], r["shots"]),
+                     "margin_formula": emu["margin_formula"] == MARGIN_FORMULA,
+                     "margin_float": abs(emu["margin_float"] - math.sqrt(math.log(1 / r["check"]["alpha"]) / (2 * r["shots"]))) < 1e-6,
+                     "margin_recorded": frac(emu["margin_recorded"]) == (1 - frac(r["delta_hw"])) - frac(r["check"]["threshold"]),
+                     "statement": "threshold_recorded + delta_hw_recorded - delta_prime" in emu["statement"]}
+            for k, ok in proto.items():
+                if not ok:
+                    errors.append(f"{name}: emulator_comparison.{k} does not match the run file (R3)")
+        if ("emulator_sanity_checked" in words) != passes:
+            errors.append(f"{name}: emulator_sanity_checked present={('emulator_sanity_checked' in words)} but passes={passes}")
     else:
-        if emu != "no run recorded for this artifact" or "emulator_validated" in words:
+        if emu != "no run recorded for this artifact" or "emulator_sanity_checked" in words:
             errors.append(f"{name}: no run report, but the manifest says {emu!r} / words {words}")
     # regeneration
     lat = [L for L in man.get("ff_latency_ns", ["0"]) if L != "0"]
