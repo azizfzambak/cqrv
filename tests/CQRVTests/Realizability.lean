@@ -76,6 +76,37 @@ example {X₁ X₂ X₃ X₄ d₂ d₃ d₄ : Type} [Fintype X₁] [DecidableEq 
 #print axioms measured_composition_exact
 #print axioms no_cloning_obstruction
 
+/-! ## Axiom audit — Theorem 3.1, the R1 variants (REVIEW_RESPONSE_1 row 8) -/
+
+open scoped Kronecker
+
+/-- info: 'CQRV.no_cloning_linear' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms no_cloning_linear
+
+/-- info: 'CQRV.no_cloning_pure' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms no_cloning_pure
+
+/-- info: 'CQRV.pure_cloning_of_card_one' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms pure_cloning_of_card_one
+
+/-- The linear form needs no non-degeneracy: it holds on `Fin 1`. -/
+example : ¬ ∃ C : (Fin 1 → ℂ) →ₗ[ℂ] (Fin 1 × Fin 1 → ℂ), ∀ ψ : Fin 1 → ℂ, C ψ = fun ij => ψ ij.1 * ψ ij.2 :=
+  no_cloning_linear
+
+/-- The pure-state form is sharp: it fails on `Fin 1` and holds on `Fin 2`. -/
+example : ∃ Φ : Matrix (Fin 1) (Fin 1) ℂ →ₗ[ℂ] Matrix (Fin 1 × Fin 1) (Fin 1 × Fin 1) ℂ,
+    ∀ ψ : Fin 1 → ℂ, ∑ k, Complex.normSq (ψ k) = 1 →
+      Φ (Matrix.vecMulVec ψ (star ψ)) = Matrix.vecMulVec ψ (star ψ) ⊗ₖ Matrix.vecMulVec ψ (star ψ) :=
+  pure_cloning_of_card_one (by simp)
+
+example : ¬ ∃ Φ : Matrix (Fin 2) (Fin 2) ℂ →ₗ[ℂ] Matrix (Fin 2 × Fin 2) (Fin 2 × Fin 2) ℂ,
+    ∀ ψ : Fin 2 → ℂ, ∑ k, Complex.normSq (ψ k) = 1 →
+      Φ (Matrix.vecMulVec ψ (star ψ)) = Matrix.vecMulVec ψ (star ψ) ⊗ₖ Matrix.vecMulVec ψ (star ψ) :=
+  no_cloning_pure (by simp)
+
 /-! ## Axiom audit — Theorem 3.3a, general ε (Stage 10a) -/
 
 /-- info: 'CQRV.relax_comp' depends on axioms: [propext, Classical.choice, Quot.sound] -/
