@@ -221,7 +221,8 @@ kernel-evaluable few-ancilla schedule is one definition, `CQRV.Synthesis.FewSche
 
 | Item | Status (source) |
 |---|---|
-| Clean ⇒ Cond(true) (the clean regime as the conditional regime under `true`), `AncRestoreDirty.widen` (the dirty widening) | open; remarks for Paper 2 (DECISIONS.md, M4 review 2026-11-15; PHASE2_SPEC §B.3) |
+| Clean ⇒ Cond(true) (the clean regime as the conditional regime under `true`) | **closed** 2026-11-16 by revision R2 (`supportFactor`, `AncRestore.toCond_true`, `ancRestoreCond_true_iff`; commit 040e967) |
+| `AncRestoreDirty.widen` (the dirty widening) | open; remarks for Paper 2 (DECISIONS.md, M4 review 2026-11-15; PHASE2_SPEC §B.3) |
 | The all-n forms of 23c (`planB_cost` / `planB_valid` for every n) | open; proved for n = 4 … 12 (`planB_cost`, `planB_cost_small`) |
 | KG Theorem 5.1 for every n (the few:log MCZ restores) | **proved** (Stage 13a: `mczFew_logDepth_ancRestore`, `diffusionFew_logDepth_ancRestore`, `grover_certificate_few_all`); the `ladder` variant is not certified |
 | Commutation of blocks on disjoint qubits | **closed** by 26b2 (`gateK_comm_of_disjoint`, `krausOps_reorder`; DECISIONS.md, 27c review) |
@@ -266,7 +267,7 @@ live or current.
 
 **Claims not to make**: the `ladder` variant's restoration as proved (it is not certified; only
 `.logDepth` is); the Unqomp / Silq safety conditions as formalized (23b was not run as a stage); the
-dirty widening or Clean ⇒ Cond(true) as proved.
+dirty widening as proved. (Clean ⇒ Cond(true) is proved since revision R2, 2026-11-16.)
 
 ## 7. Deviations since M3
 

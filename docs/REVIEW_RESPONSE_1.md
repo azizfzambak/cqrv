@@ -140,8 +140,12 @@ are replaced by the trust table and one fixed sentence.
 
 ## 4. Revision plan for the project (tasks R1–R16)
 
-These tasks change code or committed files. They are proposed, not started. R13, R14 and R16 are
-the author's.
+These tasks change code or committed files. R13, R14 and R16 are the author's.
+
+**Status (2026-11-16).** R1, R2, R15: done (revision task A, `docs/tasks/REVA_TASK.md`; commits
+6c66a87, 040e967, 8dfced6; accepted, CI 26 PASS / 4 n/a). R3, R4, R5, R10: revision task B
+(`REVB_TASK.md`); R12: task C (`REVC_TASK.md`); R11: task D (`REVD_TASK.md`), in that order, by the
+author's decision of 2026-11-16. R6–R9 not scheduled.
 
 | Task | Content | Size | Changes committed files? |
 |---|---|---|---|
