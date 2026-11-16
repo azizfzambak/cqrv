@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "CQRV certificate envelope, schema v1.11.0",
-  "description": "Report §8.4.2, §8.4.4, §9.5.1, §9.5.3; DECISIONS.md 2026-10-24 (Stage 8a, reviewer decision 3). Written by CQRV.Certify.Certificate.toJson. v1.1.0 (DECISIONS.md 2026-10-25, Stage 8b) adds theorem, obligations and the machine fields of reference_configuration; v1.2.0 (Stage 8b review) adds trust_boundary.front_end; v1.3.0 (DECISIONS.md 2026-10-25, Stage 9b decision 1) lets front_end be the exhaustive-validation wording (n ≤ 16) or the Stage 8b wording (n > 16); v1.4.0 (DECISIONS.md 2026-10-26, Stage 11b decision 5) adds the optional object hardware (`cqr certify --profile`): a certificate without it is unchanged and keeps schema_version \"1.3.0\" (valid under v1.4.0), one with it says \"1.4.0\" (hardware present iff schema_version is \"1.4.0\"); v1.5.0 (DECISIONS.md 2026-10-26, Stage 12d decision 5) adds the optional field diffusion_shape (omitted means \"tree\"): only a certificate of `cqr certify --shape few:log` carries it and says \"1.5.0\" (diffusion_shape present iff schema_version is \"1.5.0\"; hardware optional there), so the tree certificates are unchanged; v1.6.0 (DECISIONS.md 2026-10-29, Stage 14a) adds the required object solution_count {value, status}: status \"kernel_decided\" when Cert.lean proves hM_count (Network.countSat_eq_card and decide +kernel; `cqr certify --count-limit k`, n ≤ k, default 12) and `cert` takes no hypothesis — the status line is then `certified` —, \"hypothesis\" when `cert` keeps hM_card (status line `certified (conditional on: solution_count = M)`); value = instance.M; every certificate written since Stage 14a says \"1.6.0\" (hardware and diffusion_shape optional under it; solution_count present iff schema_version is \"1.6.0\"). v1.7.0 (DECISIONS.md 2026-10-30, Stage 15b; PHASE2_SPEC.md §A.0.1) adds the optional field uncompute (\"coherent\": every temporary AND is undone by the adjoint of its compute block, no measurement, no classical bit; `cqr certify --uncompute coherent`, certified by grover_certificate_coherent): only such a certificate carries it and says \"1.7.0\" (uncompute present iff schema_version is \"1.7.0\"; solution_count required there too; omitted means \"mbu\"), so every MBU certificate kept \"1.6.0\" byte for byte. v1.8.0 (Stage 16b, DECISIONS.md 2026-10-31; the retirement of the omission convention decided 2026-10-30, Stage 15b review): uncompute is required in every certificate (the omission convention of 1.7.0 is retired), solution_count stays required, and trust_boundary.front_end is the proved wording (the step typed term → network is the theorem toNetwork_pred of Stage 16a, applied in Cert.lean to the typed-term literal prog: prog_scoped, net_ok, front_end, kernel-checked); the wording is tied to the version (the proved wording only under 1.8.0 and later, the earlier wordings only before it). v1.9.0 (Stage 17b, PHASE2_SPEC.md §A.1; DECISIONS.md 2026-10-31): the required object grade_ext {two_qubit, t_depth, rot, meas, ff} — the second resource record GradeExt of the emitted circuit, measured by the same scheduler as grade and stated in Cert.lean as gradeExt_eq (decide +kernel); present iff schema_version is \"1.9.0\" (solution_count and uncompute required there too; hardware and diffusion_shape optional). v1.10.0 (Stage 20b3, PHASE2_SPEC.md §A.4 \"Amendments before Stage 20b3\" (5); DECISIONS.md 2026-11-12): the pattern Count — the counting (amplitude-estimation) certificate written by CQRV.Certify.CountCertificate.toJson (scripts/CertifyTool.lean count-certify; `cqr certify --problem count` in Stage 21). Stage 21a3 (PHASE2_SPEC.md §A.5 amendment (7); DECISIONS.md 2026-11-13): 1.10.0 admits both patterns — every certificate says \"1.10.0\" and carries grade_kind, \"measured\" for Grover (no blocks; hardware and diffusion_shape stay optional) and \"composed_bound\" for Count; Count's solution_count.status is \"kernel_decided\" (value and instance.M the count) or \"not_decided\" (both null: n above --count-limit, refinement (5′), spec.epsilon then the maximum over a, π/2^m + π²/4^m); the envelopes of the earlier versions stay valid under their own versions. v1.11.0 (Stage 21a4, PHASE2_SPEC.md §A.6 amendment (8) and refinement (8′); DECISIONS.md 2026-11-14): the object selection — budget {w, d, t, a}, prefer, order (the four letters in key order), the three candidates (shape, uncompute, grade or null, admissible), selected {shape, uncompute} and the name of the theorem `selected` — written only by `cqr certify --budget w,d,t,a --prefer …`, for pattern Grover; present iff the version is 1.11.0, which otherwise requires what 1.10.0 requires for Grover. A certificate written without --budget stays at 1.10.0. The Count branch: instance {n, M, m, kmax} (M the kernel-decided count, kmax null for the exact inverse QFT); spec.epsilon and spec.delta are reals, each {expr, approx} (an expression string and a decimal marked approximate, never a rational: sin²(π y/2^m) is in general irrational), spec.estimate the decoding; grade is the composed bound of Stage 19a over the blocks (grade_kind \"composed_bound\"; required), grade_ext the composed second record with t_depth a bound (t_depth_kind \"bound\"); blocks lists every distinct block of the circuit (name, gates, multiplicity, grade, grade_ext, live_end), from which tests/diff/certify_check.py replays the assembled circuit for the hash and recomputes the composed grade; hardware_perturbation carries a note (the QASM / QIR measure all n + m data qubits; countPOVM reads the phase register only). The Grover branch (every other pattern) keeps the shapes below: instance {n, M, r}, epsilon \"0\", delta a rational, grade measured (grade_kind \"measured\" under 1.10.0), no blocks. Hardware fitness is not part of status. \"not yet audited\" (no kernel check): proof, cpu, theorem, kernel_check null, axioms and obligations empty. \"certified\": kernel check passed and the axiom audit passed (sorry-free, standard axioms or the trust-boundary table), no obligations. \"certificate with tracked obligations\": kernel check passed, audit failed; obligations names each one.",
+  "title": "CQRV certificate envelope, schema v1.12.0",
+  "description": "Report §8.4.2, §8.4.4, §9.5.1, §9.5.3; DECISIONS.md 2026-10-24 (Stage 8a, reviewer decision 3). Written by CQRV.Certify.Certificate.toJson. v1.1.0 (DECISIONS.md 2026-10-25, Stage 8b) adds theorem, obligations and the machine fields of reference_configuration; v1.2.0 (Stage 8b review) adds trust_boundary.front_end; v1.3.0 (DECISIONS.md 2026-10-25, Stage 9b decision 1) lets front_end be the exhaustive-validation wording (n ≤ 16) or the Stage 8b wording (n > 16); v1.4.0 (DECISIONS.md 2026-10-26, Stage 11b decision 5) adds the optional object hardware (`cqr certify --profile`): a certificate without it is unchanged and keeps schema_version \"1.3.0\" (valid under v1.4.0), one with it says \"1.4.0\" (hardware present iff schema_version is \"1.4.0\"); v1.5.0 (DECISIONS.md 2026-10-26, Stage 12d decision 5) adds the optional field diffusion_shape (omitted means \"tree\"): only a certificate of `cqr certify --shape few:log` carries it and says \"1.5.0\" (diffusion_shape present iff schema_version is \"1.5.0\"; hardware optional there), so the tree certificates are unchanged; v1.6.0 (DECISIONS.md 2026-10-29, Stage 14a) adds the required object solution_count {value, status}: status \"kernel_decided\" when Cert.lean proves hM_count (Network.countSat_eq_card and decide +kernel; `cqr certify --count-limit k`, n ≤ k, default 12) and `cert` takes no hypothesis — the status line is then `certified` —, \"hypothesis\" when `cert` keeps hM_card (status line `certified (conditional on: solution_count = M)`); value = instance.M; every certificate written since Stage 14a says \"1.6.0\" (hardware and diffusion_shape optional under it; solution_count present iff schema_version is \"1.6.0\"). v1.7.0 (DECISIONS.md 2026-10-30, Stage 15b; PHASE2_SPEC.md §A.0.1) adds the optional field uncompute (\"coherent\": every temporary AND is undone by the adjoint of its compute block, no measurement, no classical bit; `cqr certify --uncompute coherent`, certified by grover_certificate_coherent): only such a certificate carries it and says \"1.7.0\" (uncompute present iff schema_version is \"1.7.0\"; solution_count required there too; omitted means \"mbu\"), so every MBU certificate kept \"1.6.0\" byte for byte. v1.8.0 (Stage 16b, DECISIONS.md 2026-10-31; the retirement of the omission convention decided 2026-10-30, Stage 15b review): uncompute is required in every certificate (the omission convention of 1.7.0 is retired), solution_count stays required, and trust_boundary.front_end is the proved wording (the step typed term → network is the theorem toNetwork_pred of Stage 16a, applied in Cert.lean to the typed-term literal prog: prog_scoped, net_ok, front_end, kernel-checked); the wording is tied to the version (the proved wording only under 1.8.0 and later, the earlier wordings only before it). v1.9.0 (Stage 17b, PHASE2_SPEC.md §A.1; DECISIONS.md 2026-10-31): the required object grade_ext {two_qubit, t_depth, rot, meas, ff} — the second resource record GradeExt of the emitted circuit, measured by the same scheduler as grade and stated in Cert.lean as gradeExt_eq (decide +kernel); present iff schema_version is \"1.9.0\" (solution_count and uncompute required there too; hardware and diffusion_shape optional). v1.10.0 (Stage 20b3, PHASE2_SPEC.md §A.4 \"Amendments before Stage 20b3\" (5); DECISIONS.md 2026-11-12): the pattern Count — the counting (amplitude-estimation) certificate written by CQRV.Certify.CountCertificate.toJson (scripts/CertifyTool.lean count-certify; `cqr certify --problem count` in Stage 21). Stage 21a3 (PHASE2_SPEC.md §A.5 amendment (7); DECISIONS.md 2026-11-13): 1.10.0 admits both patterns — every certificate says \"1.10.0\" and carries grade_kind, \"measured\" for Grover (no blocks; hardware and diffusion_shape stay optional) and \"composed_bound\" for Count; Count's solution_count.status is \"kernel_decided\" (value and instance.M the count) or \"not_decided\" (both null: n above --count-limit, refinement (5′), spec.epsilon then the maximum over a, π/2^m + π²/4^m); the envelopes of the earlier versions stay valid under their own versions. v1.11.0 (Stage 21a4, PHASE2_SPEC.md §A.6 amendment (8) and refinement (8′); DECISIONS.md 2026-11-14): the object selection — budget {w, d, t, a}, prefer, order (the four letters in key order), the three candidates (shape, uncompute, grade or null, admissible), selected {shape, uncompute} and the name of the theorem `selected` — written only by `cqr certify --budget w,d,t,a --prefer …`, for pattern Grover; present iff the version is 1.11.0, which otherwise requires what 1.10.0 requires for Grover. A certificate written without --budget stays at 1.10.0. The Count branch: instance {n, M, m, kmax} (M the kernel-decided count, kmax null for the exact inverse QFT); spec.epsilon and spec.delta are reals, each {expr, approx} (an expression string and a decimal marked approximate, never a rational: sin²(π y/2^m) is in general irrational), spec.estimate the decoding; grade is the composed bound of Stage 19a over the blocks (grade_kind \"composed_bound\"; required), grade_ext the composed second record with t_depth a bound (t_depth_kind \"bound\"); blocks lists every distinct block of the circuit (name, gates, multiplicity, grade, grade_ext, live_end), from which tests/diff/certify_check.py replays the assembled circuit for the hash and recomputes the composed grade; hardware_perturbation carries a note (the QASM / QIR measure all n + m data qubits; countPOVM reads the phase register only). The Grover branch (every other pattern) keeps the shapes below: instance {n, M, r}, epsilon \"0\", delta a rational, grade measured (grade_kind \"measured\" under 1.10.0), no blocks. Hardware fitness is not part of status. \"not yet audited\" (no kernel check): proof, cpu, theorem, kernel_check null, axioms and obligations empty. \"certified\": kernel check passed and the axiom audit passed (sorry-free, standard axioms or the trust-boundary table), no obligations. \"certificate with tracked obligations\": kernel check passed, audit failed; obligations names each one. v1.12.0 (revision R5, REVIEW_RESPONSE_1 §4; DECISIONS.md 2026-11-16) adds hashes.library (SHA3-256 of the CQRV sources the certificate was checked against — every .lean file under CQRV/ and Apps/ plus lakefile.lean, lean-toolchain, lake-manifest.json, as `path ‖ 0x00 ‖ hex(SHA3-256(content)) ‖ 0x0A` sorted by path; CQRV.Certify.libraryHash, mirrored by tests/diff/libhash.py; null only in the unaudited sample) and hardware_perturbation.status (the δ_hw ≤ δ + G·p̄ figure is an illustrative estimate, not a theorem); every certificate — the selection one (1.11.0 before) and the counting one included — says \"1.12.0\"; selection is optional under it. The hardware manifests cite a certificate by the SHA3-256 of its JSON with hashes.library set to null (certificate_json_sha3_mod_library), so that a library change moves only the library fields.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "pattern", "instance", "spec", "grade", "hypotheses",
@@ -47,14 +47,14 @@
     }
   },
   "dependentSchemas": {
-    "hardware": {"properties": {"schema_version": {"enum": ["1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0"]}}},
-    "diffusion_shape": {"properties": {"schema_version": {"enum": ["1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0"]}}},
-    "solution_count": {"properties": {"schema_version": {"enum": ["1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0"]}}},
-    "uncompute": {"properties": {"schema_version": {"enum": ["1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0"]}}},
-    "grade_ext": {"properties": {"schema_version": {"enum": ["1.9.0", "1.10.0", "1.11.0"]}}},
-    "grade_kind": {"properties": {"schema_version": {"enum": ["1.10.0", "1.11.0"]}}},
-    "blocks": {"properties": {"schema_version": {"enum": ["1.10.0"]}, "pattern": {"const": "Count"}}},
-    "selection": {"properties": {"schema_version": {"enum": ["1.11.0"]}, "pattern": {"not": {"const": "Count"}}}}
+    "hardware": {"properties": {"schema_version": {"enum": ["1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0", "1.12.0"]}}},
+    "diffusion_shape": {"properties": {"schema_version": {"enum": ["1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0", "1.12.0"]}}},
+    "solution_count": {"properties": {"schema_version": {"enum": ["1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0", "1.12.0"]}}},
+    "uncompute": {"properties": {"schema_version": {"enum": ["1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0", "1.12.0"]}}},
+    "grade_ext": {"properties": {"schema_version": {"enum": ["1.9.0", "1.10.0", "1.11.0", "1.12.0"]}}},
+    "grade_kind": {"properties": {"schema_version": {"enum": ["1.10.0", "1.11.0", "1.12.0"]}}},
+    "blocks": {"properties": {"schema_version": {"enum": ["1.10.0", "1.12.0"]}, "pattern": {"const": "Count"}}},
+    "selection": {"properties": {"schema_version": {"enum": ["1.11.0", "1.12.0"]}, "pattern": {"not": {"const": "Count"}}}}
   },
   "allOf": [
     {"if": {"properties": {"schema_version": {"const": "1.4.0"}}, "required": ["schema_version"]},
@@ -74,11 +74,15 @@
     {"if": {"properties": {"schema_version": {"const": "1.11.0"}}, "required": ["schema_version"]},
      "then": {"required": ["solution_count", "uncompute", "grade_ext", "grade_kind", "selection"],
               "properties": {"pattern": {"not": {"const": "Count"}}, "grade_kind": {"const": "measured"}}}},
+    {"if": {"properties": {"schema_version": {"const": "1.12.0"}}, "required": ["schema_version"]},
+     "then": {"required": ["solution_count", "uncompute", "grade_ext", "grade_kind"],
+              "properties": {"hashes": {"required": ["predicate", "circuit", "proof", "library"]},
+                             "hardware_perturbation": {"required": ["status"]}}}},
     {"if": {"properties": {"pattern": {"const": "Count"}}, "required": ["pattern"]},
      "then": {
        "required": ["grade_kind", "blocks", "grade_ext", "solution_count", "uncompute"],
        "properties": {
-         "schema_version": {"const": "1.10.0"},
+         "schema_version": {"enum": ["1.10.0", "1.12.0"]},
          "grade_kind": {"const": "composed_bound"},
          "instance": {
            "type": "object",
@@ -134,7 +138,8 @@
                  "terminal_measurements": {"$ref": "#/$defs/nat"}
                }
              },
-             "note": {"type": "string", "minLength": 1}
+             "note": {"type": "string", "minLength": 1},
+             "status": {"const": "illustrative estimate from the profile, not a theorem; see hw noisecert for the proved conditional bound"}
            }
          },
          "solution_count": {"properties": {"status": {"enum": ["kernel_decided", "not_decided"]}}}
@@ -147,7 +152,7 @@
      },
      "else": {
        "properties": {
-         "schema_version": {"enum": ["1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0"]},
+         "schema_version": {"enum": ["1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0", "1.12.0"]},
          "grade_kind": {"const": "measured"},
          "solution_count": {"properties": {"value": {"$ref": "#/$defs/nat"}, "status": {"enum": ["kernel_decided", "hypothesis"]}}},
          "instance": {
@@ -203,18 +208,19 @@
                  "classically_controlled": {"$ref": "#/$defs/nat"},
                  "terminal_measurements": {"$ref": "#/$defs/nat"}
                }
-             }
+             },
+             "status": {"const": "illustrative estimate from the profile, not a theorem; see hw noisecert for the proved conditional bound"}
            }
          }
        },
        "not": {"required": ["blocks"]}
      }},
-    {"if": {"properties": {"schema_version": {"enum": ["1.8.0", "1.9.0", "1.10.0", "1.11.0"]}}, "required": ["schema_version"]},
+    {"if": {"properties": {"schema_version": {"enum": ["1.8.0", "1.9.0", "1.10.0", "1.11.0", "1.12.0"]}}, "required": ["schema_version"]},
      "then": {"properties": {"trust_boundary": {"properties": {"front_end": {"const": "DSL typed term → network: proved (toNetwork_pred; kernel-checked net_ok and front_end in Cert.lean); parser, surface checker and the typed-term printer unverified; predicate_hash binds the source"}}}}},
      "else": {"properties": {"trust_boundary": {"properties": {"front_end": {"not": {"const": "DSL typed term → network: proved (toNetwork_pred; kernel-checked net_ok and front_end in Cert.lean); parser, surface checker and the typed-term printer unverified; predicate_hash binds the source"}}}}}}}
   ],
   "properties": {
-    "schema_version": {"type": "string", "enum": ["1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0"]},
+    "schema_version": {"type": "string", "enum": ["1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0", "1.12.0"]},
     "uncompute": {
       "description": "PHASE2_SPEC.md §A.0.1 (Stage 15b): the uncomputation mode of the certified circuit (required in every certificate since 1.8.0, Stage 16b; under 1.7.0 written for coherent certificates only, omitted meaning \"mbu\"): \"coherent\" = every temporary AND undone by the adjoint of its compute block (4 more T per AND, no measurement, no classical bit; `cqr certify --uncompute coherent`), certified by grover_certificate_coherent through grover_parametric_lemma_gen and Lemma 6.3.2 in mode coherent. The tool writes only \"coherent\"; \"mbu\" is accepted for hand-written envelopes.",
       "type": "string",
@@ -331,14 +337,15 @@
     "hypotheses": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "restoration": {"type": "string", "minLength": 1},
     "hashes": {
-      "description": "SHA3-256, lower-case hex. predicate: DSL source with LF line endings; circuit: compact sorted-key IR JSON; proof: certificate .lean file with the pinned configuration (Stage 8b; null before).",
+      "description": "SHA3-256, lower-case hex. predicate: DSL source with LF line endings; circuit: compact sorted-key IR JSON; proof: certificate .lean file with the pinned configuration (Stage 8b; null before); library (R5, required under 1.12.0): the CQRV sources the certificate was checked against — the preimage `path ‖ 0x00 ‖ hex(SHA3-256(content)) ‖ 0x0A` over every .lean file under CQRV/ and Apps/ plus lakefile.lean, lean-toolchain and lake-manifest.json, sorted by path (UTF-8 byte order, `/` separators, paths relative to the project root), content as bytes (CQRV.Certify.libraryHash; tests/diff/libhash.py mirrors it and checks the recorded hashes against the tree, blocking with --release); null only in the unaudited sample.",
       "type": "object",
       "additionalProperties": false,
       "required": ["predicate", "circuit", "proof"],
       "properties": {
         "predicate": {"$ref": "#/$defs/sha3"},
         "circuit": {"$ref": "#/$defs/sha3"},
-        "proof": {"oneOf": [{"$ref": "#/$defs/sha3"}, {"type": "null"}]}
+        "proof": {"oneOf": [{"$ref": "#/$defs/sha3"}, {"type": "null"}]},
+        "library": {"oneOf": [{"$ref": "#/$defs/sha3"}, {"type": "null"}]}
       }
     },
     "trust_boundary": {

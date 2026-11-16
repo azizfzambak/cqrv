@@ -56,6 +56,8 @@
 #                                certificate is written by `cqr certify --problem count
 #                                --precision 4` (count-certify removed), plus the coherent,
 #                                not-decided, M = 0 and usage-refusal checks
+#   tests/diff/libhash.py        R5: hashes.library of every committed certificate.json and manifest.json is
+#                                the current tree's (warning; CQRV_RELEASE=1 → blocking)
 #   tests/diff/profile_schema.py profiles/*.json against docs/profile.schema.json;
 #                                illustrative_sc = report Table 3.5 / §3.3.3 (renamed from
 #                                ibm_kyiv in Stage 14a, no alias); mutated profiles rejected by
@@ -74,4 +76,7 @@ CQR="$ROOT/.lake/build/bin/cqr"
 [ -f "$CQR" ] || { echo "check_certify: $CQR not found (run lake build first)" >&2; exit 2; }
 "$PY" -I "$ROOT/tests/diff/profile_schema.py" --cqr "$CQR"
 "$PY" -I "$ROOT/tests/diff/certify_check.py" --cqr "$CQR"
+# R5: every committed certificate and manifest records the library hash of the current tree — a warning
+# by default, blocking with CQRV_RELEASE=1 (`--release`)
+"$PY" -I "$ROOT/tests/diff/libhash.py" ${CQRV_RELEASE:+--release}
 echo "check_certify: all checks passed"

@@ -18,7 +18,7 @@ core + Mathlib):
 * `select`: the first admissible element with the least key, proved once for any list
   (`select_spec`: the result is in the list, is admissible, and no admissible element lies
   strictly below it; it is `none` exactly when nothing is admissible);
-* the selection record `SelectionInfo` with its JSON (`selection` of schema 1.11.0), its report
+* the selection record `SelectionInfo` with its JSON (`selection`, schema 1.11.0; 1.12.0 since R5), its report
   row and its status line, and the renderer of the selection block of `Cert.lean` (G2): `budget`,
   `cand_grade_c` for every candidate, `chosen_fits`, and `selected` quantified over the builders'
   outputs.
@@ -244,7 +244,8 @@ def CandidateResult.text (b : Grade) (c : CandidateResult) : String :=
 def gradeJsonOf (g : Grade) : Json :=
   Json.mkObj [("w", g.w), ("d", g.d), ("t", g.t), ("a", g.a)]
 
-/-- PHASE2_SPEC §A.6 (8′) — the `selection` object of schema 1.11.0; `theoremName` is the fully
+/-- PHASE2_SPEC §A.6 (8′) — the `selection` object (schema 1.11.0; optional under 1.12.0 since R5);
+`theoremName` is the fully
 qualified name of `selected`. -/
 def SelectionInfo.toJson (s : SelectionInfo) (theoremName : String) : Json :=
   Json.mkObj
@@ -258,10 +259,11 @@ def SelectionInfo.toJson (s : SelectionInfo) (theoremName : String) : Json :=
        ("uncompute", Json.str s.chosen.mode.toString)]),
      ("theorem", Json.str theoremName)]
 
-/-- The certificate envelope of a selection run: the ordinary JSON with `schema_version "1.11.0"`
-and the `selection` object (the keys of a `Json` object are sorted on output). -/
+/-- The certificate envelope of a selection run: the ordinary JSON (its `schema_version`; "1.11.0"
+was written here before R5) with the `selection` object (the keys of a `Json` object are sorted on
+output). -/
 def SelectionInfo.addTo (s : SelectionInfo) (j : Json) (theoremName : String) : Json :=
-  (j.setObjVal! "schema_version" "1.11.0").setObjVal! "selection" (s.toJson theoremName)
+  j.setObjVal! "selection" (s.toJson theoremName)
 
 /-- The report row of the selection (after the Table 8.5.2 rows). -/
 def SelectionInfo.reportRow (s : SelectionInfo) : ReportRow :=

@@ -25,6 +25,24 @@ kernel's exit code and the axioms the kernel-checked environment reports.
 
 namespace CQRV.Certify
 
+/-! ## R5 — the library hash of the working tree -/
+
+/-- R5 (REVIEW_RESPONSE_1 §4) — the files of `libraryHash`: every `.lean` file under `CQRV/` and
+`Apps/` (recursively) and `lakefile.lean`, `lean-toolchain`, `lake-manifest.json`, read as bytes
+from the working directory (the project root, where `cqr` runs); paths with `/`. -/
+def libraryFiles : IO (List (String × ByteArray)) := do
+  let mut out : List (String × ByteArray) := []
+  for root in ["CQRV", "Apps"] do
+    for p in ← System.FilePath.walkDir ⟨root⟩ do
+      if p.extension == some "lean" then
+        out := (p.toString.replace "\\" "/", ← IO.FS.readBinFile p) :: out
+  for f in ["lakefile.lean", "lean-toolchain", "lake-manifest.json"] do
+    out := (f, ← IO.FS.readBinFile ⟨f⟩) :: out
+  return out
+
+/-- R5 — `hashes.library` of the working tree (`libraryHash` over `libraryFiles`). -/
+def libraryHashIO : IO String := do return libraryHash (← libraryFiles)
+
 /-! ## The axiom audit (decision 3) -/
 
 /-- Report §9.5.1 — the standard axioms of Lean/Mathlib accepted by every certificate. -/

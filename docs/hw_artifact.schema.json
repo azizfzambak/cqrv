@@ -45,7 +45,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["certificate_json", "certificate_dir", "logical_circuit", "target_snapshot", "witness", "physical_qasm3"],
       "properties": {
-        "certificate_json": {"oneOf": [{"$ref": "#/$defs/sha3"}, {"type": "null"}]},
+        "certificate_json": {"description": "The full SHA3-256 of the logical certificate.json bytes at transpile time — a historical record of the certificate the artifact was made from (null for an artifact made before its certificate). It is not compared with the current certificate.json (revision R5, DECISIONS.md 2026-11-16: a schema change of the certificate does not invalidate the artifact); the binding that is checked is logical_circuit = the certificate's hashes.circuit. The physical and conditional certificates cite the certificate by its hash modulo hashes.library instead.", "oneOf": [{"$ref": "#/$defs/sha3"}, {"type": "null"}]},
         "certificate_dir": {"oneOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
         "logical_circuit": {"$ref": "#/$defs/sha3"},
         "target_snapshot": {"$ref": "#/$defs/sha3"},

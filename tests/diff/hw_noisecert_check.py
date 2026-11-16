@@ -5,15 +5,19 @@ and the emulator comparison at δ' is recomputed (PHASE2_SPEC §C.4 (4); report 
 
 For each of examples/certs/hw_n2_torino, hw_n3_torino (with a logical certificate) and
 mbu_gadget_torino (the channel form):
-  * `manifest.json`: the artifact hashes, the target snapshot and file hashes (and, with a logical
-    certificate, `certificate.json`'s bytes); the status words contain `noise_conditional`; the four
-    premises P-cal, P-stoch, P-ro, P-idle are present with the meaning sentence;
+  * `manifest.json` (schema 1.2.0 since R5): the artifact hashes, the target snapshot and file hashes,
+    `hashes.library` = the current tree's (`libhash.library_hash`) and, with a logical certificate,
+    `certificate.json`'s bytes modulo `hashes.library` (`certificate_json_mod_library` and
+    `logical_certificate.certificate_json_sha3_mod_library`); the status words contain
+    `noise_conditional`; the four premises P-cal, P-stoch, P-ro, P-idle are present with the meaning
+    sentence;
   * `noise.noise_bound`, `clamped`, `noise_vacuous` and `physical_bound_p_eq_r` equal `hw/noisebound.py`'s;
   * the emulator comparison: when a run report exists, `threshold_at_delta_prime` equals the recorded
     threshold + the recorded δ_hw − δ' (exactly, as Fractions of the printed decimals) and the result
     is `passes` iff p̂ ≥ that threshold; `emulator_validated` is present iff it passes; without a run
     report the manifest says "no run recorded for this artifact";
-  * the three files are byte-identical to what `cqr hw noisecert` regenerates.
+  * the Lean file and `physical.qasm` are byte-identical, and `manifest.json` identical modulo
+    `hashes.library`, to what `cqr hw noisecert` regenerates.
 The kernel check of the Lean files (`lake env lean`) is the bash step's. Conditional on the premises;
 nothing here is a fact about a device or "verified on hardware".
 """
@@ -28,7 +32,9 @@ from fractions import Fraction
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "hw"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import noisebound  # noqa: E402
+import libhash  # noqa: E402
 
 TARGET_FILES = {"fake_torino": "hw/targets/fake_torino.json", "fake_washington": "hw/targets/fake_washington.json"}
 CERTS = [("hw_n2_torino", "hw_n2", "PhysCert.lean"), ("hw_n3_torino", "hw_n3", "PhysCert.lean"),
@@ -48,6 +54,13 @@ def frac(s):
     return Fraction(str(s))
 
 
+def modulo_library(path):
+    """A manifest's canonical JSON without hashes.library (R5: a library change moves only that field)."""
+    m = json.load(open(path, encoding="utf-8"))
+    m["hashes"].pop("library", None)
+    return canonical(m)
+
+
 def check_cert(cqr, name, logical, lean_file, errors):
     cdir = os.path.join(ROOT, "examples", "certs", name)
     man = json.load(open(os.path.join(cdir, "manifest.json"), encoding="utf-8"))
@@ -60,12 +73,18 @@ def check_cert(cqr, name, logical, lean_file, errors):
         "physical_json": sha3(canonical(json.load(open(os.path.join(adir, "physical.json"), encoding="utf-8")))),
         "target_snapshot": json.load(open(tpath, encoding="utf-8"))["snapshot"]["hash"],
         "target_file_sha3": sha3(open(tpath, "rb").read()),
+        "library": libhash.library_hash(),
     }
     if logical:
-        want["certificate_json"] = sha3(open(os.path.join(ROOT, "examples", "certs", logical, "certificate.json"), "rb").read())
+        want["certificate_json_mod_library"] = sha3(libhash.mod_library(
+            open(os.path.join(ROOT, "examples", "certs", logical, "certificate.json"), "rb").read()))
+        if man["logical_certificate"].get("certificate_json_sha3_mod_library") != want["certificate_json_mod_library"]:
+            errors.append(f"{name}: logical_certificate.certificate_json_sha3_mod_library differs from the certificate's")
     for k, v in want.items():
         if man["hashes"].get(k) != v:
             errors.append(f"{name}: manifest hash {k}: {man['hashes'].get(k)} differs from {v}")
+    if man.get("schema_version") != "1.2.0":
+        errors.append(f"{name}: manifest schema_version {man.get('schema_version')} is not 1.2.0")
     words = man["status"]
     if "noise_conditional" not in words or "physical_translation_validated" not in words:
         errors.append(f"{name}: status words {words} lack noise_conditional / physical_translation_validated")
@@ -111,9 +130,11 @@ def check_cert(cqr, name, logical, lean_file, errors):
         if p.returncode != 0:
             errors.append(f"{name}: cqr hw noisecert failed ({p.returncode}): {(p.stdout + p.stderr).strip()[:300]}")
         else:
-            for f in (lean_file, "physical.qasm", "manifest.json"):
+            for f in (lean_file, "physical.qasm"):
                 if open(os.path.join(tmp, f), "rb").read() != open(os.path.join(cdir, f), "rb").read():
                     errors.append(f"{name}: {f} differs from the regenerated file")
+            if modulo_library(os.path.join(tmp, "manifest.json")) != modulo_library(os.path.join(cdir, "manifest.json")):
+                errors.append(f"{name}: manifest.json differs from the regenerated file (modulo hashes.library)")
     return float(frac(noise["noise_bound"])), words, emu if isinstance(emu, str) else emu["result"]
 
 

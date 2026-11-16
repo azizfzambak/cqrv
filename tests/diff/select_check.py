@@ -67,11 +67,11 @@ def argmin(cands, budget, order):
 
 
 def check_sel_dir(d, validator, budget, prefer, expect):
-    """Schema 1.11.0, the selection object and its semantic rules, the hash link and the emitted
+    """Schema 1.12.0 (1.11.0 before R5), the selection object and its semantic rules, the hash link and the emitted
     files of one selection directory; returns (cert, text)."""
     cert = json.loads(cc.read(os.path.join(d, "certificate.json")))
     validator.validate(cert)
-    assert cert["schema_version"] == "1.11.0" and cert["grade_kind"] == "measured", cert["schema_version"]
+    assert cert["schema_version"] == "1.12.0" and cert["grade_kind"] == "measured", cert["schema_version"]
     assert cert["pattern"] == "Grover" and "blocks" not in cert
     sel = cert["selection"]
     assert sel["budget"] == budget and sel["prefer"] == prefer, sel
@@ -161,7 +161,7 @@ def main():
         kc = cert["reference_configuration"]["kernel_check"]
         print(f"ok:   --budget 12,200,100,8 --prefer depth: `certified` + the selection line (exit 0, {dt:.0f} s; "
               f"kernel {cc.secs(kc['kernel_ms'])}, wall {cc.secs(kc['wall_ms'])}); fewLogMbu selected (depth alone "
-              "would pick treeMbu, w = 15 > 12); schema v1.11.0 with selection; the three candidate grades = the "
+              "would pick treeMbu, w = 15 > 12); schema v1.12.0 with selection; the three candidate grades = the "
               "committed grover_pred_037 / _coh / _few grades; committed examples/certs/grover_pred_037_sel agrees "
               "(bytes; JSON outside reference_configuration)")
         print("ok:   .qir / .qasm byte-identical to grover_pred_037_few's; Cert.lean minus the selection block "

@@ -49,7 +49,12 @@ reviewer decisions 2 and 3).
   present iff the version is 1.9.0; every certificate said "1.9.0". **v1.10.0 (Stage 21a3,
   PHASE2_SPEC.md §A.5 amendment (7))** adds `grade_kind` (`"measured"` here: the scheduler on the
   whole circuit; `"composed_bound"` for the counting certificate of `CountCert.lean`); every
-  certificate says "1.10.0" and admits both patterns.
+  certificate says "1.10.0" and admits both patterns. **v1.12.0 (revision R5, REVIEW_RESPONSE_1 §4;
+  DECISIONS.md 2026-11-16)** adds `hashes.library` (`libraryHash`: the CQRV sources the certificate
+  was checked against; `null` only in the unaudited sample) and `hardware_perturbation.status`
+  (`hardwarePerturbationStatus`: the old `δ_hw ≤ δ + G·p̄` figure is an illustrative estimate, not a
+  theorem); every certificate — the selection one (1.11.0 before) and the counting one included —
+  says "1.12.0". `certJsonModLibrary` is the form the hardware files hash.
 -/
 
 @[expose] public section
@@ -116,6 +121,36 @@ def proofHash (certText toolchain mathlibRev physlibRev : String) : String :=
     | [] => ByteArray.empty
     | b :: bs => bs.foldl (fun acc x => acc ++ proofHashSeparator ++ x) b
   SHA3.sha3_256Hex bytes
+
+/-- R5 (REVIEW_RESPONSE_1 §4; DECISIONS.md 2026-11-16) — `hashes.library`: SHA3-256 of the preimage
+`path₁ ‖ 0x00 ‖ hex(SHA3-256(content₁)) ‖ 0x0A ‖ path₂ ‖ 0x00 ‖ … ‖ 0x0A` over the files sorted by
+path (byte order of the UTF-8 path; paths relative to the project root with `/`): every `.lean` file
+under `CQRV/` and `Apps/`, plus `lakefile.lean`, `lean-toolchain` and `lake-manifest.json`, the
+content as bytes (the repository stores them with LF line endings, `.gitattributes`). The files are
+collected by `libraryFiles` (`CQRV.Certify.Audit`); `tests/diff/libhash.py` mirrors this function
+and checks that every committed certificate and manifest records the hash of the current tree. -/
+def libraryHash (files : List (String × ByteArray)) : String :=
+  let sorted := (files.toArray.qsort fun a b => decide (a.1 < b.1)).toList
+  let pre := sorted.foldl (fun acc (p, c) =>
+    acc ++ p.toUTF8 ++ ByteArray.mk #[0] ++ (SHA3.sha3_256Hex c).toUTF8 ++ ByteArray.mk #[10])
+    ByteArray.empty
+  SHA3.sha3_256Hex pre
+
+/-- R5, the reviewer's correction of REVB_TASK R5.3 (DECISIONS.md 2026-11-16) — a certificate's JSON
+text with the value of `hashes.library` replaced by `null`: **the form the hardware files hash**
+(`certificate_json_sha3_mod_library` of the physical and conditional manifests and of the
+`PhysCert.lean` headers), so that a library change moves only the `library` fields and a change of
+the certificate's content still propagates. `cqr certify` writes the key once, as
+`"library":"<64 hex>"`; a text without it (an older schema, or `null` already) is returned unchanged. -/
+def certJsonModLibrary (text : String) : String :=
+  match text.splitOn "\"library\":\"" with
+  | [a, b] =>
+    let hs := b.toList.take 64
+    if hs.length == 64 && hs.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) &&
+        (b.toList.drop 64).head? == some '"' then
+      a ++ "\"library\":null" ++ String.ofList (b.toList.drop 65)
+    else text
+  | _ => text
 
 /-! ## The record (decision 3) -/
 
@@ -241,6 +276,9 @@ structure Certificate where
   circuitHash : String
   /-- Stage 8b -/
   proofHash : Option String
+  /-- R5: `hashes.library` (`libraryHash` of the tree the certificate was checked against; filled
+  by `cqr certify`, `none` in the unaudited sample) -/
+  libraryHash : Option String := none
   /-- the noisy operations counted by `G` of `δ_hw ≤ δ + G·p̄` (§3.3.3) -/
   gateCounts : GateCounts
   config : RefConfig
@@ -264,8 +302,10 @@ structure Certificate where
   uncompute : UncomputeMode := .mbu
   deriving Repr
 
-/-- The schema version written to `schema_version` (semver): "1.10.0" for every certificate
-since Stage 21a3 (PHASE2_SPEC.md §A.5 amendment (7)) — `grade_kind` is required (`"measured"` for
+/-- The schema version written to `schema_version` (semver): "1.12.0" for every certificate since
+revision R5 (2026-11-16; `hashes.library` required, `hardware_perturbation.status`; the selection
+certificate said "1.11.0" and every other "1.10.0" before). Under 1.10.0, since Stage 21a3
+(PHASE2_SPEC.md §A.5 amendment (7)), `grade_kind` is required (`"measured"` for
 a Grover certificate, `"composed_bound"` for a counting one, `CountCert.lean`), as are the object
 `grade_ext` (`GradeExt`, `gradeExt_eq` in `Cert.lean`; 1.9.0, Stage 17b, PHASE2_SPEC.md §A.1),
 `solution_count` and `uncompute`, and `trust_boundary.front_end` is the proved wording
@@ -276,7 +316,13 @@ front end, `uncompute` written in every certificate — the Stage 15b convention
 only), 1.6.0 Stage 14a (`solution_count`); before Stage 14a the version depended on the optional
 objects present (1.3.0 / 1.4.0 / 1.5.0). Each of these stages regenerated every committed
 certificate, so one version suffices. -/
-def schemaVersion : String := "1.10.0"
+def schemaVersion : String := "1.12.0"
+
+/-- R5 (REVIEW_RESPONSE_1 §4) — `hardware_perturbation.status`: the §3.3.3 figure `δ_hw ≤ δ + G·p̄`
+with `p̄` a profile parameter was superseded by the conditional certificates (`cqr hw noisecert`,
+`phys_noisy_stochastic`) and is not a theorem. -/
+def hardwarePerturbationStatus : String :=
+  "illustrative estimate from the profile, not a theorem; see hw noisecert for the proved conditional bound"
 
 /-- The trust-boundary note of the `hardware` object (§5.3.1). -/
 def hardwareNote : String :=
@@ -316,7 +362,8 @@ def Certificate.toJson (c : Certificate) : Json :=
      ("hypotheses", Json.arr (c.hypotheses.map str).toArray),
      ("restoration", str c.restoration),
      ("hashes", Json.mkObj [("predicate", str c.predicateHash), ("circuit", str c.circuitHash),
-       ("proof", match c.proofHash with | some h => str h | none => Json.null)]),
+       ("proof", match c.proofHash with | some h => str h | none => Json.null),
+       ("library", optStr c.libraryHash)]),
      ("trust_boundary", Json.mkObj [("emitted", str "QIR text"),
        ("profile", str "adaptive_profile"),
        ("emitter", str "unverified; translation-validated by re-parse"),
@@ -326,7 +373,8 @@ def Certificate.toJson (c : Certificate) : Json :=
        ("counts", Json.mkObj [("unitary", c.gateCounts.unitary),
          ("mid_circuit_measurements", c.gateCounts.midCircuitMeasurements),
          ("classically_controlled", c.gateCounts.classicallyControlled),
-         ("terminal_measurements", c.gateCounts.terminalMeasurements)])]),
+         ("terminal_measurements", c.gateCounts.terminalMeasurements)]),
+       ("status", str hardwarePerturbationStatus)]),
      ("reference_configuration", Json.mkObj [("lean", str c.config.lean),
        ("mathlib", str c.config.mathlib), ("physlib", str c.config.physlib),
        ("cpu", optStr c.config.cpu),

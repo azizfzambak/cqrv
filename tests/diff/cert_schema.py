@@ -108,10 +108,11 @@ def main():
     assert cert["instance"] == {"n": 8, "M": 32, "r": 2}, cert["instance"]
     assert cert["status"] == "not yet audited" and cert["axioms"] == []
     assert cert["hashes"]["proof"] is None
+    assert cert["hashes"]["library"] is None  # R5: the unaudited sample records no library hash
     assert cert["trust_boundary"]["front_end"] == PROVED, cert["trust_boundary"]
     assert cert["theorem"] is None and cert["obligations"] == []
     assert cert["reference_configuration"]["kernel_check"] is None
-    assert cert["schema_version"] == "1.10.0", cert["schema_version"]
+    assert cert["schema_version"] == "1.12.0", cert["schema_version"]
     assert cert["grade_kind"] == "measured", cert.get("grade_kind")
     assert cert["uncompute"] == "mbu", cert.get("uncompute")
     assert cert["solution_count"] == {"value": 32, "status": "hypothesis"}, cert["solution_count"]
@@ -120,7 +121,7 @@ def main():
     assert cert["grade_ext"] == {"two_qubit": 126, "t_depth": 39, "rot": 0, "meas": 18, "ff": 36}, \
         cert["grade_ext"]
     print("ok:   delta 7/128, grade (15, 134, 72, 7), grade_ext (2Q 126, T-depth 39, rot 0, meas 18, "
-          "ff 36), status 'not yet audited'; schema_version 1.10.0 with grade_kind measured (Stage 21a3), "
+          "ff 36), status 'not yet audited'; schema_version 1.12.0 with grade_kind measured (Stage 21a3; 1.12.0 since R5), "
           "uncompute mbu, front_end = the proved wording")
 
     with open(os.path.join(ROOT, SRC), "rb") as f:
@@ -174,6 +175,11 @@ def main():
         "short hash": mutated(lambda c: c["hashes"].update(circuit="abc")),
         "missing counts": mutated(lambda c: c["hardware_perturbation"].pop("counts")),
         "incomplete counts": mutated(lambda c: c["hardware_perturbation"]["counts"].pop("terminal_measurements")),
+        # R5: under 1.12.0 hashes.library and hardware_perturbation.status are required
+        "1.12.0 without hashes.library": mutated(lambda c: c["hashes"].pop("library")),
+        "1.12.0 with a short library hash": mutated(lambda c: c["hashes"].update(library="abc")),
+        "1.12.0 without hardware_perturbation.status": mutated(lambda c: c["hardware_perturbation"].pop("status")),
+        "1.12.0 with another hardware_perturbation.status": mutated(lambda c: c["hardware_perturbation"].update(status="a theorem")),
     }
     def audited(c, status="certified"):
         c.update(status=status, theorem="CQRV.Cert.grover_pred_037.cert",
@@ -383,7 +389,7 @@ def main():
     with open(COUNT_CERT, encoding="utf-8") as f:
         count = json.load(f)
     validator.validate(count)
-    assert count["schema_version"] == "1.10.0" and count["pattern"] == "Count", count["pattern"]
+    assert count["schema_version"] == "1.12.0" and count["pattern"] == "Count", count["pattern"]
     assert count["grade_kind"] == "composed_bound" and count["grade_ext"]["t_depth_kind"] == "bound"
     assert set(count["instance"]) == {"n", "M", "m", "kmax"} and count["instance"]["kmax"] is None
     assert set(count["spec"]) == {"epsilon", "delta", "estimate"}
@@ -407,11 +413,12 @@ def main():
         with open(os.path.join(ROOT, "examples", "certs", d, "certificate.json"), encoding="utf-8") as f:
             c = json.load(f)
         validator.validate(c)
-        assert c["schema_version"] == "1.10.0", (d, c["schema_version"])  # grover_pred_037_sel: 1.11.0, below
+        assert c["schema_version"] == "1.12.0", (d, c["schema_version"])  # R5: one version; grover_pred_037_sel below
+        assert c["hashes"]["library"] is not None and c["hardware_perturbation"]["status"].startswith("illustrative"), d
         assert c["grade_kind"] == ("composed_bound" if d.endswith("_count") else "measured"), d
     validator.validate(mutated_count(lambda c: (c["solution_count"].update(status="not_decided", value=None),
                                                 c["instance"].update(M=None))))
-    print("ok:   schema v1.10.0 (Stage 21a3): the five committed certificates validate (four Grover with "
+    print("ok:   schema v1.12.0 (Stage 21a3; R5): the five committed certificates validate (four Grover with "
           "grade_kind measured, Count with composed_bound); a not-decided Count envelope (value and "
           "instance.M null) validates")
 
@@ -448,7 +455,7 @@ def main():
               encoding="utf-8") as f:
         selc = json.load(f)
     validator.validate(selc)
-    assert selc["schema_version"] == "1.11.0" and selc["grade_kind"] == "measured", selc["schema_version"]
+    assert selc["schema_version"] == "1.12.0" and selc["grade_kind"] == "measured", selc["schema_version"]
     assert set(selc["selection"]) == {"budget", "prefer", "order", "candidates", "selected", "theorem"}
     assert len(selc["selection"]["candidates"]) == 3 and selc["selection"]["prefer"] == "depth"
     sel = copy.deepcopy(selc["selection"])
@@ -463,7 +470,7 @@ def main():
 
     validator.validate(with_sel())
     validator.validate(with_sel(lambda s: s["candidates"][1].update(grade=None, admissible=False)))
-    print("ok:   schema v1.11.0 (Stage 21a4): the committed selection certificate validates (grade_kind "
+    print("ok:   schema v1.12.0 (Stage 21a4; 1.11.0 before R5): the committed selection certificate validates (grade_kind "
           "measured, three candidates, prefer depth); the sample with a selection object validates, also "
           "with a failed candidate (grade null)")
     bad.update({
@@ -482,7 +489,10 @@ def main():
         "selection candidate shape free text": with_sel(lambda s: s["candidates"][0].update(shape="chain")),
         "selection extra key": with_sel(lambda s: s.update(note="x")),
         "1.11.0 with grade_kind composed_bound": with_sel(lambda s: None) | {"grade_kind": "composed_bound"},
+        # R5: the selection object is optional under 1.12.0 but still refused on a Count envelope
+        "Count under 1.12.0 with selection": mutated_count(lambda c: c.update(selection=copy.deepcopy(sel))),
     })
+    validator.validate(with_sel(version="1.12.0"))
     for label, c in bad.items():
         if validator.is_valid(c):
             raise AssertionError(f"schema accepts a bad envelope: {label}")

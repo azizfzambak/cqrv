@@ -677,7 +677,8 @@ def certifyGrover (path src : String) (tp : TypedProgram) (entryPos : Pos) (sig 
     let hw := prof.map fun (p, h) =>
       HardwareCheck.of p h base.grade base.delta base.gateCounts.total
     let cert := { base with
-      proofHash := some (proofHash text cfg.lean cfg.mathlib cfg.physlib), axioms,
+      proofHash := some (proofHash text cfg.lean cfg.mathlib cfg.physlib),
+      libraryHash := some (← libraryHashIO), axioms,
       status, theoremName := some q.theoremName, obligations, hardware := hw, diffusion := diff }
     let certJson := match sel with
       | none => cert.toJson
@@ -930,7 +931,8 @@ def runCertifyCount (path : String) (m : Nat) (out : Option String) (bench : Opt
                           kernelCheck := timing }
     let axioms := (last.axioms ++ axsCount).eraseDups
     let cert := { CountCertificate.ofRequest q cfg with
-      proofHash := some (proofHash text cfg.lean cfg.mathlib cfg.physlib), axioms, status,
+      proofHash := some (proofHash text cfg.lean cfg.mathlib cfg.physlib),
+      libraryHash := some (← libraryHashIO), axioms, status,
       theoremName := some q.theoremName, obligations }
     IO.FS.writeFile (file "certificate.json") (cert.toJson.compress ++ "\n")
     IO.FS.writeFile (file s!"{tp.name}.qir") qirText
@@ -1173,8 +1175,9 @@ def runHwCertify (certDir artifactDir target lat : String) (out : Option String)
       let artName := s!"{a.manifest.instance_}__{a.manifest.target}"
       let runText ← read "docs/hw_runs" s!"{artName}.json"
       let nBits := (a.G.filter Hardware.BasisGate.isMeasure).length
+      let lib ← libraryHashIO
       match Hardware.generatePhysCert certName certBase certLean certJson manifest logical witness physical t target targetText L
-          a.deviceWidth a.dataPhys nBits runText with
+          a.deviceWidth a.dataPhys nBits runText lib with
       | .error msg => IO.eprintln s!"cqr hw certify: {msg}"; return 1
       | .ok (lean, qasm, man, grades) =>
         let dir := System.FilePath.mk (out.getD s!"examples/certs/{certName}")
@@ -1219,6 +1222,7 @@ def runHwNoiseCert (artifactDir target lat : String) (certDir : Option String) (
       let runFile := s!"docs/hw_runs/{artName}.json"
       let runText ← read "docs/hw_runs" s!"{artName}.json"
       let nBits := (a.G.filter Hardware.BasisGate.isMeasure).length
+      let lib ← libraryHashIO
       let result ← match certDir with
         | some cd => do
           match ← read cd "Cert.lean", ← read cd "certificate.json" with
@@ -1226,12 +1230,12 @@ def runHwNoiseCert (artifactDir target lat : String) (certDir : Option String) (
             let certBase := (System.FilePath.mk cd).fileName.getD "cert"
             let certName := s!"{certBase}_{targetShort}"
             pure (Hardware.generateNoiseCert certName certBase certLean certJson manifest logical witness physical t target
-              targetText L a.deviceWidth a.dataPhys nBits runText runFile |>.map fun r => (certName, "PhysCert.lean", certBase, r))
+              targetText L a.deviceWidth a.dataPhys nBits runText runFile lib |>.map fun r => (certName, "PhysCert.lean", certBase, r))
           | _, _ => pure (.error s!"{cd}/Cert.lean or certificate.json unreadable")
         | none =>
           let certName := s!"{a.manifest.instance_}_{targetShort}"
           pure (Hardware.generateGadgetNoiseCert certName manifest logical witness physical t target targetText
-            a.deviceWidth a.dataPhys nBits runText runFile |>.map fun r => (certName, "NoiseCert.lean", "", r))
+            a.deviceWidth a.dataPhys nBits runText runFile lib |>.map fun r => (certName, "NoiseCert.lean", "", r))
       match result with
       | .error msg => IO.eprintln s!"cqr hw noisecert: {msg}"; return 1
       | .ok (certName, leanFile, _, lean, qasm, man, nd, emu) =>

@@ -4,12 +4,15 @@
   python -I tests/diff/hw_physcert_check.py --cqr <cqr> [--cert examples/certs/grover_pred_037_torino]   (.venv-hw)
 
 For the certificate directory:
-  * `manifest.json`: the hashes it records are those of the artifact's canonical `logical.json`,
-    `witness.json`, `physical.json`, of the logical certificate's `certificate.json` bytes, of the
-    target's snapshot and of the target file's bytes; the status words are among the four of P3 and
-    `emulator_validated` is present iff the artifact's run report passed;
-  * `PhysCert.lean`, `physical.qasm` and `manifest.json` are byte-identical to what `cqr hw certify`
-    regenerates (the literals are the artifact's; the logical body is the committed `Cert.lean`'s);
+  * `manifest.json` (schema 1.2.0 since R5): the hashes it records are those of the artifact's canonical
+    `logical.json`, `witness.json`, `physical.json`, of the logical certificate's `certificate.json`
+    **modulo `hashes.library`** (`certificate_json_mod_library`, also `logical_certificate.
+    certificate_json_sha3_mod_library`; R5), of the target's snapshot and of the target file's bytes,
+    and `hashes.library` is the current tree's (`libhash.library_hash`); the status words are among the
+    four of P3 and `emulator_validated` is present iff the artifact's run report passed;
+  * `PhysCert.lean` and `physical.qasm` are byte-identical, and `manifest.json` is identical modulo
+    `hashes.library`, to what `cqr hw certify` regenerates (the literals are the artifact's; the logical
+    body is the committed `Cert.lean`'s);
   * the `PhysGrade` values of the manifest equal `hw/physgrade.py`'s at each latency;
   * `physical.qasm` parses back (`qiskit.qasm3.loads`) to the artifact's `physical.json` gate list:
     the same ops on the same device qubits, angles equal to 1e-12, the same measured bits, the same
@@ -28,7 +31,9 @@ from fractions import Fraction
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "hw"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import physgrade  # noqa: E402
+import libhash  # noqa: E402
 
 TARGET_FILES = {"fake_torino": "hw/targets/fake_torino.json", "fake_washington": "hw/targets/fake_washington.json"}
 WORDS = ["logical_certified", "hardware_compatible", "physical_translation_validated", "emulator_validated"]
@@ -99,6 +104,13 @@ def same_op(a, b):
     return True
 
 
+def modulo_library(path):
+    """A manifest's canonical JSON without hashes.library (R5: a library change moves only that field)."""
+    m = json.load(open(path, encoding="utf-8"))
+    m["hashes"].pop("library", None)
+    return canonical(m)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cqr", required=True)
@@ -115,13 +127,18 @@ def main():
         "logical_circuit": sha3(canonical(json.load(open(os.path.join(adir, "logical.json"), encoding="utf-8")))),
         "witness": sha3(canonical(json.load(open(os.path.join(adir, "witness.json"), encoding="utf-8")))),
         "physical_json": sha3(canonical(json.load(open(os.path.join(adir, "physical.json"), encoding="utf-8")))),
-        "certificate_json": sha3(open(os.path.join(ldir, "certificate.json"), "rb").read()),
+        "certificate_json_mod_library": sha3(libhash.mod_library(open(os.path.join(ldir, "certificate.json"), "rb").read())),
         "target_snapshot": json.load(open(tpath, encoding="utf-8"))["snapshot"]["hash"],
         "target_file_sha3": sha3(open(tpath, "rb").read()),
+        "library": libhash.library_hash(),
     }
     for k, v in want.items():
         if man["hashes"].get(k) != v:
             errors.append(f"manifest hash {k}: {man['hashes'].get(k)} differs from {v}")
+    if man["logical_certificate"].get("certificate_json_sha3_mod_library") != want["certificate_json_mod_library"]:
+        errors.append("logical_certificate.certificate_json_sha3_mod_library differs from the certificate's")
+    if man.get("schema_version") != "1.2.0":
+        errors.append(f"manifest schema_version {man.get('schema_version')} is not 1.2.0")
     words = man["status"]
     if any(w not in WORDS for w in words) or words != [w for w in WORDS if w in words]:
         errors.append(f"status words {words} are not an ordered subset of {WORDS}")
@@ -142,9 +159,11 @@ def main():
         if p.returncode != 0:
             errors.append(f"cqr hw certify failed ({p.returncode}): {(p.stdout + p.stderr).strip()[:300]}")
         else:
-            for f in ("PhysCert.lean", "physical.qasm", "manifest.json"):
+            for f in ("PhysCert.lean", "physical.qasm"):
                 if open(os.path.join(tmp, f), "rb").read() != open(os.path.join(cdir, f), "rb").read():
                     errors.append(f"{f} differs from the regenerated file")
+            if modulo_library(os.path.join(tmp, "manifest.json")) != modulo_library(os.path.join(cdir, "manifest.json")):
+                errors.append("manifest.json differs from the regenerated file (modulo hashes.library)")
     # parse back
     try:
         got = qasm_ops(open(os.path.join(cdir, "physical.qasm"), encoding="utf-8").read())

@@ -415,9 +415,10 @@ theorem cert : ∀ M : ℕ, (Finset.univ.filter fun x => Network.pred net {n} x 
 
 /-! ## The JSON record (schema 1.10.0, amendment (5)) -/
 
-/-- The schema version of a counting certificate (`pattern "Count"`); since Stage 21a3 every
-certificate says `schemaVersion` = "1.10.0" (PHASE2_SPEC.md §A.5 amendment (7)). -/
-def countSchemaVersion : String := "1.10.0"
+/-- The schema version of a counting certificate (`pattern "Count"`): `Certify.schemaVersion`
+("1.12.0" since revision R5; since Stage 21a3 every certificate says the same version,
+PHASE2_SPEC.md §A.5 amendment (7)). -/
+def countSchemaVersion : String := Certify.schemaVersion
 
 /-- The `restoration` text of a counting certificate. -/
 def countRestorationText (n m : Nat) : String :=
@@ -469,6 +470,8 @@ structure CountCertificate where
   predicateHash : String
   circuitHash : String
   proofHash : Option String
+  /-- R5: `hashes.library` (`Certify.libraryHash`), filled by `cqr certify` -/
+  libraryHash : Option String := none
   gateCounts : GateCounts
   config : RefConfig
   axioms : List String
@@ -517,7 +520,7 @@ def CountCertificate.toJson (c : CountCertificate) : Json :=
      ("hypotheses", Json.arr (c.hypotheses.map str).toArray),
      ("restoration", str c.restoration),
      ("hashes", Json.mkObj [("predicate", str c.predicateHash), ("circuit", str c.circuitHash),
-       ("proof", optStr c.proofHash)]),
+       ("proof", optStr c.proofHash), ("library", optStr c.libraryHash)]),
      ("trust_boundary", Json.mkObj [("emitted", str "QIR text"),
        ("profile", str "adaptive_profile"),
        ("emitter", str "unverified; translation-validated by re-parse"),
@@ -528,7 +531,7 @@ def CountCertificate.toJson (c : CountCertificate) : Json :=
          ("mid_circuit_measurements", c.gateCounts.midCircuitMeasurements),
          ("classically_controlled", c.gateCounts.classicallyControlled),
          ("terminal_measurements", c.gateCounts.terminalMeasurements)]),
-       ("note", str (countHardwareNote c.n c.m))]),
+       ("note", str (countHardwareNote c.n c.m)), ("status", str Certify.hardwarePerturbationStatus)]),
      ("reference_configuration", Json.mkObj [("lean", str c.config.lean),
        ("mathlib", str c.config.mathlib), ("physlib", str c.config.physlib),
        ("cpu", optStr c.config.cpu),

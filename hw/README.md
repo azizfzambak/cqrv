@@ -61,7 +61,9 @@ by assumption); `seed_search` keeps the seed with the least bound over 0..19. An
 
 `hw/artifact.py` writes the artifacts of `hw/artifacts/<instance>__<target>/`: `witness.json`
 (`docs/hw_witness.schema.json`), `physical.qasm` (OpenQASM 3), `manifest.json`
-(`docs/hw_artifact.schema.json` v1.1.0: the hashes of the certificate JSON when one exists, of the
+(`docs/hw_artifact.schema.json` v1.1.0: the hashes of the certificate JSON when one exists — the full
+SHA3-256 of its bytes at transpile time, a historical record that is not compared with the current
+certificate.json (R5; the checked binding is the logical circuit's hash) —, of the
 canonical logical circuit — the form Lean hashes as `circuit_hash` —, of the target snapshot, of the
 witness and of the QASM; the seeds tried; the counts; the bound; `routing` for a subgraph route), and,
 with `--extra`, `logical.json` and `physical.json` for the Lean checks (the existing files are checked
@@ -107,7 +109,12 @@ writes `examples/certs/<cert>_<target>/`: `PhysCert.lean` (self-contained, kerne
 certificate re-derived, the trusted link `emitted_eq : emitted = C`, the reconstruction, the edges, the
 channel theorem, **`phys_realizes`** — the realization transferred to the physical circuit from
 all-|0⟩ — and the grade at each latency), `physical.qasm` (parsed back to the artifact's gate list by
-`tests/diff/hw_physcert_check.py`) and `manifest.json` (schema 1.1.0: the hashes, the grades, the
+`tests/diff/hw_physcert_check.py`) and `manifest.json` (schema 1.2.0 since R5: the hashes — the logical
+certificate.json cited **modulo `hashes.library`** as `certificate_json_mod_library` /
+`certificate_json_sha3_mod_library` (its bytes with the library hash set to null, so that a library change
+moves only the `library` fields), and `hashes.library`, the SHA3-256 of the CQRV sources the files were
+generated against (`CQRV.Certify.libraryHash`; `tests/diff/libhash.py` warns when a recorded hash is not the
+tree's and blocks with `--release`) —, the grades, the
 status words `logical_certified`, `hardware_compatible`, `physical_translation_validated`,
 `emulator_validated` only when the run report passed, and `meaning_physical_translation`: on an ideal
 device with these gates and this connectivity, started from all-|0⟩, the physical circuit realizes the

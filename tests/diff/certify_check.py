@@ -126,6 +126,13 @@ Runs the built `cqr` from the project root and checks
   * Stage 18a: the committed Cert.lean / .qir / .qasm files are the Stage 17b files (git 9fc909b)
     byte for byte (the scheduler state became a cons list; no measured value changed).
 
+  * Revision R5 (REVIEW_RESPONSE_1 §4; DECISIONS.md 2026-11-16): schema 1.12.0 for every certificate
+    (the selection one said 1.11.0); hashes.library = libhash.library_hash() of the current tree
+    (the Lean `libraryHash`, mirrored); hardware_perturbation.status (an illustrative estimate, not a
+    theorem); the committed JSON is compared modulo the machine fields AND modulo hashes.library
+    (`without`, `masked`), so that a library change does not fail this check — the freshness of the
+    recorded hashes is tests/diff/libhash.py's (warning; blocking with --release).
+
 Usage: python -I tests/diff/certify_check.py --cqr <path to cqr>   (after `lake build`)
 """
 
@@ -147,6 +154,7 @@ import jsonschema
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lean_tool import ROOT  # noqa: E402
 import benchmark_diff  # noqa: E402
+import libhash  # noqa: E402
 import reparse_qasm  # noqa: E402
 import reparse_qir  # noqa: E402
 
@@ -312,6 +320,9 @@ PROFILE = os.path.join(ROOT, "profiles", f"{PROFILE_NAME}.json")
 HW_STATUS = "checked against declared profile (not a proof about hardware)"
 HW_NOTE = "routing, native gates and calibration are outside the trust boundary"
 RE_REFCONF = re.compile(r'"reference_configuration":\{[^{}]*(?:\{[^{}]*\}|null)[^{}]*\}')
+RE_LIBRARY = re.compile(r'"library":"[0-9a-f]{64}"')
+HW_PERTURBATION_STATUS = ("illustrative estimate from the profile, not a theorem; see hw noisecert for the proved "
+                          "conditional bound")
 
 
 def rat(q):
@@ -321,13 +332,15 @@ def rat(q):
 
 def masked(text):
     """certificate.json text with the object reference_configuration (machine and timing
-    fields) masked; everything else byte for byte."""
+    fields) and the value of hashes.library (R5) masked; everything else byte for byte."""
     out, k = RE_REFCONF.subn('"reference_configuration":<masked>', text)
     assert k == 1, "reference_configuration not found exactly once"
+    out, k = RE_LIBRARY.subn('"library":<masked>', out)
+    assert k == 1, "hashes.library not found exactly once"
     return out
 
 
-def check_hardware(d, cert, plain, last_two, fits, version="1.10.0"):
+def check_hardware(d, cert, plain, last_two, fits, version="1.12.0"):
     """The `hardware` object of a --profile run, recomputed; the rest equals `plain`."""
     prof = json.loads(read(PROFILE))
     h = cert["hardware"]
@@ -540,6 +553,8 @@ def check_count_dir(d, validator):
     circ = replay_blocks(text, cert["blocks"])
     assert cert["hashes"]["circuit"] == sha3(canon(circ).encode("utf-8")), "circuit hash (replay)"
     assert cert["hashes"]["proof"] == proof_hash(text), "proof hash"
+    assert cert["hashes"]["library"] == libhash.library_hash(), "library hash (R5): not the current tree's"
+    assert cert["hardware_perturbation"]["status"] == HW_PERTURBATION_STATUS, "hardware_perturbation.status (R5)"
     g, e = composed_grade(cert["blocks"])
     assert cert["grade"] == g and cert["grade_kind"] == "composed_bound", (cert["grade"], g)
     assert {k: cert["grade_ext"][k] for k in e} == e and cert["grade_ext"]["t_depth_kind"] == "bound", \
@@ -652,7 +667,7 @@ def check_count(cqr, validator, tmp):
     assert any("no claim for M = 0" in h for h in cert["hypotheses"]), cert["hypotheses"]
     assert cert["trust_boundary"]["front_end"] == PROVED
     assert len(circ["gates"]) == 3682 and circ["n_anc"] == 8, (len(circ["gates"]), circ["n_anc"])
-    print("ok:   cqr certify --problem count --precision 4 (grover_pred_037): `certified (…)` (exit 0); schema v1.10.0, pattern "
+    print("ok:   cqr certify --problem count --precision 4 (grover_pred_037): `certified (…)` (exit 0); schema v1.12.0, pattern "
           "Count, composed bound (20, 1388, 660, 8) = the sum over the six blocks (1 + 1 + 2 + 4 + 8 + 1 "
           "copies), grade_ext (1161, T-depth bound 660, 6, 165, 330), ε ≈ 0.168426 and δ ≈ 0.189431 as "
           "{expr, approx}; axioms exactly the standard three; cert universal in M, cert_count at M = 32")
@@ -806,6 +821,8 @@ def check_dir(d, validator):
     circ = emitted_circuit(text)
     assert cert["hashes"]["circuit"] == sha3(canon(circ).encode("utf-8")), "circuit hash"
     assert cert["hashes"]["proof"] == proof_hash(text), "proof hash"
+    assert cert["hashes"]["library"] == libhash.library_hash(), "library hash (R5): not the current tree's"
+    assert cert["hardware_perturbation"]["status"] == HW_PERTURBATION_STATUS, "hardware_perturbation.status (R5)"
     name = cert["theorem"].split(".")[-2]
     for fmt, mod in (("qasm", reparse_qasm), ("qir", reparse_qir)):
         emitted = read(os.path.join(d, f"{name}.{fmt}"))
@@ -813,17 +830,20 @@ def check_dir(d, validator):
         assert parsed == circ, f"{fmt} re-parse differs from the IR literal of Cert.lean"
         assert len(terminal) == circ["n_data"], f"{fmt} terminal measurement"
         assert "rz" not in emitted, f"{fmt}: a synthesized circuit has no phase gate"
-    # Stage 21a3 (PHASE2_SPEC.md §A.5 amendment (7)): every Grover certificate at 1.10.0, grade measured
-    assert cert["schema_version"] == "1.10.0", cert["schema_version"]
+    # Stage 21a3 (PHASE2_SPEC.md §A.5 amendment (7)): every Grover certificate at one version, grade measured
+    # (1.10.0; 1.12.0 since R5)
+    assert cert["schema_version"] == "1.12.0", cert["schema_version"]
     assert cert["grade_kind"] == "measured" and "blocks" not in cert, cert.get("grade_kind")
     check_grade_ext(cert, text, circ)
     return cert, text
 
 
 def without(cert, keys):
+    """The certificate without the given machine fields and (R5) without hashes.library."""
     c = json.loads(json.dumps(cert))
     for k in keys:
         c["reference_configuration"].pop(k)
+    c["hashes"].pop("library", None)
     return c
 
 
@@ -911,7 +931,7 @@ def main():
         assert text.count("nAnc_eq hM_count\n") == 1 and "native_decide" not in text
         print("ok:   Cert.lean: hM_count by Network.countSat_eq_card and decide +kernel; "
               "theorem cert without hypothesis; solution_count kernel_decided")
-        print("ok:   JSON valid (schema v1.10.0, grade_kind measured, uncompute mbu); grade (15, 134, 72, 7), delta 7/128, "
+        print("ok:   JSON valid (schema v1.12.0, grade_kind measured, uncompute mbu); grade (15, 134, 72, 7), delta 7/128, "
               "axioms exactly propext, Classical.choice, Quot.sound; front end: the proved wording, "
               "Cert.lean states prog / prog_scoped / net_ok / front_end (Stage 16b)")
         print("ok:   circuit hash = SHA3 of the IR literal of Cert.lean (hashlib); "
@@ -934,9 +954,10 @@ def main():
         print("ok:   committed examples/certs/grover_pred_037 agrees (JSON modulo machine fields)")
         assert masked(read(os.path.join(runs[0], "certificate.json"))) == \
             masked(read(os.path.join(EXAMPLE, "certificate.json"))), "certificate.json bytes"
-        assert cert["schema_version"] == "1.10.0" and "hardware" not in cert
+        assert cert["schema_version"] == "1.12.0" and "hardware" not in cert
         print("ok:   without --profile: certificate.json byte-identical to the committed one "
-              "outside reference_configuration (schema_version 1.10.0, grade_kind measured, no hardware)")
+              "outside reference_configuration and hashes.library (schema_version 1.12.0, grade_kind measured, "
+              "no hardware); hashes.library = the current tree (R5)")
 
         # --profile illustrative_sc (Stage 11b; renamed from ibm_kyiv in Stage 14a)
         out = os.path.join(tmp, "prof")
@@ -1016,7 +1037,7 @@ def main():
         assert so_p.rstrip("\n").split("\n")[-1] == "certified", so_p
         fc, ftext = check_dir(out_p, validator)
         check_front_end(ftext, 8, NAME)
-        assert fc["schema_version"] == "1.10.0" and fc["diffusion_shape"] == "few:log", fc
+        assert fc["schema_version"] == "1.12.0" and fc["diffusion_shape"] == "few:log", fc
         assert tuple(fc["grade_ext"][k] for k in GRADE_EXT_KEYS) == GRADE_EXT["grover_pred_037_few"], fc
         assert fc["uncompute"] == "mbu" and fc["trust_boundary"]["front_end"] == PROVED, fc
         assert fc["solution_count"] == {"value": 32, "status": "kernel_decided"}, fc
@@ -1053,7 +1074,7 @@ def main():
         assert exf["reference_configuration"]["kernel_check"]["runs"] == 5
         check_report(EXAMPLE_FEW, exf)
         print("ok:   --shape few:log: `certified` (exit 0); "
-              "schema v1.10.0, diffusion_shape few:log, grade (10, 172, 96, 2), grade_ext "
+              "schema v1.12.0, diffusion_shape few:log, grade (10, 172, 96, 2), grade_ext "
               "(106, 77, 0, 8, 16), delta 7/128, "
               "axioms exactly the standard three; grover_certificate_few_all, no fewCheck")
         print("ok:   --shape few:log --profile illustrative_sc: fits all budgets (d = 172 <= 200), "
@@ -1073,7 +1094,7 @@ def main():
         assert so_p.rstrip("\n").split("\n")[-1] == "certified", so_p
         cc, ctext = check_dir(out_p, validator)
         check_front_end(ctext, 8, NAME)
-        assert cc["schema_version"] == "1.10.0" and cc["uncompute"] == "coherent", cc
+        assert cc["schema_version"] == "1.12.0" and cc["uncompute"] == "coherent", cc
         assert tuple(cc["grade_ext"][k] for k in GRADE_EXT_KEYS) == GRADE_EXT["grover_pred_037_coh"], cc
         assert cc["trust_boundary"]["front_end"] == PROVED, cc
         assert "diffusion_shape" not in cc and "hardware" not in cc
@@ -1131,7 +1152,7 @@ def main():
         assert not os.path.exists(out), "a certificate was written for few:log + coherent"
         rc, so, se = certify(args.cqr, src, os.path.join(tmp, "bogus"), "--uncompute", "bogus")
         assert rc == 2 and not os.path.exists(os.path.join(tmp, "bogus")), (rc, so, se)
-        print("ok:   --uncompute coherent: `certified` (exit 0); schema v1.10.0, uncompute coherent, "
+        print("ok:   --uncompute coherent: `certified` (exit 0); schema v1.12.0, uncompute coherent, "
               "grade (15, 200, 144, 7), grade_ext (216, 74, 0, 0, 0), 0 measurements, 0 classical "
               "bits, delta 7/128, axioms exactly "
               "the standard three; grover_certificate_coherent, OracleCertCoh, no DiffusionCert")

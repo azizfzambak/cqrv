@@ -29,6 +29,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -255,8 +256,14 @@ def main():
             check(w2 == w and qasm2 == qasm, f"{label}: seed search deterministic (same witness and QASM twice)")
             # the committed files
             cm, cw, cq = (read(os.path.join(d, f)) for f in ("manifest.json", "witness.json", "physical.qasm"))
-            check(cm == art.canonical(manifest) + "\n" and cw == art.canonical(w) + "\n" and cq == qasm,
-                  f"{label}: committed manifest.json, witness.json, physical.qasm reproduced byte for byte")
+            # R5 (DECISIONS.md 2026-11-16): hashes.certificate_json is the full SHA3 of the certificate.json the artifact
+            # was transpiled from (a historical record, null before the certificate); the re-transpile records the
+            # current one, so the manifest is compared modulo that field
+            def sans_cert_hash(m):
+                m = json.loads(json.dumps(m)); m["hashes"].pop("certificate_json", None); return art.canonical(m)
+            check(sans_cert_hash(json.loads(cm)) == sans_cert_hash(manifest) and cw == art.canonical(w) + "\n" and cq == qasm,
+                  f"{label}: committed manifest.json (modulo hashes.certificate_json), witness.json, physical.qasm "
+                  "reproduced byte for byte")
             # hashes
             M = json.loads(cm)
             H = M["hashes"]
@@ -264,11 +271,12 @@ def main():
             circ, _ = art.logical_circuit(a.cqr, inst)
             hok = (H["witness"] == art.sha3(cw.rstrip("\n")) and H["physical_qasm3"] == art.sha3(cq)
                    and H["logical_circuit"] == art.sha3(art.canonical(circ)) and H["target_snapshot"] == target["snapshot"]["hash"])
+            hok = hok and (H["certificate_json"] is None or re.fullmatch(r"[0-9a-f]{64}", H["certificate_json"]) is not None)
             if inst[5] is not None:
                 cert = json.loads(read(os.path.join(ROOT, inst[5], "certificate.json")))
-                hok = hok and H["certificate_json"] == art.sha3(read(os.path.join(ROOT, inst[5], "certificate.json"), "rb"))
                 hok = hok and cert["hashes"]["circuit"] == H["logical_circuit"]
-                extra = f"; logical circuit hash = the committed certificate's hashes.circuit ({inst[5]})"
+                extra = (f"; logical circuit hash = the committed certificate's hashes.circuit ({inst[5]}); "
+                         "certificate_json well-formed (the transpile-time hash, not compared, R5)")
             else:
                 extra = ""
             check(hok, f"{label}: manifest hashes recomputed from the files{extra}")

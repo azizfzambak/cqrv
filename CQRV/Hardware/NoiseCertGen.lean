@@ -291,10 +291,10 @@ def noiseWords (logical hardwareCompatible : Bool) (emuPassed : Bool) : List Str
 def generateNoiseCert (certName certBase : String) (certLeanText certJsonText : String)
     (manifestText logicalText witnessText physicalText : String) (t : HardwareTarget)
     (targetFile targetText : String) (L : Rat) (deviceWidth : Nat) (dataPhys : List Nat)
-    (nBits : Nat) (runText : Option String) (runFile : String) :
+    (nBits : Nat) (runText : Option String) (runFile : String) (libHash : String) :
     Except String (String × String × String × NoiseData × Option EmulatorCompare) := do
   let p ← preparePhysCert certName certLeanText certJsonText manifestText logicalText witnessText physicalText
-    t targetFile targetText L deviceWidth dataPhys nBits runText
+    t targetFile targetText L deviceWidth dataPhys nBits runText libHash
   let d := p.d
   let physBound := match p.grades.head? with | some (_, g) => g.bound | none => 0
   let nd ← noiseDataOf d.rates d.dev d.G d.dataPhys d.delta physBound
@@ -322,7 +322,7 @@ def generateNoiseCert (certName certBase : String) (certLeanText certJsonText : 
 `mbuCircuit` (the kernel decides `c_eq`; the generator checks the hash link to `mbuCircuit` first). -/
 def generateGadgetNoiseCert (certName : String) (manifestText logicalText witnessText physicalText : String)
     (t : HardwareTarget) (targetFile targetText : String) (deviceWidth : Nat) (dataPhys : List Nat)
-    (nBits : Nat) (runText : Option String) (runFile : String) :
+    (nBits : Nat) (runText : Option String) (runFile : String) (libHash : String) :
     Except String (String × String × String × NoiseData × Option EmulatorCompare) := do
   let mj ← Json.parse manifestText
   let m ← manifestOfJson mj
@@ -369,7 +369,7 @@ def generateGadgetNoiseCert (certName : String) (manifestText logicalText witnes
     | some e => if e.passes then s!"passes at delta_prime ({runFile})" else s!"fails at delta_prime ({runFile})"
     | none => emuNote
   let manifest := Json.mkObj (([
-    ("schema_version", "1.1.0"),
+    ("schema_version", "1.2.0"),
     ("certificate", certName),
     ("logical_statement", Json.mkObj [("theorem", "CQRV.mbu_channel_correct"), ("module", "CQRV.Circuit.Restoration"),
       ("link", "c_eq : C = mbuCircuit, decided by the kernel"), ("delta", "0")]),
@@ -377,7 +377,7 @@ def generateGadgetNoiseCert (certName : String) (manifestText logicalText witnes
       ("target", m.target), ("basis", m.basis.twoQubit), ("used_qubits", Json.arr (dev.map (fun x => (x : Json))).toArray),
       ("data_physical", Json.arr (dataPhys.map (fun x => (x : Json))).toArray)]),
     ("hashes", Json.mkObj [("logical_circuit", m.logicalHash), ("witness", m.witnessHash), ("physical_json", physHash),
-      ("target_snapshot", m.targetHash), ("target_file_sha3", targetFileHash)]),
+      ("target_snapshot", m.targetHash), ("target_file_sha3", targetFileHash), ("library", libHash)]),
     ("phys_grade", Json.mkObj [("0", g.toJson 0)]),
     ("hardware_compatible", Json.mkObj [("edges_ok", edgesOkB), ("capabilities_ok", capsOk)]),
     ("emulator_run", emulatorRun),
