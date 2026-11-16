@@ -1,0 +1,37 @@
+-- Revision R12 (REVIEW_RESPONSE_1 §4; docs/tasks/REVC_TASK.md): weight-function benchmark, written
+-- from its definition (no source file). Predicate: exactly three of the eight input bits are set —
+-- the shape of the RevLib weight functions rd53 / rd73 / rd84 (cited as the family only; nothing
+-- transcribed). n = 8, M = C(8, 3) = 56 (enumerated in tests/diff/r12_predicates.py), r* = 1,
+-- success probability sin^2(3 theta) = 1 - delta ≈ 0.987793.
+-- Input layout (bit 0 = LSB): x[0..7] = the eight bits.
+-- Form: a popcount by full adders (fa(a, b, c) = (a xor b xor c, (a and b) xor (c and (a xor b))) —
+-- the two carry terms exclude each other, so `xor` is `or` and costs no AND node) in let bindings —
+-- the DSL's `for` fold carries one Bool accumulator, so a multi-bit counter is written out
+-- (DECISIONS.md 2026-11-17, R12): weight-1 column {sa, sb, sc} -> bit0, k1; weight-2 column
+-- {ca, cb, cc, k1} -> bit1, k2; weight-4 column {cd, k2} -> bit2 (= cd xor k2; the weight-8 bit
+-- cd and k2 is not needed: a count <= 8 with bit0 = bit1 = 1 and bit2 = 0 is 3). Exactly three iff
+-- bit0 and bit1 and not bit2. 12 AND nodes, so the 20-qubit statevector harness applies.
+fn wt8_3(x: Vec Bool 8) -> Bool {
+  let a0 = idx(x, 0) in
+  let a1 = idx(x, 1) in
+  let a2 = idx(x, 2) in
+  let a3 = idx(x, 3) in
+  let a4 = idx(x, 4) in
+  let a5 = idx(x, 5) in
+  let a6 = idx(x, 6) in
+  let a7 = idx(x, 7) in
+  let sa = a0 xor a1 xor a2 in
+  let ca = (a0 and a1) xor (a2 and (a0 xor a1)) in
+  let sb = a3 xor a4 xor a5 in
+  let cb = (a3 and a4) xor (a5 and (a3 xor a4)) in
+  let sc = a6 xor a7 xor sa in
+  let cc = (a6 and a7) xor (sa and (a6 xor a7)) in
+  let bit0 = sb xor sc in
+  let k1 = sb and sc in
+  let sd = ca xor cb xor cc in
+  let cd = (ca and cb) xor (cc and (ca xor cb)) in
+  let bit1 = sd xor k1 in
+  let k2 = sd and k1 in
+  let bit2 = cd xor k2 in
+  bit0 and bit1 and (not bit2)
+}

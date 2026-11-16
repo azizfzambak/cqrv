@@ -1,0 +1,31 @@
+-- Revision R12 (REVIEW_RESPONSE_1 §4; docs/tasks/REVC_TASK.md): comparator benchmark, written from
+-- its definition (no source file). Predicate: x - y >= 5 for 4-bit unsigned x, y (equivalently
+-- x >= y + 5, x > y + 4). The task's x > y has M = 120 of 256 (M/N = 0.469): Grover gains nothing
+-- (r* = 1 succeeds with probability 0.593, r = 0 with 0.469), so the nearest useful variant of the
+-- task text is taken (DECISIONS.md 2026-11-17, R12): M = 66 (enumerated in
+-- tests/diff/r12_predicates.py), r* = 1, success probability sin^2(3 theta) = 1 - delta ≈ 0.999275.
+-- Input layout (bit 0 = LSB): x[0..3] = x.0..x.3, x[4..7] = y.0..y.3.
+-- Form: the borrow chain of x - y (d_k = x_k xor y_k xor b_k, b_{k+1} = (not x_k and y_k) xor
+-- (not (x_k xor y_k) and b_k) — the two terms exclude each other, so `xor` is `or` here and costs no
+-- AND node; the straight-line MBU schedule keeps one ancilla per AND, and 11 ANDs keep the circuit
+-- within the 20-qubit statevector harness); x - y >= 5 iff no borrow out of bit 3 (x >= y) and the
+-- 4-bit difference d >= 5, i.e. d_3 or (d_2 and (d_1 or d_0)).
+fn cmp4(x: Vec Bool 8) -> Bool {
+  let x0 = idx(x, 0) in
+  let x1 = idx(x, 1) in
+  let x2 = idx(x, 2) in
+  let x3 = idx(x, 3) in
+  let y0 = idx(x, 4) in
+  let y1 = idx(x, 5) in
+  let y2 = idx(x, 6) in
+  let y3 = idx(x, 7) in
+  let d0 = x0 xor y0 in
+  let b1 = (not x0) and y0 in
+  let d1 = x1 xor y1 xor b1 in
+  let b2 = ((not x1) and y1) xor ((not (x1 xor y1)) and b1) in
+  let d2 = x2 xor y2 xor b2 in
+  let b3 = ((not x2) and y2) xor ((not (x2 xor y2)) and b2) in
+  let d3 = x3 xor y3 xor b3 in
+  let b4 = ((not x3) and y3) xor ((not (x3 xor y3)) and b3) in
+  (not b4) and (d3 or (d2 and (d1 or d0)))
+}

@@ -133,6 +133,12 @@ Runs the built `cqr` from the project root and checks
     (`without`, `masked`), so that a library change does not fail this check — the freshness of the
     recorded hashes is tests/diff/libhash.py's (warning; blocking with --release).
 
+  * Revision R12 (docs/tasks/REVC_TASK.md): the committed benchmark certificates examples/certs/addchk3,
+    wt8_3 and wt8_3_count are checked here (schema, hashes, M kernel-decided, run reports; cmp4 is
+    harness evidence only, its kernel check peaking above the 8 GB guard);
+    their harness and byte-for-byte re-certification is tests/diff/r12_predicates.py, run by
+    scripts/diff_benchmark.sh (CI step "Worked predicates").
+
 Usage: python -I tests/diff/certify_check.py --cqr <path to cqr>   (after `lake build`)
 """
 
@@ -155,6 +161,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lean_tool import ROOT  # noqa: E402
 import benchmark_diff  # noqa: E402
 import libhash  # noqa: E402
+import r12_predicates  # noqa: E402
 import reparse_qasm  # noqa: E402
 import reparse_qir  # noqa: E402
 
@@ -542,9 +549,10 @@ def composed_grade(blocks):
     return g, e
 
 
-def check_count_dir(d, validator):
+def check_count_dir(d, validator, name=NAME):
     """Schema, the hash link by replaying the block literals, proof hash, the composed grade and the
-    emitted files of one counting output directory."""
+    emitted files of one counting output directory (`name`: the request, for the .qasm / .qir files
+    and the n + m terminal measurements)."""
     cert = json.loads(read(os.path.join(d, "certificate.json")))
     validator.validate(cert)
     text = read(os.path.join(d, "Cert.lean"))
@@ -576,17 +584,17 @@ def check_count_dir(d, validator):
     assert hp["counts"] == counts and hp["G"] == sum(counts.values()), hp
     assert "countPOVM reads the phase register" in hp["note"], hp["note"]
     # the emitted files: QASM re-parses to the assembled circuit (cp native), QIR to its decomposeCp
-    qasm = read(os.path.join(d, f"{NAME}.qasm"))
+    qasm = read(os.path.join(d, f"{name}.qasm"))
     parsed, terminal = reparse_qasm.parse(qasm)
     assert parsed == circ, "qasm re-parse differs from the assembled circuit"
-    assert len(terminal) == circ["n_data"] == 12, "qasm terminal measurement over n + m = 12 qubits"
-    qir = read(os.path.join(d, f"{NAME}.qir"))
+    assert len(terminal) == circ["n_data"] == cert["instance"]["n"] + cert["instance"]["m"], "qasm terminal measurement over n + m qubits"
+    qir = read(os.path.join(d, f"{name}.qir"))
     got, terminal_q = reparse_qir.parse(qir)
     want = decompose_cp(circ)
     assert len(got["gates"]) == len(want["gates"]) and all(
         gate_equal(x, y) for x, y in zip(got["gates"], want["gates"])), "qir re-parse differs from decomposeCp"
     assert {k: got[k] for k in ("n_data", "n_anc")} == {k: want[k] for k in ("n_data", "n_anc")}
-    assert len(terminal_q) == 12 and qir.count("declare void @__quantum__qis__rz__body(double, ptr)\n") == 1
+    assert len(terminal_q) == circ["n_data"] and qir.count("declare void @__quantum__qis__rz__body(double, ptr)\n") == 1
     n_cp = sum(1 for x in circ["gates"] if x["op"] == "cp")
     assert n_cp == 6 and len(want["gates"]) == len(circ["gates"]) + 4 * n_cp, "the inverse QFT has six cp"
     return cert, text, circ
@@ -1025,6 +1033,26 @@ def main():
         print("ok:   committed run reports (both examples): 9 rows of Table 8.5.2 (1a / 1b), "
               "statuses, "
               "measured grade / delta / kernel time / axioms / G = certificate.json")
+
+        # R12 (docs/tasks/REVC_TASK.md): the committed benchmark certificates addchk3, wt8_3 and
+        # wt8_3_count (cmp4 is harness evidence only: its kernel check peaks above the 8 GB guard) —
+        # schema, hashes (library current), M kernel-decided, the instances of
+        # r12_predicates.BENCH, the run reports; their re-certification byte for byte is the step
+        # scripts/diff_benchmark.sh (tests/diff/r12_predicates.py --certify, the harness first)
+        for bname in r12_predicates.CERTIFIED:
+            bn, _, bM, br, _ = r12_predicates.BENCH[bname]
+            bdir = os.path.join(ROOT, "examples", "certs", bname)
+            bc, btext = check_dir(bdir, validator)
+            assert bc["instance"] == {"n": bn, "M": bM, "r": br}, (bname, bc["instance"])
+            assert bc["solution_count"] == {"value": bM, "status": "kernel_decided"} and "hM_card" not in btext, bname
+            assert bc["status"] == "certified" and bc["axioms"] == STANDARD and bc["obligations"] == [], bname
+            check_report(bdir, bc)
+        cnt_c, _, _ = check_count_dir(os.path.join(ROOT, "examples", "certs", r12_predicates.COUNT_BENCH + "_count"),
+                                      validator, name=r12_predicates.COUNT_BENCH)
+        assert (cnt_c["instance"]["n"], cnt_c["instance"]["m"], cnt_c["solution_count"]["value"]) == \
+            (r12_predicates.BENCH[r12_predicates.COUNT_BENCH][0], 4, r12_predicates.BENCH[r12_predicates.COUNT_BENCH][2])
+        print("ok:   R12 committed certificates addchk3, wt8_3 and wt8_3_count: schema 1.12.0, hashes "
+              "(library current), M kernel-decided, standard axioms, run reports agree")
 
         # --shape few:log (Stage 12d): the few-ancilla diffusion, candidate B
         runs_few = {}

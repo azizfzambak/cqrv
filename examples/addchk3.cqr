@@ -1,0 +1,25 @@
+-- Revision R12 (REVIEW_RESPONSE_1 §4; docs/tasks/REVC_TASK.md): adder-check benchmark, written from
+-- its definition (no source file). Predicate: x + y ≡ z (mod 8) for 3-bit unsigned x, y, z.
+-- n = 9, M = 64 (one z per (x, y); enumerated in tests/diff/r12_predicates.py), r* = 2, success
+-- probability sin^2(5 theta) = 121/128 (sin^2 theta = 64/512 = 1/8, as grover_pred_037).
+-- Input layout (bit 0 = LSB): x[0..2] = x.0..x.2, x[3..5] = y.0..y.2, x[6..8] = z.0..z.2.
+-- Form: the ripple-carry sum s = x + y mod 8 (s_0 = x_0 xor y_0, c_1 = x_0 and y_0,
+-- s_k = x_k xor y_k xor c_k, c_{k+1} = (x_k and y_k) xor (c_k and (x_k xor y_k)) — exclusive terms, so
+-- `xor` is `or` and costs no AND node), compared bit by bit with z: not (s_k xor z_k), k = 0, 1, 2.
+fn addchk3(x: Vec Bool 9) -> Bool {
+  let x0 = idx(x, 0) in
+  let x1 = idx(x, 1) in
+  let x2 = idx(x, 2) in
+  let y0 = idx(x, 3) in
+  let y1 = idx(x, 4) in
+  let y2 = idx(x, 5) in
+  let z0 = idx(x, 6) in
+  let z1 = idx(x, 7) in
+  let z2 = idx(x, 8) in
+  let s0 = x0 xor y0 in
+  let c1 = x0 and y0 in
+  let s1 = x1 xor y1 xor c1 in
+  let c2 = (x1 and y1) xor (c1 and (x1 xor y1)) in
+  let s2 = x2 xor y2 xor c2 in
+  (not (s0 xor z0)) and (not (s1 xor z1)) and (not (s2 xor z2))
+}

@@ -74,7 +74,7 @@ step "Diffusion and Grover circuit" scripts/diff_grover.sh
 step "Few-ancilla MCZ (Stage 12b; few:log certified, 12d; every n, 13a)" scripts/diff_mcz.sh
 step "QFT / AQFT (Stage 18b)" scripts/diff_qft.sh
 step "Counting circuit (Stage 19b)" scripts/diff_counting.sh
-step "Second worked predicate simple_alu_x0_1 (Stage 9b)" scripts/diff_benchmark.sh
+step "Worked predicates: simple_alu_x0_1 (Stage 9b); cmp4, addchk3, wt8_3 (R12)" scripts/diff_benchmark.sh
 if command -v llvm-as >/dev/null 2>&1; then
   step "Install llvm (llvm-as present)" llvm
   step "SHA3, schema, QIR / QASM re-parse (REQUIRE_LLVM_AS=1)" env REQUIRE_LLVM_AS=1 scripts/check_emit.sh

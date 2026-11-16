@@ -99,6 +99,30 @@ The M3 figures (the first six rows) are unchanged. `fr_n2`/`fr_n3` are the front
 (`examples/frontier/fr_n<k>.cqr`, Grover on k ANDs); `hw_n2`/`hw_n3` have the same circuits as the
 tree-mbu members of that family. Schema 1.10.0 (1.11.0 for the selection certificate).
 
+**Revision R12 addition (2026-11-17; REVIEW_RESPONSE_1 §4; docs/tasks/REVC_TASK.md).** Two combinational
+benchmarks written from their definitions (no source file), certified end to end by the existing tools
+(schema 1.12.0, `hashes.library` current; `cqr certify --solutions M --report`, M kernel-decided; the
+harness of `tests/diff/r12_predicates.py` passed first — program = definition on all 2ⁿ inputs, the
+oracle, one iteration and the full circuit in both shapes, 32 sampled distinct branches per check and every
+branch where 2^k ≤ 2^13: addchk3's oracle 2^5, its few:log iteration 2^7, its tree iteration 2^13). Kernel
+time: the certificate's single run; peak: the peak working set of `lean --profile` on `Cert.lean`
+(`scripts/bench_scaling.py` method, LEAN_NUM_THREADS = 4; R11 re-measures). Gates: the IR gate count.
+
+| Directory | Definition; instance | success = 1 − δ | `grade` (w, d, t, a) | `grade_ext` (2Q, T-depth, rot, meas, ff) | Gates (G) | Kernel (s) | Peak (MB) |
+|---|---|---|---|---|---|---|---|
+| `addchk3` | x + y ≡ z (mod 8), 3-bit; n = 9, M = 64, r = 2 | 121/128 (δ = 7/128) | (17, 226, 104, 8); measured | (262, 55, 0, 26, 52) | 683 (640) | 44.5 | 6 805 |
+| `wt8_3` | exactly 3 of 8 bits set (rd-family shape); n = 8, M = 56, r = 1 | 2023/2048 (δ = 25/2048) | (20, 159, 76, 12); measured | (281, 27, 0, 19, 38) | 555 (525) | 38.5 | 6 925 |
+| `wt8_3_count` | Count on wt8_3; n = 8, m = 4, M = 56; exact inverse QFT, mbu | 1 − 8/π² ≈ 0.189431 = δ (ε ≈ 0.200894) | (25, 2738, 1260, 13); composed bound | (4431, ≤ 1260, 6, 315, 630) | 8 812 (8 194) | 106.0 | 7 009 |
+
+**cmp4, evidence only (no certificate).** `examples/cmp4.cqr` is the comparator x − y ≥ 5 on 4-bit x, y
+(n = 8, M = 66, r = 1, success 130977/131072; the task's x > y has M = 120 and Grover gains nothing: r = 1
+succeeds with 0.593). Its harness passes (32 sampled branches per check, both shapes; grade (19, 127, 72,
+11) tree, (19, 146, 84, 11) few:log; 500 / 485 gates), but its kernel check exceeds the 8 GB guard of this
+16 GB machine: 60.5 s at 8 646 / 8 678 MB (tree, two measurements), 41.4 s at 8 674 MB (few:log), the
+counting certificate 98.8 s at 8 756 MB — against 3 728 MB for `grover_pred_037` on the same measurement.
+Peak memory does not follow the gate count (wt8_3 has more gates and 1.7 GB less); a finding about the
+kernel's memory ceiling, not a certificate (the reviewer's decision, DECISIONS.md 2026-11-17).
+
 **Physical and conditional** (`examples/certs/<dir>/manifest.json`, schema 1.1.0; `PhysGrade` at the
 feed-forward latency L = 0 and 1000 ns; the kernel times from the CI logs of steps 29 and 30):
 

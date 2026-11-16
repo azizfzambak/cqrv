@@ -1,0 +1,1009 @@
+; QIR Adaptive Profile — addchk3 (CQRV, report §8.4.3); unverified emitter (§5.3)
+; data qubits 0..9, ancillae 9..17; mid-circuit results 0..26, terminal results 26..35
+
+@out = internal constant [4 x i8] c"out\00"
+@out0 = internal constant [7 x i8] c"out[0]\00"
+@out1 = internal constant [7 x i8] c"out[1]\00"
+@out2 = internal constant [7 x i8] c"out[2]\00"
+@out3 = internal constant [7 x i8] c"out[3]\00"
+@out4 = internal constant [7 x i8] c"out[4]\00"
+@out5 = internal constant [7 x i8] c"out[5]\00"
+@out6 = internal constant [7 x i8] c"out[6]\00"
+@out7 = internal constant [7 x i8] c"out[7]\00"
+@out8 = internal constant [7 x i8] c"out[8]\00"
+
+define i64 @addchk3() #0 {
+entry:
+  call void @__quantum__rt__initialize(ptr null)
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 5 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 6 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 7 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 8 to ptr))
+  ; cqrv: alloc 9
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 3 to ptr), ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 9 to ptr))
+  ; cqrv: alloc 10
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 1 to ptr), ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 1 to ptr))
+  ; cqrv: alloc 11
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 1 to ptr), ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 3 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 6 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 7 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 1 to ptr))
+  ; cqrv: alloc 12
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 1 to ptr), ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 7 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 6 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 3 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 5 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 8 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 2 to ptr))
+  ; cqrv: alloc 13
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 8 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 5 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__z__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 5 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 8 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 0 to ptr))
+  %c113 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 0 to ptr))
+  br i1 %c113, label %then113, label %cont113
+then113:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 2 to ptr))
+  br label %cont113
+cont113:
+  %c114 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 0 to ptr))
+  br i1 %c114, label %then114, label %cont114
+then114:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 13 to ptr))
+  br label %cont114
+cont114:
+  ; cqrv: free 13
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 8 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 5 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 3 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 6 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 7 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 1 to ptr))
+  %c130 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 1 to ptr))
+  br i1 %c130, label %then130, label %cont130
+then130:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 1 to ptr))
+  br label %cont130
+cont130:
+  %c131 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 1 to ptr))
+  br i1 %c131, label %then131, label %cont131
+then131:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 12 to ptr))
+  br label %cont131
+cont131:
+  ; cqrv: free 12
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 7 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 6 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 3 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 2 to ptr))
+  %c143 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 2 to ptr))
+  br i1 %c143, label %then143, label %cont143
+then143:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 1 to ptr))
+  br label %cont143
+cont143:
+  %c144 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 2 to ptr))
+  br i1 %c144, label %then144, label %cont144
+then144:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 11 to ptr))
+  br label %cont144
+cont144:
+  ; cqrv: free 11
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 3 to ptr))
+  %c149 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 3 to ptr))
+  br i1 %c149, label %then149, label %cont149
+then149:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 1 to ptr), ptr inttoptr (i64 4 to ptr))
+  br label %cont149
+cont149:
+  %c150 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 3 to ptr))
+  br i1 %c150, label %then150, label %cont150
+then150:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 10 to ptr))
+  br label %cont150
+cont150:
+  ; cqrv: free 10
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 4 to ptr))
+  %c154 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 4 to ptr))
+  br i1 %c154, label %then154, label %cont154
+then154:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 3 to ptr))
+  br label %cont154
+cont154:
+  %c155 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 4 to ptr))
+  br i1 %c155, label %then155, label %cont155
+then155:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 9 to ptr))
+  br label %cont155
+cont155:
+  ; cqrv: free 9
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 5 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 6 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 7 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 8 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 5 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 6 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 7 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 8 to ptr))
+  ; cqrv: alloc 9
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 1 to ptr), ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 9 to ptr))
+  ; cqrv: alloc 10
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 3 to ptr), ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 10 to ptr))
+  ; cqrv: alloc 11
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 5 to ptr), ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 5 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 5 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 5 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 11 to ptr))
+  ; cqrv: alloc 12
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 6 to ptr), ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 7 to ptr), ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 6 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 7 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 6 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 7 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 6 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 7 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 12 to ptr))
+  ; cqrv: alloc 13
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 13 to ptr))
+  ; cqrv: alloc 14
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 14 to ptr), ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 14 to ptr), ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 14 to ptr), ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 14 to ptr), ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 14 to ptr))
+  ; cqrv: alloc 15
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 14 to ptr), ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 15 to ptr), ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 15 to ptr), ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 15 to ptr), ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 15 to ptr), ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 15 to ptr))
+  ; cqrv: alloc 16
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 15 to ptr), ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 8 to ptr), ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 16 to ptr), ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 16 to ptr), ptr inttoptr (i64 8 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 8 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 16 to ptr), ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 16 to ptr), ptr inttoptr (i64 8 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__z__body(ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 16 to ptr), ptr inttoptr (i64 5 to ptr))
+  %c290 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 5 to ptr))
+  br i1 %c290, label %then290, label %cont290
+then290:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 15 to ptr), ptr inttoptr (i64 8 to ptr))
+  br label %cont290
+cont290:
+  %c291 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 5 to ptr))
+  br i1 %c291, label %then291, label %cont291
+then291:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 16 to ptr))
+  br label %cont291
+cont291:
+  ; cqrv: free 16
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 15 to ptr), ptr inttoptr (i64 6 to ptr))
+  %c295 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 6 to ptr))
+  br i1 %c295, label %then295, label %cont295
+then295:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 14 to ptr))
+  br label %cont295
+cont295:
+  %c296 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 6 to ptr))
+  br i1 %c296, label %then296, label %cont296
+then296:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 15 to ptr))
+  br label %cont296
+cont296:
+  ; cqrv: free 15
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 14 to ptr), ptr inttoptr (i64 7 to ptr))
+  %c300 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 7 to ptr))
+  br i1 %c300, label %then300, label %cont300
+then300:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 12 to ptr))
+  br label %cont300
+cont300:
+  %c301 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 7 to ptr))
+  br i1 %c301, label %then301, label %cont301
+then301:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 14 to ptr))
+  br label %cont301
+cont301:
+  ; cqrv: free 14
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 8 to ptr))
+  %c305 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 8 to ptr))
+  br i1 %c305, label %then305, label %cont305
+then305:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 10 to ptr))
+  br label %cont305
+cont305:
+  %c306 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 8 to ptr))
+  br i1 %c306, label %then306, label %cont306
+then306:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 13 to ptr))
+  br label %cont306
+cont306:
+  ; cqrv: free 13
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 9 to ptr))
+  %c310 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 9 to ptr))
+  br i1 %c310, label %then310, label %cont310
+then310:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 6 to ptr), ptr inttoptr (i64 7 to ptr))
+  br label %cont310
+cont310:
+  %c311 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 9 to ptr))
+  br i1 %c311, label %then311, label %cont311
+then311:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 12 to ptr))
+  br label %cont311
+cont311:
+  ; cqrv: free 12
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 10 to ptr))
+  %c315 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 10 to ptr))
+  br i1 %c315, label %then315, label %cont315
+then315:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 5 to ptr))
+  br label %cont315
+cont315:
+  %c316 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 10 to ptr))
+  br i1 %c316, label %then316, label %cont316
+then316:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 11 to ptr))
+  br label %cont316
+cont316:
+  ; cqrv: free 11
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 11 to ptr))
+  %c320 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 11 to ptr))
+  br i1 %c320, label %then320, label %cont320
+then320:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 3 to ptr))
+  br label %cont320
+cont320:
+  %c321 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 11 to ptr))
+  br i1 %c321, label %then321, label %cont321
+then321:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 10 to ptr))
+  br label %cont321
+cont321:
+  ; cqrv: free 10
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 12 to ptr))
+  %c325 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 12 to ptr))
+  br i1 %c325, label %then325, label %cont325
+then325:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 1 to ptr))
+  br label %cont325
+cont325:
+  %c326 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 12 to ptr))
+  br i1 %c326, label %then326, label %cont326
+then326:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 9 to ptr))
+  br label %cont326
+cont326:
+  ; cqrv: free 9
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 5 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 6 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 7 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 8 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 5 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 6 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 7 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 8 to ptr))
+  ; cqrv: alloc 9
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 3 to ptr), ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 9 to ptr))
+  ; cqrv: alloc 10
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 1 to ptr), ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 1 to ptr))
+  ; cqrv: alloc 11
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 1 to ptr), ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 3 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 6 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 7 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 1 to ptr))
+  ; cqrv: alloc 12
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 1 to ptr), ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 7 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 6 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 3 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 5 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 8 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 2 to ptr))
+  ; cqrv: alloc 13
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 8 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 5 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__z__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 5 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 8 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 13 to ptr))
+  %c450 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 13 to ptr))
+  br i1 %c450, label %then450, label %cont450
+then450:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 2 to ptr))
+  br label %cont450
+cont450:
+  %c451 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 13 to ptr))
+  br i1 %c451, label %then451, label %cont451
+then451:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 13 to ptr))
+  br label %cont451
+cont451:
+  ; cqrv: free 13
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 8 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 5 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 3 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 6 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 7 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 14 to ptr))
+  %c467 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 14 to ptr))
+  br i1 %c467, label %then467, label %cont467
+then467:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 1 to ptr))
+  br label %cont467
+cont467:
+  %c468 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 14 to ptr))
+  br i1 %c468, label %then468, label %cont468
+then468:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 12 to ptr))
+  br label %cont468
+cont468:
+  ; cqrv: free 12
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 7 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 6 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 3 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 15 to ptr))
+  %c480 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 15 to ptr))
+  br i1 %c480, label %then480, label %cont480
+then480:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 1 to ptr))
+  br label %cont480
+cont480:
+  %c481 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 15 to ptr))
+  br i1 %c481, label %then481, label %cont481
+then481:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 11 to ptr))
+  br label %cont481
+cont481:
+  ; cqrv: free 11
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 16 to ptr))
+  %c486 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 16 to ptr))
+  br i1 %c486, label %then486, label %cont486
+then486:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 1 to ptr), ptr inttoptr (i64 4 to ptr))
+  br label %cont486
+cont486:
+  %c487 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 16 to ptr))
+  br i1 %c487, label %then487, label %cont487
+then487:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 10 to ptr))
+  br label %cont487
+cont487:
+  ; cqrv: free 10
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 17 to ptr))
+  %c491 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 17 to ptr))
+  br i1 %c491, label %then491, label %cont491
+then491:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 3 to ptr))
+  br label %cont491
+cont491:
+  %c492 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 17 to ptr))
+  br i1 %c492, label %then492, label %cont492
+then492:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 9 to ptr))
+  br label %cont492
+cont492:
+  ; cqrv: free 9
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 5 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 6 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 7 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 8 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 5 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 6 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 7 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 8 to ptr))
+  ; cqrv: alloc 9
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 1 to ptr), ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 9 to ptr))
+  ; cqrv: alloc 10
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 3 to ptr), ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 10 to ptr))
+  ; cqrv: alloc 11
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 5 to ptr), ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 5 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 5 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 5 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 11 to ptr))
+  ; cqrv: alloc 12
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 6 to ptr), ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 7 to ptr), ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 6 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 7 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 6 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 7 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 6 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 7 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 12 to ptr))
+  ; cqrv: alloc 13
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 13 to ptr))
+  ; cqrv: alloc 14
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 14 to ptr), ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 14 to ptr), ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 14 to ptr), ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 14 to ptr), ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 14 to ptr))
+  ; cqrv: alloc 15
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 14 to ptr), ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 15 to ptr), ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 15 to ptr), ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 15 to ptr), ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 15 to ptr), ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 15 to ptr))
+  ; cqrv: alloc 16
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 15 to ptr), ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 8 to ptr), ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 16 to ptr), ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 16 to ptr), ptr inttoptr (i64 8 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 8 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 16 to ptr), ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 16 to ptr), ptr inttoptr (i64 8 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__z__body(ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 16 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 16 to ptr), ptr inttoptr (i64 18 to ptr))
+  %c627 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 18 to ptr))
+  br i1 %c627, label %then627, label %cont627
+then627:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 15 to ptr), ptr inttoptr (i64 8 to ptr))
+  br label %cont627
+cont627:
+  %c628 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 18 to ptr))
+  br i1 %c628, label %then628, label %cont628
+then628:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 16 to ptr))
+  br label %cont628
+cont628:
+  ; cqrv: free 16
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 15 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 15 to ptr), ptr inttoptr (i64 19 to ptr))
+  %c632 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 19 to ptr))
+  br i1 %c632, label %then632, label %cont632
+then632:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 14 to ptr))
+  br label %cont632
+cont632:
+  %c633 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 19 to ptr))
+  br i1 %c633, label %then633, label %cont633
+then633:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 15 to ptr))
+  br label %cont633
+cont633:
+  ; cqrv: free 15
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 14 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 14 to ptr), ptr inttoptr (i64 20 to ptr))
+  %c637 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 20 to ptr))
+  br i1 %c637, label %then637, label %cont637
+then637:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 12 to ptr))
+  br label %cont637
+cont637:
+  %c638 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 20 to ptr))
+  br i1 %c638, label %then638, label %cont638
+then638:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 14 to ptr))
+  br label %cont638
+cont638:
+  ; cqrv: free 14
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 13 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 13 to ptr), ptr inttoptr (i64 21 to ptr))
+  %c642 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 21 to ptr))
+  br i1 %c642, label %then642, label %cont642
+then642:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 10 to ptr))
+  br label %cont642
+cont642:
+  %c643 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 21 to ptr))
+  br i1 %c643, label %then643, label %cont643
+then643:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 13 to ptr))
+  br label %cont643
+cont643:
+  ; cqrv: free 13
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 12 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 12 to ptr), ptr inttoptr (i64 22 to ptr))
+  %c647 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 22 to ptr))
+  br i1 %c647, label %then647, label %cont647
+then647:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 6 to ptr), ptr inttoptr (i64 7 to ptr))
+  br label %cont647
+cont647:
+  %c648 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 22 to ptr))
+  br i1 %c648, label %then648, label %cont648
+then648:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 12 to ptr))
+  br label %cont648
+cont648:
+  ; cqrv: free 12
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 11 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 11 to ptr), ptr inttoptr (i64 23 to ptr))
+  %c652 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 23 to ptr))
+  br i1 %c652, label %then652, label %cont652
+then652:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 5 to ptr))
+  br label %cont652
+cont652:
+  %c653 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 23 to ptr))
+  br i1 %c653, label %then653, label %cont653
+then653:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 11 to ptr))
+  br label %cont653
+cont653:
+  ; cqrv: free 11
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 10 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 10 to ptr), ptr inttoptr (i64 24 to ptr))
+  %c657 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 24 to ptr))
+  br i1 %c657, label %then657, label %cont657
+then657:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 3 to ptr))
+  br label %cont657
+cont657:
+  %c658 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 24 to ptr))
+  br i1 %c658, label %then658, label %cont658
+then658:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 10 to ptr))
+  br label %cont658
+cont658:
+  ; cqrv: free 10
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 9 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 9 to ptr), ptr inttoptr (i64 25 to ptr))
+  %c662 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 25 to ptr))
+  br i1 %c662, label %then662, label %cont662
+then662:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 1 to ptr))
+  br label %cont662
+cont662:
+  %c663 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 25 to ptr))
+  br i1 %c663, label %then663, label %cont663
+then663:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 9 to ptr))
+  br label %cont663
+cont663:
+  ; cqrv: free 9
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 5 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 6 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 7 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 8 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 3 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 4 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 5 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 6 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 7 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 8 to ptr))
+  br label %measurements
+measurements:
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 26 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 1 to ptr), ptr inttoptr (i64 27 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 28 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 3 to ptr), ptr inttoptr (i64 29 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 4 to ptr), ptr inttoptr (i64 30 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 5 to ptr), ptr inttoptr (i64 31 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 6 to ptr), ptr inttoptr (i64 32 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 7 to ptr), ptr inttoptr (i64 33 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 8 to ptr), ptr inttoptr (i64 34 to ptr))
+  br label %output
+output:
+  call void @__quantum__rt__array_record_output(i64 9, ptr @out)
+  call void @__quantum__rt__result_record_output(ptr inttoptr (i64 26 to ptr), ptr @out0)
+  call void @__quantum__rt__result_record_output(ptr inttoptr (i64 27 to ptr), ptr @out1)
+  call void @__quantum__rt__result_record_output(ptr inttoptr (i64 28 to ptr), ptr @out2)
+  call void @__quantum__rt__result_record_output(ptr inttoptr (i64 29 to ptr), ptr @out3)
+  call void @__quantum__rt__result_record_output(ptr inttoptr (i64 30 to ptr), ptr @out4)
+  call void @__quantum__rt__result_record_output(ptr inttoptr (i64 31 to ptr), ptr @out5)
+  call void @__quantum__rt__result_record_output(ptr inttoptr (i64 32 to ptr), ptr @out6)
+  call void @__quantum__rt__result_record_output(ptr inttoptr (i64 33 to ptr), ptr @out7)
+  call void @__quantum__rt__result_record_output(ptr inttoptr (i64 34 to ptr), ptr @out8)
+  ret i64 0
+}
+
+declare void @__quantum__qis__h__body(ptr)
+declare void @__quantum__qis__s__body(ptr)
+declare void @__quantum__qis__s__adj__body(ptr)
+declare void @__quantum__qis__t__body(ptr)
+declare void @__quantum__qis__t__adj__body(ptr)
+declare void @__quantum__qis__x__body(ptr)
+declare void @__quantum__qis__z__body(ptr)
+declare void @__quantum__qis__cnot__body(ptr, ptr)
+declare void @__quantum__qis__cz__body(ptr, ptr)
+declare void @__quantum__qis__mz__body(ptr, ptr writeonly) #1
+declare i1 @__quantum__qis__read_result__body(ptr)
+declare void @__quantum__rt__initialize(ptr)
+declare void @__quantum__rt__array_record_output(i64, ptr)
+declare void @__quantum__rt__result_record_output(ptr, ptr)
+
+attributes #0 = { "entry_point" "output_labeling_schema" "qir_profiles"="adaptive_profile" "required_num_qubits"="17" "required_num_results"="35" }
+attributes #1 = { "irreversible" }
+
+!llvm.module.flags = !{!0, !1, !2, !3}
+!0 = !{i32 1, !"qir_major_version", i32 1}
+!1 = !{i32 7, !"qir_minor_version", i32 0}
+!2 = !{i32 1, !"dynamic_qubit_management", i1 false}
+!3 = !{i32 1, !"dynamic_result_management", i1 false}
