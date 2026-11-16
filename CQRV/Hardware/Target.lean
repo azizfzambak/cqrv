@@ -2,6 +2,7 @@ module
 
 public import Lean.Data.Json
 public import CQRV.Certify.SHA3
+public import Mathlib.Data.Rat.Defs
 
 /-!
 # CQRV.Hardware.Target
@@ -49,6 +50,17 @@ structure Capabilities where
   reset : Capability
   deriving Repr, BEq
 
+/-- PHASE2_SPEC §C.3 (Stage 26c2) — the `durations` of a target, in ns, as the exact rationals of the
+decimal numbers written in the file (`JsonNumber`, exact): per gate name, per qubit (`"q"`) or per
+directed pair (`"p,q"`); the measurement durations per qubit. Not covered by the snapshot hash. -/
+structure Durations where
+  gates : List (String × List (String × Rat))
+  measure : List (String × Rat)
+  deriving Repr
+
+/-- A JSON number, exactly: `mantissa / 10^exponent`. -/
+def jsonNumberToRat (n : JsonNumber) : Rat := (n.mantissa : Rat) / ((10 ^ n.exponent : Nat) : Rat)
+
 /-- PHASE2_SPEC §C.1 — the fields of a hardware target that Lean reads. -/
 structure HardwareTarget where
   name : String
@@ -62,6 +74,8 @@ structure HardwareTarget where
   snapshotTimestamp : String
   /-- `snapshot.hash`: the SHA3-256 hex digest the file claims for `calibration`. -/
   snapshotHash : String
+  /-- The gate and measurement durations (Stage 26c2). -/
+  durations : Durations
 
 /-- A key of an object, with a message naming the context. -/
 def field (ctx : String) (j : Json) (k : String) : Except String Json :=
@@ -98,6 +112,23 @@ def edgeOfJson (n : Nat) (j : Json) : Except String (Nat × Nat) := do
     return (x, y)
   | _ => throw "coupling_map: an edge must have two endpoints"
 
+/-- A table `{key: number, …}` read exactly. -/
+def numberTable (ctx : String) (j : Json) : Except String (List (String × Rat)) := do
+  let o ← j.getObj?.mapError fun _ => s!"{ctx}: not an object"
+  o.toList.mapM fun (k, v) => do
+    let n ← v.getNum?.mapError fun _ => s!"{ctx}.{k}: not a number"
+    return (k, jsonNumberToRat n)
+
+/-- PHASE2_SPEC §C.3 (Stage 26c2) — `durations` from its JSON object; the unit must be `ns`. -/
+def Durations.ofJson (j : Json) : Except String Durations := do
+  let unit ← strField "durations" j "unit"
+  unless unit == "ns" do throw s!"durations: unit {unit}, expected ns"
+  let gatesObj ← (← field "durations" j "gates").getObj?.mapError fun _ => "durations.gates: not an object"
+  let gates ← gatesObj.toList.mapM fun (op, tab) => do
+    return (op, ← numberTable s!"durations.gates.{op}" tab)
+  let measure ← numberTable "durations.measure" (← field "durations" j "measure")
+  return { gates, measure }
+
 /-- PHASE2_SPEC §C.1 — a target from its JSON object (the fields Lean needs; the other fields of
 the schema are left to the Python check). -/
 def HardwareTarget.ofJson (j : Json) : Except String HardwareTarget := do
@@ -120,8 +151,12 @@ def HardwareTarget.ofJson (j : Json) : Except String HardwareTarget := do
   let snap ← field "target" j "snapshot"
   let snapshotTimestamp ← strField "snapshot" snap "timestamp"
   let snapshotHash ← strField "snapshot" snap "hash"
+  -- `durations` (Stage 26c2): read when present; a target without it has none (a lookup then fails)
+  let durations ← match j.getObjVal? "durations" with
+    | .ok dj => Durations.ofJson dj
+    | .error _ => pure ⟨[], []⟩
   return { name, numQubits, basisGates, couplingMap, capabilities, calibration,
-           snapshotTimestamp, snapshotHash }
+           snapshotTimestamp, snapshotHash, durations }
 
 /-- The canonical form of a JSON value: `Lean.Json.compress` (sorted keys, no whitespace). -/
 def canonical (j : Json) : String := j.compress

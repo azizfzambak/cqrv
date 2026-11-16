@@ -1276,6 +1276,31 @@ theorem realizes_phys (hC : C.WF) (G : List BasisGate)
   rw [hchan]
   exact h.2 x hx
 
+/-- Report §2.1.2 — **`realizesExact_phys`**: `RealizesExact` (ε = 0, as the Grover certificates
+state it) transfers to the physical circuit, with the same decoding, at the physical circuit's own
+grade. -/
+theorem realizesExact_phys (hC : C.WF) (G : List BasisGate)
+    (hG : applyWitness b C w (C.nData + (C.nAnc + bb)) = .ok G)
+    (hWF : (physCircuit (C.nData + (C.nAnc + bb)) G).WF)
+    (hM : (physCircuit (C.nData + (C.nAnc + bb)) G).nBits = C.nBits)
+    (σ₀ : Equiv.Perm (Fin (C.nData + (C.nAnc + bb))))
+    (h₀ : w.initial = layOf (C.nData + (C.nAnc + bb)) (C.nData + C.nAnc) σ₀)
+    {Y : Type} [Fintype Y] [DecidableEq Y] (S : Spec Unit Y)
+    (dec : POVM Y (Reg C.nData)) (δ : ℝ) (r : Grade)
+    (h : RealizesExact S dec (Grover.groverChannel C.nData C) δ r) :
+    ∃ σf : Equiv.Perm (Fin (C.nData + (C.nAnc + bb))),
+      w.final = layOf (C.nData + (C.nAnc + bb)) (C.nData + C.nAnc) σf ∧
+      RealizesExact S dec (physGroverChannel bb σ₀ σf (physCircuit (C.nData + (C.nAnc + bb)) G)) δ
+        (Synthesis.grade (physCircuit (C.nData + (C.nAnc + bb)) G)) := by
+  obtain ⟨σf, hf, hch⟩ := applyWitness_sound b C w bb hC G hG hWF hM σ₀ h₀
+  refine ⟨σf, hf, le_rfl, fun x hx => ?_⟩
+  have hchan : (physGroverChannel bb σ₀ σf (physCircuit (C.nData + (C.nAnc + bb)) G)).chan (encode x) =
+      (Grover.groverChannel C.nData C).chan (encode x) := by
+    simp only [physGroverChannel, Grover.groverChannel, GradedChannel.traceAnc, CPTPMap.compose_eq,
+      CPTPMap.replacement_apply, hch, unembed_embed, CPTPMap.traceRight_eq_MState_traceRight]
+  rw [hchan]
+  exact h.2 x hx
+
 end Transfer
 
 end

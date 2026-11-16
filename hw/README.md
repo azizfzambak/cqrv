@@ -93,3 +93,25 @@ the channel theorem at the instance (`phys_channel`, `phys_zero`), with the stan
 the measured kernel times. Nothing is "verified on hardware": the physical circuit is validated
 against the logical one on the target's coupling map.
 
+## The physical grade and the physical certificate (Stage 26c2)
+
+`cqr hw grade --artifact <dir> --target <target.json> --ff-latency <ns> [--json]` computes the
+physical grade of an artifact's circuit: the qubits used, the two-qubit count, the mid-circuit
+measurements, the feed-forward count, the exact wall-clock depth (ASAP; the durations are the exact
+rationals of the target file's decimals; a conditioned gate waits for its measurement plus the
+latency L, an assumption the certificate states) and the exact physical bound (25a's
+`physical_bound`). `hw/physgrade.py` is its Python mirror; `tests/diff/hw_physgrade_check.py`
+checks equality on all artifacts at L = 0 and 1000 ns.
+
+`cqr hw certify --cert <logical cert dir> --artifact <dir> --target <target.json> --ff-latency <ns>`
+writes `examples/certs/<cert>_<target>/`: `PhysCert.lean` (self-contained; checked by the kernel
+with `lake env lean`: the logical certificate re-derived, `emitted = C`, the reconstruction, the
+edges, the channel theorem, the realization transferred to the physical circuit from all-|0⟩, the
+grade at each latency), `physical.qasm` (the file one would run; `tests/diff/hw_physcert_check.py`
+parses it back to the artifact's gate list) and `manifest.json` (hashes — including the target
+file's bytes, since the durations are outside the snapshot hash —, grades, status words). The
+status words are `logical_certified`, `hardware_compatible`, `physical_translation_validated`,
+`emulator_validated` (only when the run report passed). "Physically validated" means: on an ideal
+device with these gates and this connectivity, started from all-|0⟩, the physical circuit realizes
+the specification. Noise is Stage 27; nothing is "verified on hardware".
+

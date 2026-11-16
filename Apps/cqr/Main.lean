@@ -9,6 +9,7 @@ import CQRV.Hardware.Target
 import CQRV.Hardware.Bound
 import CQRV.Hardware.Decomp
 import CQRV.Hardware.CheckGen
+import CQRV.Hardware.PhysGrade
 
 /-!
 # `cqr` command-line interface
@@ -137,7 +138,9 @@ def usage : String :=
     "  hw bound <file.cqr> --target <target.json> [--solutions M] [--iterations r] [--shape tree|few:log]\n" ++
     "          [--uncompute mbu|coherent] [--json]\n" ++
     "  hw table --basis cz|cx\n" ++
-    "  hw check --artifact <dir> --target <target.json> [--out <dir>]\n"
+    "  hw check --artifact <dir> --target <target.json> [--out <dir>]\n" ++
+    "  hw grade --artifact <dir> --target <target.json> --ff-latency <ns> [--json]\n" ++
+    "  hw certify --cert <dir> --artifact <dir> --target <target.json> --ff-latency <ns> [--out <dir>]\n"
 
 /-- Report §4.2.2 — parse and surface-check a source file; also returns the position of the
 entry `fn` (the last one), used by the `--solutions` diagnostic. -/
@@ -1019,6 +1022,157 @@ def runHwCheck (artifactDir target : String) (out : String) : IO UInt32 := do
         {r.physical} physical gates on {r.usedQubits} qubits; wrote {(dir / "Check.lean").toString}"
       return 0
 
+/-- The artifact data `cqr hw grade` / `cqr hw certify` read: the manifest's basis, used qubits,
+data positions and Grover parameters, and the physical circuit compacted. -/
+structure ArtifactData where
+  manifest : Hardware.ManifestData
+  dataPhys : List Nat
+  delta : Rat
+  G : List Hardware.BasisGate
+  deviceWidth : Nat
+
+def readArtifactData (artifactDir : String) : IO (Except String ArtifactData) := do
+  let read (f : String) : IO (Option String) := do
+    try return some (← IO.FS.readFile (System.FilePath.mk artifactDir / f).toString)
+    catch _ => return none
+  let some manifest ← read "manifest.json" | return .error s!"{artifactDir}/manifest.json unreadable"
+  let some physical ← read "physical.json" | return .error s!"{artifactDir}/physical.json unreadable"
+  return do
+    let mj ← Lean.Json.parse manifest
+    let m ← Hardware.manifestOfJson mj
+    let layout ← Hardware.field "manifest" mj "layout"
+    let dataPhys ← Hardware.natList "manifest.layout.data_physical" (← Hardware.field "manifest.layout" layout "data_physical")
+    let deviceWidth ← Hardware.natField "manifest" mj "device_width"
+    let delta ← match mj.getObjVal? "grover" with
+      | .ok (.null) => pure (0 : Rat)
+      | .ok gj =>
+        let n ← Hardware.natField "manifest.grover" gj "n"
+        let r ← Hardware.natField "manifest.grover" gj "r"
+        let M ← Hardware.natField "manifest.grover" gj "M"
+        pure (Certify.groverDelta r n M)
+      | .error _ => pure (0 : Rat)
+    let pj ← Lean.Json.parse physical
+    let G ← Hardware.physOfJson m.usedQubits pj
+    return { manifest := m, dataPhys, delta, G, deviceWidth }
+
+/-- PHASE2_SPEC §C.3 (Stage 26c2, P1) — `cqr hw grade --artifact <dir> --target <target.json>
+--ff-latency <ns> [--json]`: the physical grade of the artifact's physical circuit on the target at
+the feed-forward latency `L` (ns, a decimal): the qubits used, the two-qubit count, the mid-circuit
+measurements, the feed-forward count, the exact wall-clock depth (ASAP), the exact physical bound
+(25a's `physical_bound`) and whether it is vacuous. `--json`: the canonical JSON `hw/physgrade.py`
+prints. Exit 0; a missing duration or rate, or a malformed file: message, exit 1; unreadable: 2. -/
+def runHwGrade (artifactDir target lat : String) (json : Bool) : IO UInt32 := do
+  let some L := Hardware.parseDecimalSci lat | IO.eprintln s!"cqr hw grade: --ff-latency {lat} is not a decimal"; return 2
+  match ← readArtifactData artifactDir with
+  | .error msg => IO.eprintln s!"cqr hw grade: {msg}"; return 2
+  | .ok a =>
+    match ← Hardware.readTarget target with
+    | .error msg => IO.eprintln s!"cqr hw grade: {msg}"; return 2
+    | .ok t =>
+      match Hardware.physGradeOf t a.manifest.basis a.manifest.usedQubits a.G L a.dataPhys a.delta with
+      | .error msg => IO.eprintln s!"cqr hw grade: {msg}"; return 1
+      | .ok g =>
+        if json then
+          IO.println (g.toJson L).compress
+        else
+          IO.println s!"{a.manifest.instance_} on {t.name}, feed-forward latency {Hardware.ratStr L} ns (an assumption, not a property of the device)"
+          IO.println s!"qubits: {g.qubits}"
+          IO.println s!"two_qubit: {g.twoQubit}"
+          IO.println s!"mid_measurements: {g.midMeas}"
+          IO.println s!"feed_forward: {g.feedForward}"
+          IO.println s!"depth_ns: {Hardware.ratStr g.depth} (≈ {Hardware.ratFloat g.depth})"
+          IO.println s!"bound: {Hardware.ratStr g.bound} (≈ {Hardware.ratFloat g.bound}){if g.vacuous then " VACUOUS (≥ 1)" else ""}"
+          IO.println "reported, not certified: the bound is a sum of calibrated rates (Stage 27 is the noise theorem)"
+        return 0
+
+/-- `--artifact d`, `--target t`, `--ff-latency l`, `--json` of `cqr hw grade`, in any position. -/
+def hwGradeFlags : List String → Option (Option String × Option String × Option String × Bool)
+  | [] => some (none, none, none, false)
+  | "--artifact" :: d :: rest => do
+    let (_, t, l, j) ← hwGradeFlags rest
+    return (some d, t, l, j)
+  | "--target" :: t :: rest => do
+    let (d, _, l, j) ← hwGradeFlags rest
+    return (d, some t, l, j)
+  | "--ff-latency" :: l :: rest => do
+    let (d, t, _, j) ← hwGradeFlags rest
+    return (d, t, some l, j)
+  | "--json" :: rest => do
+    let (d, t, l, _) ← hwGradeFlags rest
+    return (d, t, l, true)
+  | _ => none
+
+/-- PHASE2_SPEC §C.3 (Stage 26c2, P2) — `cqr hw certify --cert <dir> --artifact <dir> --target
+<target.json> --ff-latency <ns> [--out <dir>]`: the physical certificate of a committed logical
+certificate on a target, from the artifact: `PhysCert.lean` (self-contained: the logical
+certificate's body verbatim, the artifact's literals and theorems, `emitted = C` by the kernel,
+`RealizesExact` transferred to the physical circuit, `PhysGrade` at L = 0 and at the latency given),
+`physical.qasm` (printed from the validated physical circuit) and `manifest.json` (the hashes, the
+grades, the status words). The default output is `examples/certs/<cert>_<target without fake_>/`.
+Exit 0; a hash mismatch or a malformed file 1; an unreadable file 2. -/
+def runHwCertify (certDir artifactDir target lat : String) (out : Option String) : IO UInt32 := do
+  let some L := Hardware.parseDecimalSci lat | IO.eprintln s!"cqr hw certify: --ff-latency {lat} is not a decimal"; return 2
+  let read (dir f : String) : IO (Option String) := do
+    try return some (← IO.FS.readFile (System.FilePath.mk dir / f).toString)
+    catch _ => return none
+  let some certLean ← read certDir "Cert.lean" | IO.eprintln s!"cqr hw certify: {certDir}/Cert.lean unreadable"; return 2
+  let some certJson ← read certDir "certificate.json" | IO.eprintln s!"cqr hw certify: {certDir}/certificate.json unreadable"; return 2
+  let some manifest ← read artifactDir "manifest.json" | IO.eprintln s!"cqr hw certify: {artifactDir}/manifest.json unreadable"; return 2
+  let some logical ← read artifactDir "logical.json" | IO.eprintln s!"cqr hw certify: {artifactDir}/logical.json unreadable"; return 2
+  let some witness ← read artifactDir "witness.json" | IO.eprintln s!"cqr hw certify: {artifactDir}/witness.json unreadable"; return 2
+  let some physical ← read artifactDir "physical.json" | IO.eprintln s!"cqr hw certify: {artifactDir}/physical.json unreadable"; return 2
+  let some targetText ← (do try return some (← IO.FS.readFile target) catch _ => return none)
+    | IO.eprintln s!"cqr hw certify: {target} unreadable"; return 2
+  match ← readArtifactData artifactDir with
+  | .error msg => IO.eprintln s!"cqr hw certify: {msg}"; return 2
+  | .ok a =>
+    match ← Hardware.readTarget target with
+    | .error msg => IO.eprintln s!"cqr hw certify: {msg}"; return 2
+    | .ok t =>
+      let certBase := (System.FilePath.mk certDir).fileName.getD "cert"
+      let targetShort := if t.name.startsWith "fake_" then t.name.drop 5 else t.name
+      let certName := s!"{certBase}_{targetShort}"
+      let artName := s!"{a.manifest.instance_}__{a.manifest.target}"
+      let runText ← read "docs/hw_runs" s!"{artName}.json"
+      let nBits := (a.G.filter Hardware.BasisGate.isMeasure).length
+      match Hardware.generatePhysCert certName certBase certLean certJson manifest logical witness physical t target targetText L
+          a.deviceWidth a.dataPhys nBits runText with
+      | .error msg => IO.eprintln s!"cqr hw certify: {msg}"; return 1
+      | .ok (lean, qasm, man, grades) =>
+        let dir := System.FilePath.mk (out.getD s!"examples/certs/{certName}")
+        IO.FS.createDirAll dir
+        IO.FS.writeFile (dir / "PhysCert.lean") lean
+        IO.FS.writeFile (dir / "physical.qasm") qasm
+        IO.FS.writeFile (dir / "manifest.json") (man ++ "\n")
+        for (l, g) in grades do
+          IO.println s!"L = {Hardware.ratStr l} ns: qubits {g.qubits}, two-qubit {g.twoQubit}, mid-circuit {g.midMeas}, \
+            feed-forward {g.feedForward}, depth {Hardware.ratStr g.depth} ns (≈ {Hardware.ratFloat g.depth}), \
+            bound {Hardware.ratStr g.bound} (≈ {Hardware.ratFloat g.bound}){if g.vacuous then " VACUOUS" else ""}"
+        IO.println s!"{certName}: hashes ok; wrote {dir.toString}/PhysCert.lean, physical.qasm, manifest.json \
+          (check PhysCert.lean with `lake env lean`; reported, not certified: the noise theorem is Stage 27)"
+        return 0
+
+/-- The flags of `cqr hw certify`, in any position. -/
+def hwCertifyFlags : List String →
+    Option (Option String × Option String × Option String × Option String × Option String)
+  | [] => some (none, none, none, none, none)
+  | "--cert" :: c :: rest => do
+    let (_, a, t, l, o) ← hwCertifyFlags rest
+    return (some c, a, t, l, o)
+  | "--artifact" :: a :: rest => do
+    let (c, _, t, l, o) ← hwCertifyFlags rest
+    return (c, some a, t, l, o)
+  | "--target" :: t :: rest => do
+    let (c, a, _, l, o) ← hwCertifyFlags rest
+    return (c, a, some t, l, o)
+  | "--ff-latency" :: l :: rest => do
+    let (c, a, t, _, o) ← hwCertifyFlags rest
+    return (c, a, t, some l, o)
+  | "--out" :: o :: rest => do
+    let (c, a, t, l, _) ← hwCertifyFlags rest
+    return (c, a, t, l, some o)
+  | _ => none
+
 /-- `--artifact d`, `--target t`, `--out o` of `cqr hw check`, in any position. -/
 def hwCheckFlags : List String → Option (Option String × Option String × Option String)
   | [] => some (none, none, none)
@@ -1264,6 +1418,14 @@ def main (args : List String) : IO UInt32 := do
     match b with
     | "cz" => IO.println (Hardware.tableJson .cz).compress; return 0
     | "cx" => IO.println (Hardware.tableJson .cx).compress; return 0
+    | _ => IO.eprint usage; return 2
+  | "hw" :: "certify" :: flags =>
+    match hwCertifyFlags flags with
+    | some (some c, some a, some t, some l, o) => runHwCertify c a t l o
+    | _ => IO.eprint usage; return 2
+  | "hw" :: "grade" :: flags =>
+    match hwGradeFlags flags with
+    | some (some d, some t, some l, j) => runHwGrade d t l j
     | _ => IO.eprint usage; return 2
   | "hw" :: "check" :: flags =>
     match hwCheckFlags flags with
