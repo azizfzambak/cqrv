@@ -140,7 +140,8 @@ def usage : String :=
     "  hw table --basis cz|cx\n" ++
     "  hw check --artifact <dir> --target <target.json> [--out <dir>]\n" ++
     "  hw grade --artifact <dir> --target <target.json> --ff-latency <ns> [--json]\n" ++
-    "  hw certify --cert <dir> --artifact <dir> --target <target.json> --ff-latency <ns> [--out <dir>]\n"
+    "  hw certify --cert <dir> --artifact <dir> --target <target.json> --ff-latency <ns> [--out <dir>]\n" ++
+    "  hw select --request <name> --target <target.json> --prefer twoq|depth|bound [--ff-latency <ns>] [--budget X] [--out <dir>] [--table]\n"
 
 /-- Report §4.2.2 — parse and surface-check a source file; also returns the position of the
 entry `fn` (the last one), used by the `--solutions` diagnostic. -/
@@ -1173,6 +1174,102 @@ def hwCertifyFlags : List String →
     return (c, a, t, l, some o)
   | _ => none
 
+/-- The candidates of a request on a target: the artifacts `hw/artifacts/<request>_*__<target>/`. -/
+def selCandidates (request targetName : String) (t : Hardware.HardwareTarget) :
+    IO (Except String (List Hardware.SelCand)) := do
+  let root := System.FilePath.mk "hw" / "artifacts"
+  let entries ← root.readDir
+  let names := (entries.map (·.fileName)).toList.filter fun d =>
+    d.startsWith (request ++ "_") && d.endsWith ("__" ++ targetName)
+  let names := names.mergeSort
+  let rates := Hardware.RateTable.ofCalibration t.calibration
+  match rates with
+  | .error msg => return .error msg
+  | .ok rates =>
+    let mut out : List Hardware.SelCand := []
+    for d in names do
+      match ← readArtifactData (root / d).toString with
+      | .error msg => return .error msg
+      | .ok a =>
+        let some physical ← (do try return some (← IO.FS.readFile (root / d / "physical.json").toString) catch _ => return none)
+          | return .error s!"{d}/physical.json unreadable"
+        let physHash := match Lean.Json.parse physical with
+          | .ok pj => Certify.SHA3.sha3String pj.compress
+          | .error _ => ""
+        out := out ++ [{ name := d, mbu := a.manifest.uncompute == "mbu", basis := a.manifest.basis, G := a.G,
+                         dev := a.manifest.usedQubits, dataPhys := a.dataPhys, delta := a.delta, physHash,
+                         durs := t.durations.restrict a.manifest.usedQubits,
+                         rates := rates.restrict a.manifest.usedQubits }]
+    return .ok out
+
+/-- PHASE2_SPEC §C.3 (Stage 26c2b, P4) — `cqr hw select --request <name> --target <target.json>
+--prefer twoq|depth|bound [--ff-latency <ns>] [--budget X] [--out <dir>] [--table]`: the request's
+committed artifacts on the target are the candidates; each is graded (`PhysGrade` at the latency,
+default 0) and `selectPhys` chooses the first minimal admissible one (mbu needs the target's
+feed-forward; the budget, if given, bounds the component). Writes
+`<out>/<request>__<target>/Select.lean` (default `examples/hw_select`), where the kernel re-decides
+every grade and the choice; prints the choice (or `none`, the honest answer). `--table`: the choice
+under every preference (twoq; depth at L = 0 and 1000; bound), no file. -/
+def runHwSelect (request target pref : String) (lat : Option String) (budget : Option String)
+    (out : Option String) (table : Bool) : IO UInt32 := do
+  let some p := Hardware.PhysPref.parse? pref | IO.eprintln s!"cqr hw select: --prefer {pref}"; return 2
+  let some L := Hardware.parseDecimalSci (lat.getD "0") | IO.eprintln s!"cqr hw select: --ff-latency {lat.getD ""} is not a decimal"; return 2
+  let budgetR ← match budget with
+    | none => pure (none : Option Rat)
+    | some b => match Hardware.parseDecimalSci b with
+      | some q => pure (some q)
+      | none => IO.eprintln s!"cqr hw select: --budget {b} is not a decimal"; return 2
+  match ← Hardware.readTarget target with
+  | .error msg => IO.eprintln s!"cqr hw select: {msg}"; return 2
+  | .ok t =>
+    let targetName := ((System.FilePath.mk target).fileStem).getD t.name
+    match ← selCandidates request targetName t with
+    | .error msg => IO.eprintln s!"cqr hw select: {msg}"; return 1
+    | .ok cs =>
+      if cs.isEmpty then IO.eprintln s!"cqr hw select: no artifact of {request} on {targetName}"; return 1
+      let ff := t.capabilities.feedForward.value
+      if table then
+        for (pp, l) in [(Hardware.PhysPref.twoq, (0 : Rat)), (.depth, 0), (.depth, 1000), (.bound, 0)] do
+          match Hardware.choiceRow pp l ff budgetR cs with
+          | .error msg => IO.eprintln s!"cqr hw select: {msg}"; return 1
+          | .ok row => IO.println row
+        return 0
+      match Hardware.gradeCands cs L with
+      | .error msg => IO.eprintln s!"cqr hw select: {msg}"; return 1
+      | .ok gs =>
+        let choice := Hardware.selectPhys ff budgetR p (Hardware.toPhysCands gs)
+        let name := s!"{request}__{targetName}"
+        let text := Hardware.selectFile name request t.name s!"hw/targets/{targetName}.json" ff p L budgetR gs choice
+        let dir := System.FilePath.mk (out.getD "examples/hw_select") / name
+        IO.FS.createDirAll dir
+        IO.FS.writeFile (dir / "Select.lean") text
+        match choice with
+        | some c => IO.println s!"{name}: {pref} at L = {Hardware.ratStr L} ns → {c.name} ({(c.toJson L).compress}); wrote {(dir / "Select.lean").toString}"
+        | none => IO.println s!"{name}: {pref} at L = {Hardware.ratStr L} ns → none: no admissible candidate\
+            {match budgetR with | some b => s!" within the budget {Hardware.ratStr b}" | none => ""} (the honest answer); wrote {(dir / "Select.lean").toString}"
+        return 0
+
+/-- The flags of `cqr hw select`, in any position. -/
+structure HwSelectFlags where
+  request : Option String := none
+  target : Option String := none
+  prefer : Option String := none
+  lat : Option String := none
+  budget : Option String := none
+  out : Option String := none
+  table : Bool := false
+
+def hwSelectFlags : List String → Option HwSelectFlags
+  | [] => some {}
+  | "--request" :: r :: rest => do let f ← hwSelectFlags rest; return { f with request := some r }
+  | "--target" :: t :: rest => do let f ← hwSelectFlags rest; return { f with target := some t }
+  | "--prefer" :: p :: rest => do let f ← hwSelectFlags rest; return { f with prefer := some p }
+  | "--ff-latency" :: l :: rest => do let f ← hwSelectFlags rest; return { f with lat := some l }
+  | "--budget" :: b :: rest => do let f ← hwSelectFlags rest; return { f with budget := some b }
+  | "--out" :: o :: rest => do let f ← hwSelectFlags rest; return { f with out := some o }
+  | "--table" :: rest => do let f ← hwSelectFlags rest; return { f with table := true }
+  | _ => none
+
 /-- `--artifact d`, `--target t`, `--out o` of `cqr hw check`, in any position. -/
 def hwCheckFlags : List String → Option (Option String × Option String × Option String)
   | [] => some (none, none, none)
@@ -1419,6 +1516,13 @@ def main (args : List String) : IO UInt32 := do
     | "cz" => IO.println (Hardware.tableJson .cz).compress; return 0
     | "cx" => IO.println (Hardware.tableJson .cx).compress; return 0
     | _ => IO.eprint usage; return 2
+  | "hw" :: "select" :: flags =>
+    match hwSelectFlags flags with
+    | some f =>
+      match f.request, f.target, f.prefer with
+      | some r, some t, some p => runHwSelect r t p f.lat f.budget f.out f.table
+      | _, _, _ => IO.eprint usage; return 2
+    | none => IO.eprint usage; return 2
   | "hw" :: "certify" :: flags =>
     match hwCertifyFlags flags with
     | some (some c, some a, some t, some l, o) => runHwCertify c a t l o

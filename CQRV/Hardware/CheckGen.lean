@@ -2,6 +2,7 @@ module
 
 public import CQRV.Hardware.Check
 public import CQRV.Hardware.PhysGrade
+public import CQRV.Hardware.SelectPhys
 public import CQRV.Certify.Generate
 
 /-!
@@ -127,6 +128,7 @@ structure ManifestData where
   logicalHash : String
   witnessHash : String
   targetHash : String
+  uncompute : String
 
 def manifestOfJson (j : Json) : Except String ManifestData := do
   let instance_ ← strField "manifest" j "instance"
@@ -138,7 +140,7 @@ def manifestOfJson (j : Json) : Except String ManifestData := do
   let layout ← field "manifest" j "layout"
   let usedQubits ← natList "manifest.layout.used_qubits" (← field "manifest.layout" layout "used_qubits")
   let hashes ← field "manifest" j "hashes"
-  return { instance_, target, basis, usedQubits,
+  return { instance_, target, basis, usedQubits, uncompute := ← strField "manifest" j "uncompute",
            logicalHash := ← strField "manifest.hashes" hashes "logical_circuit",
            witnessHash := ← strField "manifest.hashes" hashes "witness",
            targetHash := ← strField "manifest.hashes" hashes "target_snapshot" }
@@ -646,5 +648,120 @@ def generatePhysCert (certName certBase : String) (certLeanText certJsonText : S
     ("status", Json.arr (words.map fun w => (w : Json)).toArray),
     ("meaning", "physically validated: on an ideal device with the target's gates and coupling map, started from all-|0> on its used qubits, the physical circuit realizes the specification with the certified delta under the final layout; not a statement about noise; not verified on hardware")]
   return (lean, qasm, manifest.compress, grades)
+
+/-! ## Selection by the physical grade (26c2b, P4) -/
+
+/-- One candidate of a selection: the artifact's data the kernel grades. -/
+structure SelCand where
+  name : String
+  mbu : Bool
+  basis : TargetBasis
+  G : List BasisGate
+  dev : List Nat
+  dataPhys : List Nat
+  delta : Rat
+  physHash : String
+  durs : Durations
+  rates : RateTable
+
+/-- The grades of the candidates at `L`, and the candidates for `selectPhys`. -/
+def gradeCands (cs : List SelCand) (L : Rat) : Except String (List (SelCand × PhysGrade)) :=
+  cs.mapM fun c => do return (c, ← physGrade c.durs c.rates c.basis c.dev c.G L c.dataPhys c.delta)
+
+def toPhysCands (gs : List (SelCand × PhysGrade)) : List PhysCand :=
+  gs.map fun (c, g) => ⟨c.name, c.mbu, g⟩
+
+def physCandLit (c : PhysCand) : String :=
+  s!"⟨\"{c.name}\", {c.mbu}, {physGradeLit c.grade}⟩"
+
+/-- PHASE2_SPEC §C.3 (26c2b, P4) — the text of `Select.lean` for one request on one target: every
+candidate's `G` and its tables as literals (its `physical.json` hash linking it to its committed
+`Check.lean`), each `PhysGrade` by the kernel, `selectPhys … = some c` or `= none` by the kernel,
+the `selectPhys_spec` instance and `#print axioms`. -/
+def selectFile (name request targetName targetFile : String) (ff : Bool) (p : PhysPref) (L : Rat)
+    (budget : Option Rat) (gs : List (SelCand × PhysGrade)) (choice : Option PhysCand) : String :=
+  let idx := gs.zipIdx
+  let candDefs := String.intercalate "\n" (idx.map fun ((c, g), i) =>
+    s!"/-- Candidate {i}: `{c.name}` ({if c.mbu then "mbu" else "coherent"}); `physical.json` SHA3-256 `{c.physHash}` — its
+reconstruction, edges and channel theorem are `examples/hw_checks/{c.name}/Check.lean`'s. -/
+def G{i} : List BasisGate := [
+    {Certify.joinWrapped (c.G.map basisGateLit) 6 "    "}]
+def dev{i} : List ℕ := {c.dev}
+def durations{i} : Durations :=
+  {durationsLit c.durs}
+def rates{i} : RateTable :=
+  {rateTableLit c.rates}
+def dataPhys{i} : List ℕ := {c.dataPhys}
+def delta{i} : Rat := {ratStr c.delta}
+theorem grade{i} : (physGrade durations{i} rates{i} {basisLit c.basis} dev{i} G{i} ({ratStr L} : Rat) dataPhys{i} delta{i}).toOption =
+    some {physGradeLit g} := by decide +kernel
+")
+  let cands := String.intercalate ",\n    " (gs.map fun (c, g) => physCandLit ⟨c.name, c.mbu, g⟩)
+  let budgetLit := match budget with | some b => s!"some ({ratStr b} : Rat)" | none => "none"
+  let choiceThm := match choice with
+    | some c =>
+      s!"/-- **`choice`**: the first minimal admissible candidate under `{p.name}` is `{c.name}`. -/
+theorem choice : selectPhys ff budget .{p.name} cands = some {physCandLit c} := by decide +kernel
+
+/-- `selectPhys_spec` at this instance: the choice is admissible and minimal for the component among
+the admissible candidates. -/
+theorem choice_spec :
+    ({physCandLit c} : PhysCand) ∈ cands ∧ admissible ff budget .{p.name} {physCandLit c} = true ∧
+      ∀ y ∈ cands, admissible ff budget .{p.name} y = true →
+        PhysPref.key .{p.name} ({physCandLit c} : PhysCand).grade ≤ PhysPref.key .{p.name} y.grade :=
+  (selectPhys_spec ff budget .{p.name} cands).1 _ choice
+"
+    | none =>
+      s!"/-- **`choice`**: no candidate is admissible under `{p.name}`{match budget with | some b => s!" within the budget {ratStr b}" | none => ""} — the honest answer, not an error. -/
+theorem choice : selectPhys ff budget .{p.name} cands = none := by decide +kernel
+
+/-- `selectPhys_spec` at this instance: no candidate is admissible. -/
+theorem choice_spec : ∀ y ∈ cands, admissible ff budget .{p.name} y = false :=
+  (selectPhys_spec ff budget .{p.name} cands).2.mp choice
+"
+  s!"import CQRV.Hardware.SelectPhys
+
+/-!
+# Selection `{name}` (generated by `cqr hw select`; do not edit)
+
+Report §3.1.3, §5.3; PHASE2_SPEC §C.3 (Stage 26c2b, P4). The request `{request}` on the target
+`{targetName}` (`{targetFile}`; feed-forward {ff}): the candidates are its committed artifacts, each
+graded by the kernel at the feed-forward latency L = {ratStr L} ns (an assumption), and the choice
+under the preference `{p.name}`{match budget with | some b => s!" with the budget {ratStr b}" | none => ""} is decided by the kernel (`selectPhys`, `selectPhys_spec`).
+Each candidate's `physical.json` hash links it to its `examples/hw_checks/<artifact>/Check.lean`,
+where its reconstruction, edges and channel theorem are checked; this file does not repeat them.
+The bound is reported, not certified (Stage 27 is the noise theorem); nothing is \"verified on
+hardware\".
+-/
+
+set_option maxRecDepth 100000
+
+namespace CQRV.HwSelect.«{name}»
+
+open CQRV CQRV.Hardware
+
+{candDefs}
+/-- The candidates with their grades at L = {ratStr L} ns. -/
+def cands : List PhysCand := [
+    {cands}]
+
+/-- The target's feed-forward capability. -/
+abbrev ff : Bool := {ff}
+/-- The budget on the component (`none`: no budget). -/
+def budget : Option Rat := {budgetLit}
+
+{choiceThm}
+#print axioms choice_spec
+
+end CQRV.HwSelect.«{name}»
+"
+
+/-- One row of the choice table: the preference, the latency, the choice. -/
+def choiceRow (p : PhysPref) (L : Rat) (ff : Bool) (budget : Option Rat) (cs : List SelCand) :
+    Except String String := do
+  let gs ← gradeCands cs L
+  let choice := selectPhys ff budget p (toPhysCands gs)
+  let grades := ", ".intercalate (gs.map fun (c, g) => s!"{c.name}: {ratStr (p.key g)}")
+  return s!"{p.name}@L={ratStr L}: {match choice with | some c => s!"{c.name} ({ratStr (p.key c.grade)})" | none => "none (no admissible candidate)"} [{grades}]"
 
 end CQRV.Hardware

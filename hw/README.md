@@ -115,3 +115,14 @@ status words are `logical_certified`, `hardware_compatible`, `physical_translati
 device with these gates and this connectivity, started from all-|0⟩, the physical circuit realizes
 the specification. Noise is Stage 27; nothing is "verified on hardware".
 
+`cqr hw select --request <name> --target <target.json> --prefer twoq|depth|bound [--ff-latency <ns>]
+[--budget X] [--out <dir>] [--table]` (Stage 26c2b) grades a request's committed artifacts on the
+target and chooses the first minimal admissible one (`selectPhys`, `selectPhys_spec`: mbu needs the
+target's feed-forward; the budget, if given, bounds the component). It writes
+`examples/hw_select/<request>__<target>/Select.lean`, where the kernel re-decides every grade and the
+choice; each candidate is linked by its `physical.json` hash to its `examples/hw_checks/<artifact>/Check.lean`.
+`--table` prints the choice under every preference. A budget no candidate meets returns `none`: on
+FakeTorino every bound is vacuous, so `--budget 1` admits nothing — the honest answer, not an error.
+The CI step "Physical certificate" (`scripts/check_physcert.sh`, pass mark 25) runs the three Python
+checks and the kernel on the certificate and the four selections.
+
