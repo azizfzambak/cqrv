@@ -141,3 +141,16 @@ choice of the arbitrary channels, the noisy physical channel realizes the specif
 Conditional on the premises, which are assumptions about the device, not facts proved here; the
 emulator's noise model is not of the (P-stoch) form; nothing is "verified on hardware".
 
+`cqr hw noisecert --artifact <dir> --target <target.json> --ff-latency <ns> [--cert <logical cert dir>] [--out <dir>]`
+(Stage 27b2) writes a **conditional certificate**: with `--cert`, 26c2's `PhysCert.lean` plus the noise
+block — the probabilities `ps`, `rs` and the bound `noiseB` as literals, `noiseBound_eq` and
+`noise_key` decided by the kernel, and `phys_noisy_inst` (for every choice of the arbitrary channels
+the noisy physical channel realizes the specification with δ' = `noiseB`); without, the channel form of
+the bare MBU gadget (`NoiseCert.lean`: `c_eq : C = mbuCircuit` by the kernel, `gadget_noisy`). The
+manifest names the status word `noise_conditional`, the four premises and the meaning sentence, and
+the emulator comparison at δ' from the recorded run (25b's criterion with its recorded margin:
+`threshold' = threshold + δ_hw − δ'`; `emulator_validated` only on a pass; "no run recorded for this
+artifact" otherwise). The CI step "Noise certificates" (`scripts/check_noisecerts.sh`, pass mark 26)
+kernel-checks the five Lean files and runs the two Python checks. Conditional on the premises, which
+are assumptions about the device, not facts proved here; nothing is "verified on hardware".
+

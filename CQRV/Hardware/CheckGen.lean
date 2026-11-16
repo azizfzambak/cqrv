@@ -446,7 +446,7 @@ logical certificate's body verbatim (its `emitted`, its `cert`), the artifact's 
 theorems (`checkBody`), the trusted link `emitted = C`, `RealizesExact` transferred to the
 physical circuit from the all-|0⟩ state, and `PhysGrade` evaluated by the kernel at each stated
 feed-forward latency. -/
-def physCertFile (d : PhysCertData) : String :=
+def physCertFile (d : PhysCertData) (extra : String := "") (extraWords : List String := []) : String :=
   let reg := "(C.nData + (C.nAnc + bb))"
   let gradeThms := String.intercalate "\n" (d.grades.map fun (L, g) =>
     s!"/-- `PhysGrade` at the feed-forward latency L = {ratStr L} ns (an assumption, not a property of the device). -/\n" ++
@@ -470,7 +470,7 @@ with the target's gates and coupling map, started from all-|0⟩ on its used qub
 circuit realizes the specification with the certified δ, at the physical circuit's own grade.
 **The grade** (`PhysGrade`) is evaluated by the kernel at the stated feed-forward latencies; the
 bound is a sum of calibrated rates (reported, not certified: Stage 27 is the noise theorem).
-Nothing here is \"verified on hardware\"; noise is not addressed. Status: {", ".intercalate (statusWords d.hardwareCompatible d.emulatorPassed)}{if d.emulatorNote.isEmpty then "" else s!" ({d.emulatorNote})"}.
+Nothing here is \"verified on hardware\"; noise is not addressed. Status: {", ".intercalate (statusWords d.hardwareCompatible d.emulatorPassed ++ extraWords)}{if d.emulatorNote.isEmpty then "" else s!" ({d.emulatorNote})"}.
 -/
 
 set_option maxRecDepth 100000
@@ -516,7 +516,7 @@ def dataPhys : List ℕ := {d.dataPhys}
 /-- The certified δ. -/
 def delta : Rat := {d.deltaExpr}
 
-{gradeThms}
+{gradeThms}{extra}
 #print axioms emitted_eq
 #print axioms phys_channel
 #print axioms phys_zero
@@ -550,16 +550,28 @@ def runResultOf (runText : Option String) : Except String (Bool × String) := do
 /-- The feed-forward latencies a certificate evaluates: 0 and the one requested (deduplicated). -/
 def latenciesOf (L : Rat) : List Rat := if L == 0 then [0] else [0, L]
 
+/-- Everything the physical certificate's outputs are built from (26c2; split out in 27b2 so the
+conditional certificate reuses the reading and the checks). -/
+structure PhysCertPrep where
+  d : PhysCertData
+  grades : List (Rat × PhysGrade)
+  certCircuit : String
+  deltaStr : String
+  uncompute : String
+  nsAscii : String
+  edgesOkB : Bool
+  capsOk : Bool
+  deviceWidth : Nat
+  nBits : Nat
+
 /-- PHASE2_SPEC §C.3 (26c2, P2) — read everything, check the hashes (the artifact's three as
 `generateCheck`, the logical certificate's `certificate.json` against the manifest's
 `certificate_json`, its `circuit_hash` against the manifest's `logical_circuit`, the target's
-snapshot and its file bytes), compute the grades, and produce `PhysCert.lean`, `physical.qasm` and
-`manifest.json`. -/
-def generatePhysCert (certName certBase : String) (certLeanText certJsonText : String)
+snapshot and its file bytes), and compute the grades. -/
+def preparePhysCert (certName : String) (certLeanText certJsonText : String)
     (manifestText logicalText witnessText physicalText : String) (t : HardwareTarget)
     (targetFile targetText : String) (L : Rat) (deviceWidth : Nat) (dataPhys : List Nat)
-    (nBits : Nat) (runText : Option String) :
-    Except String (String × String × String × List (Rat × PhysGrade)) := do
+    (nBits : Nat) (runText : Option String) : Except String PhysCertPrep := do
   let mj ← Json.parse manifestText
   let m ← manifestOfJson mj
   let lj ← Json.parse logicalText
@@ -576,9 +588,14 @@ def generatePhysCert (certName certBase : String) (certLeanText certJsonText : S
   let cj ← Json.parse certJsonText
   let certJsonHash := Certify.SHA3.sha3String certJsonText
   let hashes ← field "manifest" mj "hashes"
-  let mCertHash ← strField "manifest.hashes" hashes "certificate_json"
-  unless certJsonHash == mCertHash do
-    throw s!"certificate.json: SHA3-256 {certJsonHash} differs from the manifest's certificate_json {mCertHash}"
+  -- an artifact made before its logical certificate records `certificate_json: null` (hw_n2, hw_n3, 25a);
+  -- the link is then `circuit_hash = logical_circuit` alone, checked below
+  match (← field "manifest.hashes" hashes "certificate_json") with
+  | .null => pure ()
+  | mj' =>
+    let mCertHash ← mj'.getStr?.mapError fun _ => "manifest.hashes: `certificate_json` must be a string or null"
+    unless certJsonHash == mCertHash do
+      throw s!"certificate.json: SHA3-256 {certJsonHash} differs from the manifest's certificate_json {mCertHash}"
   let certCircuit ← strField "certificate.hashes" (← field "certificate" cj "hashes") "circuit"
   unless certCircuit == m.logicalHash do
     throw s!"certificate.json: circuit_hash {certCircuit} differs from the artifact's logical circuit {m.logicalHash}"
@@ -616,38 +633,58 @@ def generatePhysCert (certName certBase : String) (certLeanText certJsonText : S
   let _ := targetFile
   let targetFile := s!"hw/targets/{m.target}.json"
   let nsAscii := (ns.replace "«" "").replace "»" ""
+  -- the real δ in the form of the logical certificate's `delta_eq` (`p / q`; `0 / 1` for δ = 0)
+  let deltaRealExpr := if deltaRat.den = 1 then s!"({ratStr deltaRat} / 1 : ℝ)" else s!"({ratStr deltaRat} : ℝ)"
   let d : PhysCertData := {
     certName, logicalCertNamespace := ns, logicalBody := body, m, certJsonHash, physHash,
     targetFileHash := Certify.SHA3.sha3String targetText, targetFile, targetName := t.name,
     C, W, G, dev, edges, dataPhys, delta := deltaRat, deltaExpr := ratStr deltaRat,
     specExpr := s!"(SearchSpec (Network.pred net {n}))", povmExpr := s!"(basisPOVM {n})",
-    gradeExpr := "", deltaRealExpr := s!"({ratStr deltaRat} : ℝ)",
+    gradeExpr := "", deltaRealExpr,
     durs, rates := ratesR, grades, hardwareCompatible := edgesOkB && capsOk, emulatorPassed, emulatorNote }
-  let lean := physCertFile d
-  let qasm := qasmOf G dev deviceWidth nBits
-  let words := statusWords d.hardwareCompatible emulatorPassed
-  let gradesJson := Json.mkObj (grades.map fun (l, g) => (ratStr l, g.toJson l))
-  let manifest := Json.mkObj [
+  return { d, grades, certCircuit, deltaStr, uncompute, nsAscii, edgesOkB, capsOk, deviceWidth, nBits }
+
+/-- The manifest of a physical certificate (26c2), with the status `words` and `extra` fields. -/
+def physCertManifest (p : PhysCertPrep) (certName certBase : String) (words : List String)
+    (emulatorRun : String) (extra : List (String × Json)) : Json :=
+  let d := p.d
+  let gradesJson := Json.mkObj (p.grades.map fun (l, g) => (ratStr l, g.toJson l))
+  Json.mkObj (([
     ("schema_version", "1.0.0"),
     ("certificate", certName),
-    ("logical_certificate", Json.mkObj [("dir", s!"examples/certs/{certBase}"), ("namespace", nsAscii),
-      ("theorem", s!"{nsAscii}.cert"), ("certificate_json_sha3", certJsonHash), ("circuit_hash", certCircuit),
-      ("delta", deltaStr), ("uncompute", uncompute)]),
-    ("artifact", Json.mkObj [("dir", s!"hw/artifacts/{m.instance_}__{m.target}"), ("instance", m.instance_),
-      ("target", m.target), ("basis", m.basis.twoQubit), ("used_qubits", Json.arr (dev.map (fun x => (x : Json))).toArray),
-      ("data_physical", Json.arr (dataPhys.map (fun x => (x : Json))).toArray)]),
-    ("hashes", Json.mkObj [("logical_circuit", m.logicalHash), ("witness", m.witnessHash), ("physical_json", physHash),
-      ("target_snapshot", m.targetHash), ("target_file_sha3", Certify.SHA3.sha3String targetText),
-      ("certificate_json", certJsonHash)]),
-    ("ff_latency_ns", Json.arr ((latenciesOf L).map fun l => (ratStr l : Json)).toArray),
+    ("logical_certificate", Json.mkObj [("dir", s!"examples/certs/{certBase}"), ("namespace", p.nsAscii),
+      ("theorem", s!"{p.nsAscii}.cert"), ("certificate_json_sha3", d.certJsonHash), ("circuit_hash", p.certCircuit),
+      ("delta", p.deltaStr), ("uncompute", p.uncompute)]),
+    ("artifact", Json.mkObj [("dir", s!"hw/artifacts/{d.m.instance_}__{d.m.target}"), ("instance", d.m.instance_),
+      ("target", d.m.target), ("basis", d.m.basis.twoQubit), ("used_qubits", Json.arr (d.dev.map (fun x => (x : Json))).toArray),
+      ("data_physical", Json.arr (d.dataPhys.map (fun x => (x : Json))).toArray)]),
+    ("hashes", Json.mkObj [("logical_circuit", d.m.logicalHash), ("witness", d.m.witnessHash), ("physical_json", d.physHash),
+      ("target_snapshot", d.m.targetHash), ("target_file_sha3", d.targetFileHash),
+      ("certificate_json", d.certJsonHash)]),
+    ("ff_latency_ns", Json.arr ((p.grades.map fun (l, _) => (ratStr l : Json))).toArray),
     ("ff_latency_note", "the feed-forward latency is an assumption stated by this certificate, not a property of the device"),
     ("phys_grade", gradesJson),
     ("bound_note", "delta + sum of the calibrated rates + the data readouts at the final layout (25a's physical_bound); reported, not certified: the noise theorem is Stage 27"),
-    ("hardware_compatible", Json.mkObj [("edges_ok", edgesOkB), ("capabilities_ok", capsOk)]),
-    ("emulator_run", if emulatorPassed then "passes (docs/hw_runs)" else emulatorNote),
+    ("hardware_compatible", Json.mkObj [("edges_ok", p.edgesOkB), ("capabilities_ok", p.capsOk)]),
+    ("emulator_run", emulatorRun),
     ("status", Json.arr (words.map fun w => (w : Json)).toArray),
-    ("meaning", "physically validated: on an ideal device with the target's gates and coupling map, started from all-|0> on its used qubits, the physical circuit realizes the specification with the certified delta under the final layout; not a statement about noise; not verified on hardware")]
-  return (lean, qasm, manifest.compress, grades)
+    ("meaning", "physically validated: on an ideal device with the target's gates and coupling map, started from all-|0> on its used qubits, the physical circuit realizes the specification with the certified delta under the final layout; not a statement about noise; not verified on hardware")] : List (String × Json))
+    ++ extra)
+
+/-- PHASE2_SPEC §C.3 (26c2, P2) — `PhysCert.lean`, `physical.qasm` and `manifest.json` of a physical
+certificate (unchanged output since 26c2). -/
+def generatePhysCert (certName certBase : String) (certLeanText certJsonText : String)
+    (manifestText logicalText witnessText physicalText : String) (t : HardwareTarget)
+    (targetFile targetText : String) (L : Rat) (deviceWidth : Nat) (dataPhys : List Nat)
+    (nBits : Nat) (runText : Option String) :
+    Except String (String × String × String × List (Rat × PhysGrade)) := do
+  let p ← preparePhysCert certName certLeanText certJsonText manifestText logicalText witnessText physicalText
+    t targetFile targetText L deviceWidth dataPhys nBits runText
+  let lean := physCertFile p.d
+  let qasm := qasmOf p.d.G p.d.dev deviceWidth nBits
+  let words := statusWords p.d.hardwareCompatible p.d.emulatorPassed
+  let emulatorRun := if p.d.emulatorPassed then "passes (docs/hw_runs)" else p.d.emulatorNote
+  return (lean, qasm, (physCertManifest p certName certBase words emulatorRun []).compress, p.grades)
 
 /-! ## Selection by the physical grade (26c2b, P4) -/
 

@@ -7,10 +7,11 @@
 # setup-python: the local toolchain and the .venv are used; apt install of llvm: only when
 # llvm-as is on PATH, otherwise the QIR check runs with llvmlite only). M2 acceptance is judged on
 # this output. Keep the step list in sync with ci.yml.
-# Pass mark since Stage 26c2b (the step "Physical certificate"): 25 PASS, 0 FAIL, 4 n/a (24 PASS since
-# Stage 26c1b, 23 since 25b, 22 since 25a, 21 since 24b, 20 since 24a, 19 since 21a4, 18 since 19b, 17
-# since 18b, 16 before). The six hardware steps run with .venv-hw (hw/README.md) and are n/a when that
-# venv is absent (the hardware checks need only .venv and Lean, but follow the artifacts' steps).
+# Pass mark since Stage 27b2 (the step "Noise certificates"): 26 PASS, 0 FAIL, 4 n/a (25 PASS since
+# Stage 26c2b, 24 since 26c1b, 23 since 25b, 22 since 25a, 21 since 24b, 20 since 24a, 19 since 21a4, 18
+# since 19b, 17 since 18b, 16 before). The seven hardware steps run with .venv-hw (hw/README.md) and are
+# n/a when that venv is absent (the checks of 26c1b and 27b2 need only .venv and Lean, but follow the
+# artifacts' steps).
 #
 # Usage (from anywhere):  scripts/ci_local.sh
 #   PYTHON=<python> scripts/ci_local.sh   # default: .venv/Scripts/python.exe or .venv/bin/python
@@ -90,6 +91,7 @@ if [ -x .venv-hw/Scripts/python.exe ] || [ -x .venv-hw/bin/python ]; then
   step "Hardware runs (Stage 25b)" scripts/check_hw_runs.sh
   step "Hardware checks (Stage 26c1b)" scripts/check_hw_checks.sh
   step "Physical certificate (Stage 26c2b)" scripts/check_physcert.sh
+  step "Noise certificates (Stage 27b2)" scripts/check_noisecerts.sh
 else
   skip "Hardware target (Stage 24a)" "no .venv-hw (hw/README.md)"
   skip "Hardware lowering (Stage 24b)" "no .venv-hw (hw/README.md)"
@@ -97,6 +99,7 @@ else
   skip "Hardware runs (Stage 25b)" "no .venv-hw (hw/README.md)"
   skip "Hardware checks (Stage 26c1b)" "no .venv-hw (hw/README.md)"
   skip "Physical certificate (Stage 26c2b)" "no .venv-hw (hw/README.md)"
+  skip "Noise certificates (Stage 27b2)" "no .venv-hw (hw/README.md)"
 fi
 
 echo "ci_local: $pass PASS, $fail FAIL, $na n/a (logs: .lake/ci_local/)"

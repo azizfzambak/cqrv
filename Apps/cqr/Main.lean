@@ -11,6 +11,7 @@ import CQRV.Hardware.Decomp
 import CQRV.Hardware.CheckGen
 import CQRV.Hardware.PhysGrade
 import CQRV.Hardware.Noise
+import CQRV.Hardware.NoiseCertGen
 
 /-!
 # `cqr` command-line interface
@@ -143,7 +144,8 @@ def usage : String :=
     "  hw grade --artifact <dir> --target <target.json> --ff-latency <ns> [--json]\n" ++
     "  hw certify --cert <dir> --artifact <dir> --target <target.json> --ff-latency <ns> [--out <dir>]\n" ++
     "  hw select --request <name> --target <target.json> --prefer twoq|depth|bound|noise [--ff-latency <ns>] [--budget X] [--out <dir>] [--table]\n" ++
-    "  hw noise --artifact <dir> --target <target.json> [--json]\n"
+    "  hw noise --artifact <dir> --target <target.json> [--json]\n" ++
+    "  hw noisecert --artifact <dir> --target <target.json> --ff-latency <ns> [--cert <dir>] [--out <dir>]\n"
 
 /-- Report §4.2.2 — parse and surface-check a source file; also returns the position of the
 entry `fn` (the last one), used by the `--solutions` diagnostic. -/
@@ -1188,6 +1190,74 @@ def runHwCertify (certDir artifactDir target lat : String) (out : Option String)
           (check PhysCert.lean with `lake env lean`; reported, not certified: the noise theorem is Stage 27)"
         return 0
 
+/-- PHASE2_SPEC §C.4 (4) (Stage 27b2, B4) — `cqr hw noisecert --artifact <dir> --target <target.json>
+--ff-latency <ns> [--cert <dir>] [--out <dir>]`: the conditional certificate. With `--cert`: 26c2's
+physical certificate plus the noise block (`phys_noisy_inst`), `PhysCert.lean`; without: the channel
+form of the bare MBU gadget (`gadget_noisy`), `NoiseCert.lean`. Both: `physical.qasm` and
+`manifest.json` with `noise_conditional`, the four premises, the meaning sentence and the emulator
+comparison at δ' from the recorded run (`docs/hw_runs/<artifact>.json`; "no run recorded for this
+artifact" otherwise). Default output `examples/certs/<cert or instance>_<target without fake_>/`. -/
+def runHwNoiseCert (artifactDir target lat : String) (certDir : Option String) (out : Option String) : IO UInt32 := do
+  let some L := Hardware.parseDecimalSci lat | IO.eprintln s!"cqr hw noisecert: --ff-latency {lat} is not a decimal"; return 2
+  let read (dir f : String) : IO (Option String) := do
+    try return some (← IO.FS.readFile (System.FilePath.mk dir / f).toString)
+    catch _ => return none
+  let some manifest ← read artifactDir "manifest.json" | IO.eprintln s!"cqr hw noisecert: {artifactDir}/manifest.json unreadable"; return 2
+  let some logical ← read artifactDir "logical.json" | IO.eprintln s!"cqr hw noisecert: {artifactDir}/logical.json unreadable"; return 2
+  let some witness ← read artifactDir "witness.json" | IO.eprintln s!"cqr hw noisecert: {artifactDir}/witness.json unreadable"; return 2
+  let some physical ← read artifactDir "physical.json" | IO.eprintln s!"cqr hw noisecert: {artifactDir}/physical.json unreadable"; return 2
+  let some targetText ← (do try return some (← IO.FS.readFile target) catch _ => return none)
+    | IO.eprintln s!"cqr hw noisecert: {target} unreadable"; return 2
+  match ← readArtifactData artifactDir with
+  | .error msg => IO.eprintln s!"cqr hw noisecert: {msg}"; return 2
+  | .ok a =>
+    match ← Hardware.readTarget target with
+    | .error msg => IO.eprintln s!"cqr hw noisecert: {msg}"; return 2
+    | .ok t =>
+      let targetShort := if t.name.startsWith "fake_" then t.name.drop 5 else t.name
+      let artName := s!"{a.manifest.instance_}__{a.manifest.target}"
+      let runFile := s!"docs/hw_runs/{artName}.json"
+      let runText ← read "docs/hw_runs" s!"{artName}.json"
+      let nBits := (a.G.filter Hardware.BasisGate.isMeasure).length
+      let result ← match certDir with
+        | some cd => do
+          match ← read cd "Cert.lean", ← read cd "certificate.json" with
+          | some certLean, some certJson =>
+            let certBase := (System.FilePath.mk cd).fileName.getD "cert"
+            let certName := s!"{certBase}_{targetShort}"
+            pure (Hardware.generateNoiseCert certName certBase certLean certJson manifest logical witness physical t target
+              targetText L a.deviceWidth a.dataPhys nBits runText runFile |>.map fun r => (certName, "PhysCert.lean", certBase, r))
+          | _, _ => pure (.error s!"{cd}/Cert.lean or certificate.json unreadable")
+        | none =>
+          let certName := s!"{a.manifest.instance_}_{targetShort}"
+          pure (Hardware.generateGadgetNoiseCert certName manifest logical witness physical t target targetText
+            a.deviceWidth a.dataPhys nBits runText runFile |>.map fun r => (certName, "NoiseCert.lean", "", r))
+      match result with
+      | .error msg => IO.eprintln s!"cqr hw noisecert: {msg}"; return 1
+      | .ok (certName, leanFile, _, lean, qasm, man, nd, emu) =>
+        let dir := System.FilePath.mk (out.getD s!"examples/certs/{certName}")
+        IO.FS.createDirAll dir
+        IO.FS.writeFile (dir / leanFile) lean
+        IO.FS.writeFile (dir / "physical.qasm") qasm
+        IO.FS.writeFile (dir / "manifest.json") (man ++ "\n")
+        IO.println s!"{certName}: noise_bound {Hardware.ratStr nd.nb.bound} (≈ {Hardware.ratFloat nd.nb.bound}){if nd.nb.vacuous then " VACUOUS" else ""}{if nd.nb.clamped then ", clamped" else ""}; 25a's p = r bound {Hardware.ratStr nd.physBound} (≈ {Hardware.ratFloat nd.physBound})"
+        match emu with
+        | some e => IO.println s!"emulator comparison ({runFile}): p_hat {Hardware.ratStr e.pHat} vs threshold at delta_prime {Hardware.ratFloat e.thresholdNew} → {if e.passes then "passes" else "fails"} (a sanity check: the emulator's noise is not of the (P-stoch) form)"
+        | none => IO.println "emulator comparison: no run recorded for this artifact"
+        IO.println s!"wrote {dir.toString}/{leanFile}, physical.qasm, manifest.json (check {leanFile} with `lake env lean`); conditional on the premises P-cal, P-stoch, P-ro, P-idle; not verified on hardware"
+        return 0
+
+/-- The flags of `cqr hw noisecert`, in any position. -/
+def hwNoiseCertFlags : List String →
+    Option (Option String × Option String × Option String × Option String × Option String)
+  | [] => some (none, none, none, none, none)
+  | "--artifact" :: a :: rest => do let (_, t, l, c, o) ← hwNoiseCertFlags rest; return (some a, t, l, c, o)
+  | "--target" :: t :: rest => do let (a, _, l, c, o) ← hwNoiseCertFlags rest; return (a, some t, l, c, o)
+  | "--ff-latency" :: l :: rest => do let (a, t, _, c, o) ← hwNoiseCertFlags rest; return (a, t, some l, c, o)
+  | "--cert" :: c :: rest => do let (a, t, l, _, o) ← hwNoiseCertFlags rest; return (a, t, l, some c, o)
+  | "--out" :: o :: rest => do let (a, t, l, c, _) ← hwNoiseCertFlags rest; return (a, t, l, c, some o)
+  | _ => none
+
 /-- The flags of `cqr hw certify`, in any position. -/
 def hwCertifyFlags : List String →
     Option (Option String × Option String × Option String × Option String × Option String)
@@ -1597,6 +1667,10 @@ def main (args : List String) : IO UInt32 := do
   | "hw" :: "certify" :: flags =>
     match hwCertifyFlags flags with
     | some (some c, some a, some t, some l, o) => runHwCertify c a t l o
+    | _ => IO.eprint usage; return 2
+  | "hw" :: "noisecert" :: flags =>
+    match hwNoiseCertFlags flags with
+    | some (some a, some t, some l, c, o) => runHwNoiseCert a t l c o
     | _ => IO.eprint usage; return 2
   | "hw" :: "noise" :: flags =>
     match hwNoiseFlags flags with

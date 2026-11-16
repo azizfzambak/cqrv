@@ -40,6 +40,7 @@ import CQRV.Hardware.WitnessSound
 import CQRV.Hardware.Check
 import CQRV.Hardware.CheckSound
 import CQRV.Hardware.Noise
+import CQRV.Hardware.NoiseCertGen
 import CQRV.Noise.Perturb
 import CQRV.Noise.Steps
 import CQRV.Noise.Realize
