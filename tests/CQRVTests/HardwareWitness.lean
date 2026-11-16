@@ -194,6 +194,18 @@ def tamper (w : Witness) : Witness :=
 -- the physical circuit is well formed (decided here; `Circuit.wf` is Physlib-side)
 #guard (physCircuit 3 gadgetPhys).wf
 
+-- R15 (REVIEW_RESPONSE_1 "Witness classical-bit map"): the classical-bit map must be the identity
+-- covering the circuit's bits; the committed witness has `[0]` and `mbuCircuit.nBits = 1`
+#guard (gadgetWitness?.map (·.clbitMap)) == some [0]
+#guard mbuCircuit.nBits == 1
+#guard (gadgetWitness?.bind fun w => (applyWitness .cz mbuCircuit { w with clbitMap := [1] } 3).toOption) == none
+#guard (gadgetWitness?.bind fun w => (applyWitness .cz mbuCircuit { w with clbitMap := [] } 3).toOption) == none
+#guard match gadgetWitness?.map (fun w => applyWitness .cz mbuCircuit { w with clbitMap := [1] } 3) with
+  | some (.error msg) => msg == "witness: the classical-bit map is not the identity on the circuit's bits"
+  | _ => false
+-- a longer identity map is accepted (Qiskit's classical register may be wider than the bits written)
+#guard (gadgetWitness?.bind fun w => (applyWitness .cz mbuCircuit { w with clbitMap := [0, 1] } 3).toOption) == some gadgetPhys
+
 end
 
 end CQRV.Tests.HardwareWitness

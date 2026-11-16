@@ -127,6 +127,8 @@ def applyWitnessQ' (b : TargetBasis) (C : Circuit) (w : Witness) (N : ℕ) : Exc
     "witness: initial layout length differs from the logical register" >>= fun _ =>
   ensure (w.initial.all (· < N) && w.final.all (· < N)) "witness: a layout position outside the register" >>= fun _ =>
   ensure (decide w.initial.Nodup) "witness: the initial layout is not injective" >>= fun _ =>
+  ensure (w.clbitMap == List.range w.clbitMap.length && decide (C.nBits ≤ w.clbitMap.length))
+    "witness: the classical-bit map is not the identity on the circuit's bits" >>= fun _ =>
   ensure ((indexedWires C.nData (C.nData + C.nAnc) (elements b C) (translate b C) 0).all fun p =>
       p.2.2.1.all (· < C.nData + C.nAnc + C.nBits)) "witness: a wire outside the register" >>= fun _ =>
   w.order.foldlM (orderStepQ b C.nData N (translate b C) w)

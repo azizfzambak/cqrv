@@ -682,6 +682,7 @@ theorem applyWitnessQ'_sim (b : TargetBasis) (C : Circuit) (hC : C.WF) (w : Witn
   obtain ⟨_, h2, h⟩ := exceptBind_ok h
   obtain ⟨_, h3, h⟩ := exceptBind_ok h
   obtain ⟨_, h4, h⟩ := exceptBind_ok h
+  obtain ⟨_, _, h⟩ := exceptBind_ok h
   obtain ⟨_, h5, h⟩ := exceptBind_ok h
   obtain ⟨q', hfold, h⟩ := exceptBind_ok h
   obtain ⟨_, hempty, h⟩ := exceptBind_ok h
@@ -726,13 +727,16 @@ theorem applyWitnessQ'_checks (b : TargetBasis) (C : Circuit) (w : Witness) (N :
     ensure (w.initial.length == C.nData + C.nAnc && w.nLogical == C.nData + C.nAnc)
       "witness: initial layout length differs from the logical register" = .ok () ∧
     ensure (w.initial.all (· < N) && w.final.all (· < N)) "witness: a layout position outside the register" = .ok () ∧
-    ensure (decide w.initial.Nodup) "witness: the initial layout is not injective" = .ok () := by
+    ensure (decide w.initial.Nodup) "witness: the initial layout is not injective" = .ok () ∧
+    ensure (w.clbitMap == List.range w.clbitMap.length && decide (C.nBits ≤ w.clbitMap.length))
+      "witness: the classical-bit map is not the identity on the circuit's bits" = .ok () := by
   simp only [applyWitnessQ'] at h
   obtain ⟨u1, h1, h⟩ := exceptBind_ok h
   obtain ⟨u2, h2, h⟩ := exceptBind_ok h
   obtain ⟨u3, h3, h⟩ := exceptBind_ok h
-  obtain ⟨u4, h4, _⟩ := exceptBind_ok h
-  exact ⟨h1, h2, h3, h4⟩
+  obtain ⟨u4, h4, h⟩ := exceptBind_ok h
+  obtain ⟨u5, h5, _⟩ := exceptBind_ok h
+  exact ⟨h1, h2, h3, h4, h5⟩
 
 /-- PHASE2_SPEC §C.3 (26c1 L1) — **`applyWitnessQ_ok`**: the linear check implies the
 reconstruction, so `applyWitness_sound` applies to its output unchanged. -/
@@ -742,10 +746,10 @@ theorem applyWitnessQ_ok (b : TargetBasis) (C : Circuit) (hC : C.WF) (w : Witnes
   obtain ⟨q, hq, hG⟩ := exceptBind_ok h
   have hG := exceptPure_ok hG
   obtain ⟨st, hst, hlay, hvalid, hsteps⟩ := applyWitnessQ'_sim b C hC w N q hq
-  obtain ⟨h1, h2, h3, h4⟩ := applyWitnessQ'_checks b C w N q hq
+  obtain ⟨h1, h2, h3, h4, h5⟩ := applyWitnessQ'_checks b C w N q hq
   have hlen : st.taken.length = (elements b C).length := (validReorder_perm _ _ _ _ hvalid).length_eq
   simp only [applyWitness]
-  rw [h1, h2, h3, h4]
+  rw [h1, h2, h3, h4, h5]
   simp only [bind, Except.bind]
   rw [hst]
   have e1 : ensure (st.taken.length == (elements b C).length) "order: not every element is executed" = .ok () := by

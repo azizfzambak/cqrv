@@ -45,6 +45,11 @@ theorem gadget_applyWitness' : applyWitness .cz mbuCircuit gadgetW 3 = .ok gadge
 -- an element taken twice, and a changed final layout, are refused
 #guard (applyWitnessQ .cz mbuCircuit { gadgetW with order := gadgetW.order ++ [.elem 0] } 3).toOption == none
 #guard (applyWitnessQ .cz mbuCircuit { gadgetW with final := [0, 1, 2] } 3).toOption == none
+-- R15: the classical-bit map must be the identity covering the circuit's bits
+#guard (applyWitnessQ .cz mbuCircuit { gadgetW with clbitMap := [1] } 3).toOption == none
+#guard match applyWitnessQ .cz mbuCircuit { gadgetW with clbitMap := [1] } 3 with
+  | .error msg => msg == "witness: the classical-bit map is not the identity on the circuit's bits"
+  | _ => false
 -- an element out of its queue order (element 1 before element 0, both on the same qubit) is refused
 #guard (applyWitnessQ .cz mbuCircuit { gadgetW with order := .elem 1 :: .elem 0 :: gadgetW.order.drop 2 } 3).toOption == none
 

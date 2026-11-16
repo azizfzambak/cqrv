@@ -125,6 +125,8 @@ structure Witness where
   order : List OrderEntry
   /-- block element index ↦ its body -/
   blocks : List (ℕ × List BlockEntry)
+  /-- physical clbit of each IR classical bit; `applyWitness` requires the identity `[0, …, k−1]`
+  with `C.nBits ≤ k` (revision R15) -/
   clbitMap : List ℕ
   seed : ℕ
   deriving Repr
@@ -317,6 +319,8 @@ def applyWitness (b : TargetBasis) (C : Circuit) (w : Witness) (N : ℕ) :
     "witness: initial layout length differs from the logical register" >>= fun _ =>
   ensure (w.initial.all (· < N) && w.final.all (· < N)) "witness: a layout position outside the register" >>= fun _ =>
   ensure (decide w.initial.Nodup) "witness: the initial layout is not injective" >>= fun _ =>
+  ensure (w.clbitMap == List.range w.clbitMap.length && decide (C.nBits ≤ w.clbitMap.length))
+    "witness: the classical-bit map is not the identity on the circuit's bits" >>= fun _ =>
   w.order.foldlM (orderStep b C.nData N (translate b C) (elements b C) w) ⟨w.initial, [], []⟩ >>= fun st =>
   ensure (st.taken.length == (elements b C).length) "order: not every element is executed" >>= fun _ =>
   ensure (st.lay == w.final) "order: the final layout differs from the witness" >>= fun _ =>

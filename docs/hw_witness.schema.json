@@ -39,7 +39,7 @@
     },
     "swaps": {"description": "the number of routing swaps, top level and inside blocks", "$ref": "#/$defs/nat"},
     "entries_used": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
-    "clbit_map": {"description": "physical clbit of each IR classical bit (the identity in Stage 25a)", "type": "array", "items": {"$ref": "#/$defs/nat"}},
+    "clbit_map": {"description": "physical clbit of each IR classical bit: the identity [0, ..., k-1] with k >= the circuit's bit count (always the identity since Stage 25a; checked by Lean's applyWitness / applyWitnessQ, revision R15)", "type": "array", "items": {"$ref": "#/$defs/nat"}},
     "seed": {"$ref": "#/$defs/nat"},
     "versions": {
       "type": "object",

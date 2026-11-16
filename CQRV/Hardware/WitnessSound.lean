@@ -1132,6 +1132,7 @@ theorem applyWitness_sound (hC : C.WF) (G : List BasisGate)
   obtain ⟨_, _, hG⟩ := exceptBind_ok hG
   obtain ⟨_, _, hG⟩ := exceptBind_ok hG
   obtain ⟨_, _, hG⟩ := exceptBind_ok hG
+  obtain ⟨_, _, hG⟩ := exceptBind_ok hG
   obtain ⟨st, hfold, hG⟩ := exceptBind_ok hG
   obtain ⟨_, _, hG⟩ := exceptBind_ok hG
   obtain ⟨_, hfinal, hG⟩ := exceptBind_ok hG

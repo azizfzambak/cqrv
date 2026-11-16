@@ -50,7 +50,10 @@ in a `PassManager` (qiskit 2.6.2: layout + routing in one pass, control flow sup
 basis gates untouched). The result is read back (`extract`), matched to the translated elements
 through the tracked layout (`witness_of`: an error if the physical order violates a dependency, a gate
 or angle differs, or a block does not restore the layout), and rebuilt from the witness alone
-(`reconstruct`), which must equal the physical circuit gate for gate. The swaps are decomposed by the
+(`reconstruct`), which must equal the physical circuit gate for gate. The witness's `clbit_map` is
+the identity `[0, …, k−1]` — Qiskit's classical register keeps the IR's bit numbering, and Lean
+`ensure`s this explicitly in `applyWitness` / `applyWitnessQ` (revision R15): any other map is
+refused with "witness: the classical-bit map is not the identity on the circuit's bits". The swaps are decomposed by the
 table (`expand_swaps`); the counts per used qubit and edge give 25a's bound (`physical_bound`, exact
 fractions, the n data readouts at their final positions, mid-circuit measurements at the readout rate
 by assumption); `seed_search` keeps the seed with the least bound over 0..19. An optional
