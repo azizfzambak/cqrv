@@ -1993,3 +1993,83 @@ It needs two lemmas that are not yet written: the conditioned form of `krausOps_
 and the composition of the layout-tracked relabelings (`swapLay` against `swapPerm`). After it
 come `AncRestore.phys`, `realizes_phys`, and the transfer of `mbu_channel_correct` to
 `gadgetPhys`.
+
+**26b3 done, accepted 2026-11-16** (CI below). Stage 26b is complete.
+
+*The main theorem*, `applyWitness_sound` in `CQRV/Hardware/WitnessSound.lean` (Physlib-side;
+the longest proof is 97 lines). Assume:
+- C is well formed;
+- `applyWitness b C w N = .ok G`, with N = n + (a + bb);
+- the physical circuit is well formed, and its bit count is C's;
+- `w.initial = layOf N (n + a) σ₀`.
+
+Then there is σ_f = `irPerm steps * σ₀` such that `w.final = layOf N (n + a) σ_f` and, for every ρ,
+`channelDenote N 0 (physCircuit N G) (embed bb σ₀ ρ) = embed bb σ_f (channelDenote n a C ρ)`.
+
+It is proved by the five steps of "26b2 done". The block-level lemma is `applyBlock_sound`, and the
+migration over a step list is `irRun_kraus`, an equality of Kraus operators up to a unit scalar
+per branch.
+
+*The transfers:*
+- `AncRestore.phys`;
+- `unembed`, which undoes the layout and the placement and traces out the idle qubits and the
+  ancillae;
+- `physGroverChannel`;
+- `realizes_phys`;
+- in the test, `gadgetPhys_correct`: `mbu_channel_correct` transferred to the artifact's 102-gate
+  circuit through `applyWitness_sound`. Here `applyWitness .cz mbuCircuit gadgetW 3 = .ok
+  gadgetPhys` is closed by `rfl`, so the kernel evaluates the reconstruction.
+
+All have the standard three axioms.
+
+**Two statements of my 26b3 note were wrong. Both are corrected, with counterexamples:**
+1. **The initial layout must be injective.** 26b2's `applyWitness` checked only its length and
+   range. With `[0, 0]`, two logical qubits share a physical qubit, and no σ₀ extends the layout.
+   Check added: `w.initial.Nodup`.
+2. **The layout check does not imply that "Sabre's restoration collapses a block's SWAPs".** That
+   check sees only the logical positions. With one logical qubit at 0, the SWAPs (0 1), (1 2),
+   (2 0) restore the layout [0], yet compose to the transposition (1 2) of two idle qubits, which
+   is not a scalar. Check added: a block's SWAPs compose to the identity on the whole register.
+
+Both checks are now part of the definition of `applyWitness`, and both pass on the gadget.
+
+**Three simplifications, accepted:**
+- `krausOps_swap_migrate_ifBit` is not a separate lemma. The condition bit is handled once
+  (`krausOps_map_ifBit_true` and `_false`), and the unconditioned migration applies.
+- `ancCovered` is not needed for the channel statement, because the physical register is given
+  as n + (a + bb) directly.
+- The relabeling composition is `layOf`, `swapLay_layOf` and `layoutQ_layOf`.
+
+**Two hypotheses that my statement did not have** are the physical circuit's well-formedness and
+its bit count. Both are decidable.
+- *Decision:* they stay per-instance facts, decided next to the reconstruction check in 26c1.
+- Deriving them from the checks (about 150 lines, mainly `bitsOk` under `validReorder`) becomes
+  required only if deciding them on the largest instance exceeds 26c1's kernel budget.
+
+**Not proved, and moved to 26c1:**
+- **`embed_zero`**: the embedded |0⟩ equals the all-|0⟩ state of the physical register, a
+  `Ket.basis` relabeling that Physlib lacks. The prepared state is stated for now as `embed bb σ₀
+  (ancZero n ⊗ ancZero a)`.
+- **`layPerm`**: a permutation built from an injective layout list.
+
+**The kernel cost, measured for 26c by the implementer's probe (not committed).** The
+grover_pred_037 tree mbu artifact has 1 253 order entries, 36 blocks and 2 541 physical gates.
+- `decide +kernel` on its reconstruction had not finished after about 15 min and 8 GB.
+- The native `#eval` of the same reconstruction succeeds in under 2 min and reproduces the
+  artifact's 2 541 gates.
+- The costs are the quadratic `validReorder` (`splitFirst` over every element at each step) and
+  `List.contains` on the taken elements.
+
+So 26c1 starts with a linear check. Native evaluation does not count as a check: its
+`Lean.ofReduceBool` is not one of the three axioms.
+
+**The grade of the physical circuit.** `realizes_phys` is stated at the physical circuit's own
+`Synthesis.grade`, which is a true statement about an IR circuit.
+- *Decision:* `PhysGrade` does not replace that grade. It is a separate record of the physical
+  certificate (26c2), and no statement changes.
+
+**Stage 26c is split in advance** at this review:
+- **26c1:** the per-instance checks;
+- **26c2:** `PhysGrade`, the physical certificate, the status words and selection.
+
+Both are specified in STAGE26_TASK.md.
