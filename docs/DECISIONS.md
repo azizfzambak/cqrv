@@ -1492,3 +1492,9 @@ Decision: every physical and conditional manifest carries `model_premises` (`CQR
 Why: the physical statement `phys_realizes` assumes exact preparation and exact classical control besides the ideal gates; the manifests named only the noise premises, so a reader could take the physical statement as unconditional.
 Rejected: stating the premises in the `PhysCert.lean` header only (not machine-checkable); a fifth and sixth entry under `noise.premises` (they are premises of the physical statement, present with or without a noise block).
 Report §: 5.3, 8.4; PHASE2_SPEC §C.3, §C.4; REVIEW_RESPONSE_1 §4 R4.
+
+## 2026-11-17 — Revision task B review (R3, R4, R5, R10)
+Decision: revision task B accepted (CI on ba15d9c: 26 PASS, 0 FAIL, 4 n/a); main fast-forwarded to ba15d9c. The two guard decisions taken during the task (header-only changes of the `PhysCert.lean` files; the artifact field `hashes.certificate_json` kept as the transpile-time record, with `preparePhysCert` binding by the circuit hash) are recorded in the implementer's R5 entry. The line guard (824 hand-written lines against about 800) is waived: the excess is the R10 test file, which is the deliverable. The six changed `PhysCert.lean` files differ only in header comment lines 9 and 22, checked by the reviewer with `git diff -U0`; the CI re-checks them in step 29.
+Why: the certificates now say what they were checked against (the library hash) and every premise of the physical and conditional statements, and the paper's appendix is checked by the kernel.
+Rejected: none.
+Report §: 5.3, 8.4, 9.5.3; REVIEW_RESPONSE_1 §4.
