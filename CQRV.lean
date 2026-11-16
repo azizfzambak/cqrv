@@ -23,6 +23,7 @@ import CQRV.Circuit.MBUClifford
 import CQRV.Circuit.MBUBoundary
 import CQRV.Circuit.RestoreAlgebra
 import CQRV.Circuit.RestoreRegimes
+import CQRV.Synthesis.MczFewK
 import CQRV.Synthesis.Basic
 import CQRV.Synthesis.Problem1
 import CQRV.Certify.Basic
@@ -45,6 +46,7 @@ import CQRV.Noise.Perturb
 import CQRV.Noise.Steps
 import CQRV.Noise.Realize
 import CQRV.Noise.Stochastic
+import CQRV.Grover.CountingCorrect
 import CQRV.Grover.Basic
 import CQRV.Grover.SearchUnknownM
 import CQRV.Grover.KGRegime

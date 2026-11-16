@@ -2,6 +2,7 @@ module
 
 public import CQRV.Grover.Restore
 public import CQRV.Synthesis.MczFew
+public import CQRV.Synthesis.MczFewK
 
 /-!
 # CQRV.Grover.MczFew
@@ -41,59 +42,37 @@ namespace CQRV.Grover
 
 open CQRV CQRV.Synthesis CQRV.Synthesis.MczFew Matrix
 
-/-! ## A kernel-evaluable form of the schedule -/
+/-! ## A kernel-evaluable form of the schedule
+
+Stage 30a (A1): the single definition is `CQRV.Synthesis.FewScheduleK` (Physlib-free, in `Synthesis`,
+so that `Synthesis.Problem1` shares it without importing `Grover`); the Stage 12c names below are kept
+as its aliases. -/
 
 namespace FewSchedule
 
-/-- Insert into a sorted list of naturals (exposed, kernel-evaluable). -/
-def insNat (a : ℕ) : List ℕ → List ℕ
-  | [] => [a]
-  | b :: l => if a ≤ b then a :: b :: l else b :: insNat a l
+/-- Insert into a sorted list of naturals (exposed, kernel-evaluable): `FewScheduleK.insNat`. -/
+abbrev insNat := FewScheduleK.insNat
 
-/-- Insertion sort on naturals (exposed, kernel-evaluable). -/
-def sortNat : List ℕ → List ℕ
-  | [] => []
-  | a :: l => insNat a (sortNat l)
+/-- Insertion sort on naturals (exposed, kernel-evaluable): `FewScheduleK.sortNat`. -/
+abbrev sortNat := FewScheduleK.sortNat
 
-theorem insNat_eq (a : ℕ) (l : List ℕ) : insNat a l = l.orderedInsert (· ≤ ·) a := by
-  induction l with
-  | nil => simp [insNat]
-  | cons b l ih => simp [insNat, List.orderedInsert_cons, ih]
+theorem insNat_eq (a : ℕ) (l : List ℕ) : insNat a l = l.orderedInsert (· ≤ ·) a :=
+  FewScheduleK.insNat_eq a l
 
 /-- `sortNat` is `List.mergeSort` on `ℕ` with `≤`. -/
-theorem sortNat_eq (l : List ℕ) : l.mergeSort (fun a b => decide (a ≤ b)) = sortNat l := by
-  rw [List.mergeSort_eq_insertionSort (· ≤ ·)]
-  induction l with
-  | nil => simp [sortNat]
-  | cons a l ih => simp [sortNat, List.insertionSort_cons, ih, insNat_eq]
+theorem sortNat_eq (l : List ℕ) : l.mergeSort (fun a b => decide (a ≤ b)) = sortNat l :=
+  FewScheduleK.sortNat_eq l
 
-/-- `MczFew.substeps` with `sortNat` for `mergeSort`. -/
-def substepsK : Nat → List Nat → List Nat → List Op
-  | 0, P, Q =>
-    match P, Q with
-    | p₀ :: _, q₀ :: q₁ :: _ => [(p₀, q₀, q₁)]
-    | _, _ => []
-  | f + 1, P, Q =>
-    let m := P.length / 2
-    let ops := (List.range m).map fun k =>
-      (P.getD (P.length - 1 - k) 0, Q.getD (2 * k + 1) 0, Q.getD (2 * k + 2) 0)
-    let used := ops.flatMap fun o => [o.2.1, o.2.2]
-    let Q' := sortNat (Q.filter (!used.contains ·) ++ ops.map (·.1))
-    ops ++ substepsK f (P.take (P.length - m)) Q'
+/-- `MczFew.substeps` with `sortNat` for `mergeSort`: `FewScheduleK.substepsK`. -/
+abbrev substepsK := FewScheduleK.substepsK
 
-theorem substeps_eq : ∀ f P Q, substeps f P Q = substepsK f P Q
-  | 0, P, Q => by
-    rcases P with _ | ⟨p, P⟩ <;> rcases Q with _ | ⟨q₀, _ | ⟨q₁, Q⟩⟩ <;> rfl
-  | f + 1, P, Q => by simp only [substeps, substepsK, sortNat_eq, substeps_eq f]
+theorem substeps_eq : ∀ f P Q, substeps f P Q = substepsK f P Q := FewScheduleK.substeps_eq
 
 theorem doubling_eq (n : ℕ) : doubling n =
     ((List.range n).filter fun i => i + 2 ^ (i + 1) ≤ n).flatMap fun i =>
       substepsK i ((List.range (2 ^ i)).map (i + ·))
-        ((List.range (2 ^ i + 1)).map (i + 2 ^ i + ·)) := by
-  unfold doubling
-  congr 1
-  funext i
-  simp only [timestep, substeps_eq]
+        ((List.range (2 ^ i + 1)).map (i + 2 ^ i + ·)) :=
+  FewScheduleK.doubling_eq n
 
 end FewSchedule
 
@@ -560,29 +539,15 @@ all-n theorem (KG Theorem 5.1) stays a planned SORRIES.md row. -/
 
 namespace FewSchedule
 
-/-- `MczFew.doubling` with `substepsK` (kernel-evaluable; equal by `doubling_eq`). -/
-def doublingK (n : ℕ) : List Op :=
-  ((List.range n).filter fun i => i + 2 ^ (i + 1) ≤ n).flatMap fun i =>
-    substepsK i ((List.range (2 ^ i)).map (i + ·)) ((List.range (2 ^ i + 1)).map (i + 2 ^ i + ·))
+/-- `MczFew.doubling` with `substepsK` (kernel-evaluable; equal by `doubling_eq`): `FewScheduleK.doublingK`. -/
+abbrev doublingK := FewScheduleK.doublingK
 
 /-- `MczFew.plan` with `doublingK` for `doubling`: the same schedule, evaluable by the kernel
-(`plan_eq_planK`). -/
-def planK (n : ℕ) : MczVariant → List Step × List Qubit
-  | .ladder => plan n .ladder
-  | .logDepth =>
-    let data := (List.range n).map Qubit.data
-    if n ≤ 2 then ([], data) else
-    let qs := Qubit.anc 0 :: data
-    let d := doublingK n
-    let A₁ := d.foldl applyOp (true :: List.replicate n false)
-    let (g, A₂) := greedy qs.length A₁
-    let (s₂, us) := accumulate (.anc 1) (unmarkedQubits qs A₂)
-    (stepsOf qs (d ++ g) ++ s₂, us)
+(`plan_eq_planK`): `FewScheduleK.planK`. -/
+abbrev planK := FewScheduleK.planK
 
-theorem plan_eq_planK (n : ℕ) (v : MczVariant) : plan n v = planK n v := by
-  cases v
-  · rfl
-  · simp only [plan, planK, doubling_eq, doublingK]
+theorem plan_eq_planK (n : ℕ) (v : MczVariant) : plan n v = planK n v :=
+  FewScheduleK.plan_eq_planK n v
 
 end FewSchedule
 

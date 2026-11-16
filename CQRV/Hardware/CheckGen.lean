@@ -650,7 +650,7 @@ def physCertManifest (p : PhysCertPrep) (certName certBase : String) (words : Li
   let d := p.d
   let gradesJson := Json.mkObj (p.grades.map fun (l, g) => (ratStr l, g.toJson l))
   Json.mkObj (([
-    ("schema_version", "1.0.0"),
+    ("schema_version", "1.1.0"),
     ("certificate", certName),
     ("logical_certificate", Json.mkObj [("dir", s!"examples/certs/{certBase}"), ("namespace", p.nsAscii),
       ("theorem", s!"{p.nsAscii}.cert"), ("certificate_json_sha3", d.certJsonHash), ("circuit_hash", p.certCircuit),
@@ -668,7 +668,7 @@ def physCertManifest (p : PhysCertPrep) (certName certBase : String) (words : Li
     ("hardware_compatible", Json.mkObj [("edges_ok", p.edgesOkB), ("capabilities_ok", p.capsOk)]),
     ("emulator_run", emulatorRun),
     ("status", Json.arr (words.map fun w => (w : Json)).toArray),
-    ("meaning", "physically validated: on an ideal device with the target's gates and coupling map, started from all-|0> on its used qubits, the physical circuit realizes the specification with the certified delta under the final layout; not a statement about noise; not verified on hardware")] : List (String × Json))
+    ("meaning_physical_translation", "physically validated: on an ideal device with the target's gates and coupling map, started from all-|0> on its used qubits, the physical circuit realizes the specification with the certified delta under the final layout; not a statement about noise; not verified on hardware")] : List (String × Json))
     ++ extra)
 
 /-- PHASE2_SPEC §C.3 (26c2, P2) — `PhysCert.lean`, `physical.qasm` and `manifest.json` of a physical

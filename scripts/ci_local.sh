@@ -51,7 +51,7 @@ skip() {  # skip <name> <reason>
 }
 
 build() { set -o pipefail; lake build 2>&1 | tee "$LOGS/build.log"; }
-sorries() { scripts/check_sorries.sh && scripts/check_sorries.sh --self-test; }
+sorries() { scripts/check_sorries.sh && scripts/check_sorries.sh --self-test && scripts/check_layering.sh; }
 pyreqs() { "$PYTHON" -m pip install --no-deps -r tests/diff/requirements.lock && "$PYTHON" -m pip check; }
 llvm() { llvm-as --version; }
 

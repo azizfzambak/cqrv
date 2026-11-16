@@ -41,6 +41,7 @@ jobs:
         run: |
           scripts/check_sorries.sh
           scripts/check_sorries.sh --self-test
+          scripts/check_layering.sh
 
       - name: CLI smoke (cqr check / extract / match / synthesize on examples/)
         run: scripts/cli_smoke.sh

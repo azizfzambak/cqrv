@@ -369,7 +369,7 @@ def generateGadgetNoiseCert (certName : String) (manifestText logicalText witnes
     | some e => if e.passes then s!"passes at delta_prime ({runFile})" else s!"fails at delta_prime ({runFile})"
     | none => emuNote
   let manifest := Json.mkObj (([
-    ("schema_version", "1.0.0"),
+    ("schema_version", "1.1.0"),
     ("certificate", certName),
     ("logical_statement", Json.mkObj [("theorem", "CQRV.mbu_channel_correct"), ("module", "CQRV.Circuit.Restoration"),
       ("link", "c_eq : C = mbuCircuit, decided by the kernel"), ("delta", "0")]),
@@ -382,7 +382,7 @@ def generateGadgetNoiseCert (certName : String) (manifestText logicalText witnes
     ("hardware_compatible", Json.mkObj [("edges_ok", edgesOkB), ("capabilities_ok", capsOk)]),
     ("emulator_run", emulatorRun),
     ("status", Json.arr (words.map fun w => (w : Json)).toArray),
-    ("meaning", "channel form: on an ideal device, from the embedded input, the physical circuit outputs the embedding of the gadget's correct output (mbu_channel_correct through phys_channel); the noise part is conditional on the premises; not verified on hardware")] : List (String × Json))
+    ("meaning_physical_translation", "channel form: on an ideal device, from the embedded input, the physical circuit outputs the embedding of the gadget's correct output (mbu_channel_correct through phys_channel); the noise part is conditional on the premises; not verified on hardware")] : List (String × Json))
     ++ noiseJson nd targetFile m.targetHash (emu.map fun e => (e, runFile)) emuNote)
   return (lean, qasm, manifest.compress, nd, emu)
 

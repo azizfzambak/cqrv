@@ -1,11 +1,11 @@
 module
 
 import CQRV.Synthesis.Counting
-import CQRV.Circuit.CountingCorrect
+import CQRV.Grover.CountingCorrect
 import CQRV.Circuit.GradeCompose
 import CQRV.Grover.Counting
 meta import CQRV.Synthesis.Counting
-meta import CQRV.Circuit.CountingCorrect
+meta import CQRV.Grover.CountingCorrect
 meta import CQRV.Circuit.GradeCompose
 
 /-!

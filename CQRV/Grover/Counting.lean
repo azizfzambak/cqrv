@@ -1,6 +1,6 @@
 module
 
-public import CQRV.Circuit.CountingCorrect
+public import CQRV.Grover.CountingCorrect
 public import CQRV.Grover.Lemma
 public import CQRV.Grover.QPEBound
 

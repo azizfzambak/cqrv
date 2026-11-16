@@ -5,7 +5,7 @@ public import CQRV.Grover.Restore
 public import CQRV.Circuit.QFTCorrect
 
 /-!
-# CQRV.Circuit.CountingCorrect
+# CQRV.Grover.CountingCorrect
 
 PHASE2_SPEC.md §A.3 as amended before Stage 19 (amendments (1)–(5)); report §6.2.4, §6.3.2
 (Lemma 6.3.2), §8.2; docs/tasks/STAGE19_TASK.md B2 (lemmas), B4 (Stage 19b) — the counting circuit

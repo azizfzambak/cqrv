@@ -11,7 +11,6 @@ public import CQRV.Circuit.OracleBlocks
 public import CQRV.Circuit.OracleCorrectXor
 public import CQRV.Circuit.OracleCorrect
 public import CQRV.Circuit.QFTCorrect
-public import CQRV.Circuit.CountingCorrect
 
 /-!
 # CQRV.Circuit
