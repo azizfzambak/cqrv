@@ -5,8 +5,8 @@ at the 26c2b review (2026-11-16) by the reviewer, under the author's delegation.
 
 Stage 27 has three tasks, one commit each:
 - **27a**, the Lean theory, is specified here;
-- **27b**, the conditional certificates, and **27c**, the frontier, are outlined and get their
-  detailed text at the 27a review.
+- **27b**, the conditional certificates, is specified below (written at the 27a review);
+- **27c**, the frontier, is outlined and gets its detailed text at the 27b review.
 
 Precondition: main = the 26c2b review commit. Start with `git switch -c stage-27a main`.
 
@@ -94,23 +94,100 @@ Precondition: main = the 26c2b review commit. Start with `git switch -c stage-27
   `channelDenote_eq_steps` is the one proof allowed to approach 500. If it goes beyond, stop
   after N1 and report.
 
-## 27b — The conditional certificates (outline)
+## 27b — The conditional certificates (written at the 27a review, 2026-11-16)
 
-- **The bound.** `noiseBound`, Physlib-free: `δ + Σ (d_i + 1)/d_i · r_i + Σ r_j`, exact, on the
-  rate tables. Lean equals Python on all twelve artifacts, and 25a's `p = r` figure is reported
-  beside it.
-  - The rate of an operation is keyed as `rateOf` keys it: the directed pair or its reverse.
-  - The literals of `SelCand` and `selectFile` are reused, not generated anew.
-- **The `noise` preference.** `noiseBound` becomes a `PhysPref` component. A budget `noise < 1`
-  is then a certified admissibility test: an admissible candidate has a non-vacuous conditional
-  realization.
-- **Logical certificates for hw_n2 and hw_n3**, new directories made by `cqr certify`.
-- **The conditional certificates of hw_n2, hw_n3 and the MBU gadget on FakeTorino:**
-  - `phys_noisy` at the instance, with the premises (P-cal) as a hash and (P-stoch), (P-ro) as the
-    hypotheses' form;
-  - the gadget in channel form;
-  - the status word `noise_conditional` with the list of premises;
-  - (P-idle) stated in the manifest.
+Precondition: main = the 27a review commit; start with `git switch -c stage-27b main`.
+
+### B1. `phys_noisy_stochastic` (Physlib-side, `CQRV/Noise/Realize.lean` or a new file)
+
+- **Basis operations.** The premise attaches to basis operations, not IR gates: `sx` expands to
+  three IR steps (`h, s, h`).
+- **`steps_flatMap`.** `steps (G.flatMap (stepList ∘ expand))` equals the composite of the
+  per-basis-gate composites `steps (stepList (expand g))`.
+- **The statement.** Take:
+  - per basis gate g of G, a `p_g : Prob`;
+  - per data readout j, an `r_j : Prob`;
+  - arbitrary channels `Φ'_g` and `Φ'_j` on `X⁺`, universally quantified.
+
+  The noisy channel replaces each basis gate's composite by `mix p_g (composite) Φ'_g` and
+  appends `mix r_j id Φ'_j` per data qubit. **The claim:** for every choice of the Φ', the noisy
+  physical channel `RealizesExact` S with `δ + Σ p_g + Σ r_j`.
+- **The proof.** It follows from `phys_noisy` and `diamondDist_mix_le` termwise. The certificate's
+  theorem is then a one-line instance.
+
+### B2. `noiseBound` (Physlib-free; in the cqr closure)
+
+- **The definition.** `noiseBound = δ + Σ_g p_g + Σ_j r_j`, exact in `Rat`, on the rate tables of
+  `PhysGrade` (`rateOf`: the directed pair or its reverse).
+- **(P-stoch).** For a gate on k qubits, `p_g = min 1 ((d+1)/d · r_g)` with d = 2^k:
+  - this is 3/2 · r for `sx` and `x`, and 5/4 · r for `cz`;
+  - `rz` is virtual: r = 0, so p = 0;
+  - a conditioned gate takes the rate of its gate.
+- **(P-ro).** A mid-circuit measurement and a data readout take `p = r_j`, the readout rate, with
+  no factor.
+- **The clamp.** A `clamped` flag records whether some p reached the clamp. Then the bound is ≥ 1,
+  so vacuous. The fakes' error-1.0 edges give 5/4 before the clamp.
+- **Python.** A mirror in `hw/`. Lean must equal Python on all twelve artifacts. 25a's `p = r`
+  figure is printed beside it.
+- **Selection.** `PhysPref.noise`, with the `noise` rows added to `examples/hw_select/README.md`.
+  The committed `Select.lean` files are not regenerated.
+
+### B3. Logical certificates for hw_n2 and hw_n3
+
+- **The certificates.** `cqr certify` on `examples/hw_n2.cqr` (n = 2, M = 1, r = 1) and
+  `examples/hw_n3.cqr` (n = 3, M = 1, r = 2), tree, mbu. They are new directories
+  `examples/certs/hw_n2` and `examples/certs/hw_n3`; no existing certificate changes.
+- **The link.** Their `emitted` must be the artifacts' logical circuits, by the same `circuitHash`.
+  If not, stop and report.
+
+### B4. The conditional certificates (`cqr hw certify --noise`, or a new subcommand; say which)
+
+- **For hw_n2 and hw_n3 on FakeTorino:**
+  - `examples/certs/hw_n2_torino` and `examples/certs/hw_n3_torino`;
+  - 26c2's content: `emitted_eq`, `phys_channel`, `phys_zero`, `phys_realizes`, `PhysGrade`;
+  - **`phys_noisy_inst`**: for every choice of the arbitrary channels, the noisy physical channel
+    realizes the specification with δ' = `noiseBound` (as a real). The link between the real sum
+    of the `Prob`s and the `Rat` is decided by the kernel;
+  - `noiseBound_eq` by `decide +kernel`.
+- **For the MBU gadget**, the channel form. For every choice of the arbitrary channels, the noisy
+  physical channel's output is within `Σ p_g` in trace distance of σ_f's embedding of the gadget's
+  correct output (`mbu_channel_correct` through `phys_channel`).
+- **The manifest:**
+  - the status word `noise_conditional`, with `noise_bound` (exact, plus a rounded display),
+    `noise_bound_vacuous`, `clamped` and the 25a figure;
+  - the four premises as text: (P-cal) with the snapshot hash and "shipped with
+    qiskit-ibm-runtime, recorded from a real device on a past date"; (P-stoch) with the Pauli
+    reading and the clamp; (P-ro); (P-idle);
+  - **the meaning sentence:** "conditional on the premises, the device's success probability is at
+    least 1 − δ'; the premises are assumptions about the device, not facts proved here; not
+    verified on hardware".
+- **The emulator comparison.** Apply 25b's own acceptance criterion to the recorded run JSON with
+  the new δ'; do not re-run. Give `emulator_validated` only if it passes. Report the comparison,
+  and note that the emulator's noise model is not of the (P-stoch) form.
+
+### B5. CI
+
+A step "Noise certificates" runs:
+- `lake env lean` on the two new logical certificates and the three conditional ones;
+- the Lean–Python `noiseBound` equality on the twelve artifacts;
+- the regeneration of the new files byte for byte.
+
+The pass mark becomes 26.
+
+### 27b Acceptance / Stop
+
+- **Acceptance:**
+  - `lake build` green and warning-free;
+  - the axiom lines of `phys_noisy_stochastic` and of each `phys_noisy_inst`;
+  - the table of the twelve artifacts: 25a's figure, `noiseBound`, `clamped`, vacuous;
+  - the δ' of hw_n2, hw_n3 and the gadget, with the emulator comparison.
+- **Guards.** Stop and report if:
+  - the task goes above about 1 200 hand-written lines (generated files do not count), or a
+    single proof above about 500;
+  - a hypothesis is missing;
+  - B3's hash link fails.
+
+  If the line guard comes near, stop after B3 and leave B4–B5 to a 27b2.
 
 ## 27c — The feasibility frontier (outline)
 

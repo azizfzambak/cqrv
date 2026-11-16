@@ -2409,3 +2409,46 @@ mode) with a non-vacuous conditional bound.
 - **27a:** the Lean theory (1–3);
 - **27b:** the conditional certificates of the small instances (4);
 - **27c:** the frontier (6) and the idle diagnostic.
+
+**27a done, accepted 2026-11-16** (CI below). N1–N4 are proved, with no `sorry`. The task is about
+1 000 lines, and its longest proof is 56 lines. The noise theory is Physlib-side; the cqr closure
+stays 60 modules.
+
+**The perturbation bound** (`CQRV/Noise/Perturb.lean`):
+- `diamondDist_precompose_le`;
+- `steps` and `diamondDist_steps_le` (the list and the `Fin k` form);
+- `mix p Φ Φ'`, with `p : Prob`. It is proved equal to Physlib's convex combination of channels
+  (`CPTPMap.instMixable`);
+- `diamondDist_mix_le : diamondDist (mix p Φ Φ') Φ ≤ 2p`.
+
+**The step semantics** (`CQRV/Noise/Steps.lean`):
+- **The register.** `XReg n a m = (Reg n × Reg a) × Reg m`: the bits form the branch index of
+  `krausOps`.
+- **The step operators.** `stepK` gives `P_{q=v} ⊗ X_j^v` for a measurement. A plain gate gets
+  `gateU ⊗ 1`, and `ifBit` the controlled unitary.
+- **The equality.** **`channelDenote_eq_steps`**: for a well-formed C,
+  `channelDenote C ρ = traceRight (stepsOf C.gates (ρ ⊗ |0⟩⟨0|))`, with a channel form. It goes
+  through the invariant `Σ_d [supp d ⊆ W] K_d ρ K_dᴴ ⊗ |d⟩⟨d|` along the gates, where W is the set
+  of bits written so far, and through `bitsOk_complete`: under the bit discipline every bit is
+  written.
+
+**The realization** (`CQRV/Noise/Realize.lean`):
+- **`noisy_realization`** (for `RealizesExact`, and for `Realizes` with ε): δ becomes
+  δ + ½ Σ η_i;
+- **`noisy_realization_stochastic`**: δ + Σ p_i;
+- **`phys_noisy`**: the instance form on Stage 26's chain. It takes the hypotheses of
+  `realizesExact_phys` and a step list whose ideal entries are the physical circuit's steps,
+  followed by k identity readout steps. Its conclusion is the noisy physical channel's realization
+  with δ + ½ Σ η.
+
+All have the standard three axioms.
+
+**What the statements now say.** Under any noise that keeps each listed step within η_i of its
+ideal in the diamond distance, the certified physical circuit realizes the specification with
+δ + ½ Σ η_i. The step list itself encodes (P-idle): no step acts between the listed ones.
+
+**A correction to the implementer's 27b note.** The note said the table translation gives "one IR
+gate per basis gate". That is false for `sx`, which expands to `h, s, h`, three IR steps; an `ifBit`
+on an sx expands to three conditioned steps. So the stochastic premise is attached to basis
+operations: one list entry per basis gate, whose ideal is the composite of its expansion. 27b
+states `phys_noisy_stochastic` in that form.
