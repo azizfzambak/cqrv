@@ -2073,3 +2073,61 @@ So 26c1 starts with a linear check. Native evaluation does not count as a check:
 - **26c2:** `PhysGrade`, the physical certificate, the status words and selection.
 
 Both are specified in STAGE26_TASK.md.
+
+**26c1 done, accepted 2026-11-16** (CI below). 26c1 stopped at the 1 200-line guard (1 076 lines),
+as allowed. L1–L3 and the kernel measurement of all twelve artifacts are done. L4–L5 become 26c1b.
+
+**L1. A linear reconstruction check.** It lives in `CQRV/Hardware/Check.lean` (Physlib-free) and
+`CQRV/Hardware/CheckSound.lean` (Physlib-side).
+- `applyWitnessQ` keeps one dependency queue per wire. An element is taken when it heads every
+  queue of its wires.
+- An element's gates are taken from the front of `translate b C`, in one lockstep pass. The first
+  version indexed that list per element. Its kernel cache was quadratic: 8.9 GB on the 2 541-gate
+  instance, over the budget. The lockstep pass needs 4.1 GB.
+- `applyWitnessQ_ok : C.WF → applyWitnessQ b C w N = .ok G → applyWitness b C w N = .ok G`. So
+  `applyWitness_sound` applies unchanged.
+- The proof is a simulation. Its one use of `C.WF` is `elements_nodup`.
+
+**L2.** `IsLayout`, `layPerm` and `layOf_layPerm`. Also `embed_zero`: the embedded |0⟩ is the
+all-|0⟩ state of the physical register, for every σ.
+
+**L3.** `edgesOk`: every two-qubit gate, `ifBit` included, mapped to the device qubits, lies on an
+edge.
+
+All of L1–L3 have the standard three axioms.
+
+*Tests:*
+- the gadget's `applyWitnessQ` by `rfl`;
+- three tampered witnesses refused;
+- `layOf_layPerm` with an idle qubit;
+- `edgesOk` on FakeTorino's edges, with a cz off the edges refused, plain and conditioned.
+
+**The kernel table** (scratch probe files, re-measured on the committed files in 26c1b). For each
+artifact, the probe closed by `decide +kernel`:
+- the reconstruction;
+- the physical WF and bit count;
+- the logical WF.
+
+The time below is the whole `lake env lean` file.
+
+| instance @ target | N | logical | order | blocks | physical | s | GB |
+|---|---|---|---|---|---|---|---|
+| mbu_gadget @ torino | 3 | 18 | 60 | 2 | 102 | 11 | 1.8 |
+| mbu_gadget_wrapped @ torino | 3 | 23 | 80 | 2 | 142 | 11 | 1.8 |
+| hw_n2_tree_mbu @ torino | 3 | 50 | 142 | 4 | 226 | 11 | 1.9 |
+| hw_n3_tree_mbu @ torino | 5 | 183 | 540 | 16 | 848 | 14 | 2.3 |
+| grover_pred_037_tree_mbu @ torino | 16 | 418 | 1 253 | 36 | 2 541 | 24 | 4.1 |
+| grover_pred_037_tree_coherent @ torino | 15 | 580 | 2 117 | 0 | 3 177 | 22 | 4.1 |
+| grover_pred_037_tree_coherent @ washington | 15 | 580 | 805 | 0 | 879 | 15 | 2.8 |
+| grover_pred_037_fewlog_mbu @ torino | 10 | 388 | 1 184 | 16 | 2 232 | 18 | 3.1 |
+| simple_alu_x0_1_tree_mbu @ torino | 16 | 369 | 1 260 | 30 | 3 528 | 24 | 4.0 |
+| simple_alu_x0_1_tree_coherent @ torino | 16 | 504 | 2 010 | 0 | 4 170 | 23 | 4.0 |
+| simple_alu_x0_1_tree_coherent @ washington | 17 | 504 | 731 | 0 | 933 | 15 | 2.6 |
+| simple_alu_x0_1_fewlog_mbu @ torino | 16 | 352 | 1 222 | 24 | 3 290 | 21 | 3.7 |
+
+All twelve close: every artifact's routed circuit is reconstructed exactly from its logical
+circuit. No block split is needed, and every instance fits in CI.
+
+The physical WF and bit count take seconds, so deriving them (26b3 decision) stays unnecessary.
+
+**26c1b**, L4–L5, follows the implementer's design. Its specification is in STAGE26_TASK.md.

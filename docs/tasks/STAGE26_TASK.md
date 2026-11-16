@@ -306,9 +306,52 @@ Python check confirms that each file's literals are the artifact's (by hash).
 - the axiom lines;
 - the tampering refusals.
 
+### 26c1b — L4–L5, the per-instance files and the CI step (note added at the 26c1 review, 2026-11-16)
+
+26c1 stopped at its guard after L1–L3 and the kernel table. 26c1b does L4 and L5 above, in the
+implementer's design. Precondition: main = the 26c1 review commit; start with `git switch -c
+stage-26c1b main`.
+
+**The two new files of each artifact.** `hw/artifact.py` writes `logical.json` (the canonical
+logical circuit; its SHA3 is the manifest's logical hash) and `physical.json` (the final physical
+circuit on the device qubits).
+- The twelve instances are re-run with their recorded seeds.
+- Every existing artifact file must stay byte-identical; check this with `git diff` on the
+  artifact directories. If one byte differs, stop.
+
+**The generator.** `cqr hw check --artifact DIR --target FILE` is Physlib-free; `Check.lean` joins
+the cqr closure.
+- It reads the artifact's JSON files and re-checks three hashes: the logical circuit, the
+  witness, and the target snapshot (through 24a's `HardwareTarget`).
+- It compacts the witness and the physical circuit through the used qubits.
+- It writes `examples/hw_checks/<artifact>/Check.lean`.
+
+**The per-instance files are Physlib-side.** They import the proofs, as the certificates do, and
+are checked with `lake env lean`; they are not part of `lake build`. Each file holds:
+- the literals C, W, G, the device list and the target's coupling map;
+- `recon` (`applyWitnessQ … = .ok G`, closed by `rfl`);
+- `phys_wf`, `phys_nBits`, `c_wf`, `edges_ok` and `init_eq`;
+- `phys_channel` and `phys_zero`, with σ_f an explicit closed term;
+- the two tampering `#guard`s;
+- `#print axioms`.
+
+**σ_f explicit.** Factor `applyWitness_sound` into a core lemma whose conclusion names σ_f =
+`irPerm N st.steps * σ₀`. The statement of `applyWitness_sound` is unchanged. Then
+`layOf N k σ_f = w.final` is closed by the kernel.
+
+**CI step "Hardware checks".**
+- `lake env lean` on each committed `Check.lean`.
+- A Python check that each file's literals are the artifact's, by the hash of the canonical JSON
+  they were printed from.
+- The pass mark becomes 24.
+
+**Re-measure the table** on the committed files: time and peak memory per file.
+
+**The guards** of 26c hold. Generated files do not count toward the line guard.
+
 ### 26c2 — `PhysGrade`, the physical certificate, the status words, selection
 
-Precondition: main = the 26c1 review commit. 26c2 may be refined at the 26c1 review.
+Precondition: main = the 26c1b review commit. 26c2 may be refined at the 26c1b review.
 
 **P1. `PhysGrade`** (Physlib-free, in the cqr closure; §C.3). It is computed from G, the target
 and a feed-forward latency L, and has these components:
