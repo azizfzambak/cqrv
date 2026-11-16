@@ -35,7 +35,9 @@ lines with fewer axioms are listed as such; no theorem uses any other axiom (`so
 `lemma_6_3_2`, `lemma_6_3_2_coherent`; `toNetwork_pred`; `measured_composition`,
 `coherent_composition`; `qft_basis`, `aqft_diamond_le`; `countingCircuit_ancRestore`;
 `phaseDist_eq`, `qpe_success`; `ae_parametric_lemma`, `_aqft`; `millerMatch_sound`,
-`matchLibrary_spec`; `groverSem`, `countSem`; `select_spec` — all standard. Added since M3 (Stage 21b2):
+`matchLibrary_spec`; `groverSem`, `countSem`; `select_spec`; the all-n restoration of the few-ancilla MCZ
+(KG Theorem 5.1, Stage 13a): `mczFew_logDepth_ancRestore`, `diffusionFew_logDepth_ancRestore`, used by
+`grover_certificate_few_all` with no per-instance classical check — all standard. Added since M3 (Stage 21b2):
 `measured_composition_pseudo`, `measurePrepare_encode`, `search_unknown_M`, `domain_8_32_5`,
 `search_unknown_M_8_32_5` (Theorem 3.3a exercised at (n, M, m) = (8, 32, 5)) — standard.
 
@@ -220,7 +222,8 @@ kernel-evaluable few-ancilla schedule is one definition, `CQRV.Synthesis.FewSche
 | Item | Status (source) |
 |---|---|
 | Clean ⇒ Cond(true) (the clean regime as the conditional regime under `true`), `AncRestoreDirty.widen` (the dirty widening) | open; remarks for Paper 2 (DECISIONS.md, M4 review 2026-11-15; PHASE2_SPEC §B.3) |
-| The all-n forms of 23c (`planB_cost` for every n; the KG Theorem 5.1 restoration for all n) | open; proved for n = 4 … 12 (`planB_cost`, `planB_cost_small`) and per instance by `decide +kernel` (`mczFew_ancRestore_of_classical`) |
+| The all-n forms of 23c (`planB_cost` / `planB_valid` for every n) | open; proved for n = 4 … 12 (`planB_cost`, `planB_cost_small`) |
+| KG Theorem 5.1 for every n (the few:log MCZ restores) | **proved** (Stage 13a: `mczFew_logDepth_ancRestore`, `diffusionFew_logDepth_ancRestore`, `grover_certificate_few_all`); the `ladder` variant is not certified |
 | Commutation of blocks on disjoint qubits | **closed** by 26b2 (`gateK_comm_of_disjoint`, `krausOps_reorder`; DECISIONS.md, 27c review) |
 | Count selection (precision first, composed bounds) | no Phase 2 stage; Paper 1 limitation and future work (PHASE2_SPEC §A.9 (4)) |
 | Proposition 5.1 (3), the cost bound of matching | not formalized (`docs/M3_REPORT.md` §3) |
@@ -258,12 +261,12 @@ live or current.
 | The correction is Clifford iff the function is quadratic over 𝔽₂, and the IR admits exactly those | `clifford_iff_quadratic`, `mbu_exactly_quadratic` (22b, 22c) | the IR's `ifBit` admits Clifford gates only (`Gate.bitOk`) |
 | The restoration algebra: block lists, mixed data actions, widening; the three regimes with a strict hierarchy | 23a, 23b theorems (§1.1) | density-operator semantics; the regimes as stated (`AncRestoreDirty` on every state, `AncRestoreCond` as a subspace regime) |
 | The 8n − 24 bound on KG Problem 1 schedules under the stated cost model, attained by candidate B for n = 6 … 12 | `problem1_T_lower_bound`, `planB_cost` (23c) | the P1 model (`P1State`, `P1Op`, `cost`); n = 4, 5 give 8n − 20; the all-n form is open |
+| The few-ancilla (few:log) MCZ restores its two ancillae for every n (KG Theorem 5.1) | `mczFew_logDepth_ancRestore`, `diffusionFew_logDepth_ancRestore` (13a); `grover_certificate_few_all` | the `.logDepth` variant; the `ladder` variant is not certified (classical step checked at n = 8 only) |
 | Clifford+T and feed-forward accounting of the certified circuits | `grade_ext` of every certificate (§1.2) | measured by the scheduler; `rot` not folded into `t` |
 
-**Claims not to make**: the all-n restoration theorem (KG Theorem 5.1) as proved — it is per instance
-by `decide +kernel` (`fewCheck_sound`, `mczFew_ancRestore_of_classical`); the Unqomp / Silq safety
-conditions as formalized (23b was not run as a stage); the dirty widening or Clean ⇒ Cond(true) as
-proved.
+**Claims not to make**: the `ladder` variant's restoration as proved (it is not certified; only
+`.logDepth` is); the Unqomp / Silq safety conditions as formalized (23b was not run as a stage); the
+dirty widening or Clean ⇒ Cond(true) as proved.
 
 ## 7. Deviations since M3
 

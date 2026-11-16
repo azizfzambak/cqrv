@@ -98,8 +98,9 @@ CQRV certifies a **realization per request**:
 What CQRV does not do, that the works above do: it verifies no general optimization pass (Track C
 uses Qiskit's routing untrusted and checks its witness); its matcher's completeness is for a fragment
 (Miller patterns with uniform arity); its patterns are two (Grover search and quantum counting), plus
-the few-ancilla MCZ family and the hardware chain; the all-n restoration theorem of the few-ancilla
-MCZ is per instance (`fewCheck_sound`); and it has no device result. A quantitative comparison (proof
+the few-ancilla MCZ family and the hardware chain; the few-ancilla MCZ's restoration is proved for
+every n only for its `.logDepth` variant (`mczFew_logDepth_ancRestore`); the `ladder` variant is not
+certified; and it has no device result. A quantitative comparison (proof
 effort, proof size, kernel time per instance against a SQIR proof of the same circuit) is **future
 work**, conditional on the author's approval of the Coq toolchain; the measured side of such a
 comparison for CQRV is already in `docs/M5_REPORT.md` §1.2 (kernel times) and §4 (module sizes).
