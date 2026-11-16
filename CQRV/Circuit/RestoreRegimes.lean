@@ -33,6 +33,15 @@ restoration**: clean (`AncRestore`, Stage 6b), dirty and conditionally clean.
   (`czCond_cond`), clean (`czCond_clean`), **not dirty** (`czCond_not_dirty`: on `|1⟩ ⊗ |+⟩` the
   ancilla comes out as `|−⟩`), hence not conditionally clean under `cond ≡ false`
   (`czCond_not_cond_false`). Both inclusions of the hierarchy are strict.
+* **R2 (REVIEW_RESPONSE_1 row 2). Clean ⇔ Cond(true), proved.** `supportFactor`: a state
+  supported on `V_true` (`P ω P = ω` for `P = ancProj`) is `traceRight ω ⊗ᴹ ancZero a` — entrywise
+  (`supportFactor_m`, through `ancProj_mul_mul_apply`) every entry with `w ≠ 0` or `v ≠ 0`
+  vanishes and the partial trace at `(x, y)` is the single entry `((x, 0), (y, 0))`. Hence
+  `AncRestore.toCond_true` (the converse of `AncRestoreCond.toClean` at `cond ≡ true`) and
+  `ancRestoreCond_true_iff`: **the clean regime is the conditional regime under the trivial
+  condition**, the weakest of the conditional statements (`AncRestoreCond.mono`). The regime list is
+  therefore dirty ⇒ conditionally clean under `cond` ⇒ Cond(true) = clean, with the first
+  inclusion strict (`czCond_not_dirty`).
 * **The KG bridge** lives in `CQRV/Grover/KGRegime.lean` (`Grover.KG.Inv.cond_value`): a
   `Circuit` module does not import `Grover`.
 
@@ -617,6 +626,96 @@ theorem AncRestoreCond.toClean {C : Circuit} {U : 𝐔[Reg n]} {cond : Reg n →
   apply MState.ext_m
   have h' := h.mono (cond' := fun _ => true) (fun _ _ => rfl)
   rw [h' (ρ ⊗ᴹ ancZero a) (by rw [condSubspace_true, ← prod_ancZero_m_eq]), kron_one_conj]
+
+/-! ### R2 — Clean ⇔ Cond(true) (REVIEW_RESPONSE_1 row 2; report §6.2.3) -/
+
+/-- The matrix of the partial trace over the second factor (the entrywise form of Physlib's
+`MState.traceRight`; `CQRV/Noise/Steps.lean` states the same as `MState.traceRight_m`, which a
+`Circuit` module cannot import). -/
+theorem traceRight_m_eq {d₁ d₂ : Type} [Fintype d₁] [DecidableEq d₁] [Fintype d₂] [DecidableEq d₂]
+    (σ : MState (d₁ × d₂)) : σ.traceRight.m = σ.m.traceRight := by
+  simp only [MState.m, MState.traceRight_M, HermitianMat.traceRight_mat]
+
+/-- The entries of `P M P` for the clean projector `P = 1 ⊗ |0⟩⟨0|`: the `((x, 0), (y, 0))` entry
+of `M` on the ancilla-zero block, `0` elsewhere. -/
+theorem ancProj_mul_mul_apply (M : Matrix (Reg n × Reg a) (Reg n × Reg a) ℂ) (x y : Reg n)
+    (w v : Reg a) :
+    (ancProj n a * M * ancProj n a) (x, w) (y, v) =
+      if w = (fun _ => false) ∧ v = (fun _ => false) then M (x, fun _ => false) (y, fun _ => false)
+      else 0 := by
+  have hP : ∀ s t : Reg n × Reg a, ancProj n a s t =
+      if s.1 = t.1 ∧ s.2 = (fun _ => false) ∧ t.2 = (fun _ => false) then 1 else 0 := by
+    rintro ⟨x', w'⟩ ⟨y', v'⟩
+    rw [ancProj, kroneckerMap_apply, one_apply, ancZero_m_apply]
+    by_cases hxy : x' = y' <;> by_cases hw : w' = fun _ => false <;>
+      by_cases hv : v' = fun _ => false <;> simp [hxy, hw, hv]
+  rw [Matrix.mul_apply, Finset.sum_eq_single ((y, fun _ => false) : Reg n × Reg a)]
+  · rw [Matrix.mul_apply, Finset.sum_eq_single ((x, fun _ => false) : Reg n × Reg a)]
+    · rw [hP, hP]
+      by_cases hw : w = fun _ => false <;> by_cases hv : v = fun _ => false <;> simp [hw, hv]
+    · rintro ⟨p1, p2⟩ _ hp
+      rw [hP]
+      split_ifs with h
+      · exact (hp (Prod.ext_iff.mpr ⟨by simpa using h.1.symm, by simpa using h.2.2⟩)).elim
+      · simp
+    · intro h; exact absurd (Finset.mem_univ _) h
+  · rintro ⟨q1, q2⟩ _ hq
+    rw [hP]
+    split_ifs with h
+    · exact (hq (Prod.ext_iff.mpr ⟨by simpa using h.1, by simpa using h.2.1⟩)).elim
+    · simp
+  · intro h; exact absurd (Finset.mem_univ _) h
+
+/-- **Support factorization, entrywise**: a state supported on `V_true = {w = 0}` is the Kronecker
+product of its partial trace with `|0⟩⟨0|`. -/
+theorem supportFactor_m (ω : MState (Reg n × Reg a))
+    (hω : ancProj n a * ω.m * ancProj n a = ω.m) :
+    ω.m = ω.traceRight.m ⊗ₖ (ancZero a).m := by
+  have hentry : ∀ (x y : Reg n) (w v : Reg a), ω.m (x, w) (y, v) =
+      if w = (fun _ => false) ∧ v = (fun _ => false) then ω.m (x, fun _ => false) (y, fun _ => false)
+      else 0 := by
+    intro x y w v
+    rw [← ancProj_mul_mul_apply ω.m x y w v, hω]
+  ext ⟨x, w⟩ ⟨y, v⟩
+  rw [kroneckerMap_apply, traceRight_m_eq, ancZero_m_apply]
+  simp only [Matrix.traceRight, Matrix.of_apply]
+  have hsum : ∑ i, ω.m (x, i) (y, i) = ω.m (x, fun _ => false) (y, fun _ => false) := by
+    rw [Fintype.sum_eq_single (fun _ => false)]
+    intro i hi
+    rw [hentry x y i i]; simp [hi]
+  rw [hsum, hentry x y w v]
+  split_ifs <;> simp
+
+/-- R2 — **support factorization**: a state supported on `V_true` is `traceRight ω ⊗ᴹ |0⟩⟨0|`
+(`condSubspace_true` identifies `V_true` with `ancProj`). -/
+theorem supportFactor (ω : MState (Reg n × Reg a))
+    (hω : ancProj n a * ω.m * ancProj n a = ω.m) :
+    ω = ω.traceRight ⊗ᴹ ancZero a := by
+  apply MState.ext_m
+  rw [prod_ancZero_m]
+  exact supportFactor_m ω hω
+
+/-- R2 — **clean is conditionally clean under `true`**, the converse of `AncRestoreCond.toClean`
+at `cond ≡ true`: factor the supported state, apply the clean statement at `traceRight ω`, and
+`kron_one_conj`. -/
+theorem AncRestore.toCond_true {C : Circuit} {U : 𝐔[Reg n]} (h : AncRestore n a C U) :
+    AncRestoreCond n a C U (fun _ => true) := by
+  intro ω hω
+  rw [condSubspace_true] at hω
+  have hfac := supportFactor ω hω
+  calc (channelDenote n a C ω).m
+      = (channelDenote n a C (ω.traceRight ⊗ᴹ ancZero a)).m := by rw [← hfac]
+    _ = ((U ◃ ω.traceRight) ⊗ᴹ ancZero a).m := by rw [h ω.traceRight]
+    _ = (U.val ⊗ₖ (1 : Matrix (Reg a) (Reg a) ℂ)) * (ω.traceRight ⊗ᴹ ancZero a).m *
+          (U.val ⊗ₖ (1 : Matrix (Reg a) (Reg a) ℂ))ᴴ := (kron_one_conj U _ _).symm
+    _ = (U.val ⊗ₖ (1 : Matrix (Reg a) (Reg a) ℂ)) * ω.m *
+          (U.val ⊗ₖ (1 : Matrix (Reg a) (Reg a) ℂ))ᴴ := by rw [← hfac]
+
+/-- R2 — **Clean ⇔ Cond(true)**: the clean regime is the conditional regime under the trivial
+condition (report §6.2.3; REVIEW_RESPONSE_1 row 2). -/
+theorem ancRestoreCond_true_iff {C : Circuit} {U : 𝐔[Reg n]} :
+    AncRestoreCond n a C U (fun _ => true) ↔ AncRestore n a C U :=
+  ⟨AncRestoreCond.toClean, AncRestore.toCond_true⟩
 
 /-- Conditionally clean under `cond ≡ false` (`V = everything`) is dirty. -/
 theorem AncRestoreCond.toDirty {C : Circuit} {U : 𝐔[Reg n]}

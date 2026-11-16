@@ -8,7 +8,8 @@ meta import CQRV.Circuit.RestoreRegimes
 
 The axiom lines of `ancRestoreDirty_of_kraus`, `AncRestoreDirty.toClean`, `AncRestoreDirty.comp`,
 `reset_not_dirty`, `AncRestoreDirty.toCond`, `AncRestoreCond.toClean` and `AncRestoreCond.comp`
-(the standard three); the dirty phase gadget is dirty restoring (and hence conditionally clean and
+(the standard three), and of the R2 theorems `supportFactor`, `AncRestore.toCond_true`,
+`ancRestoreCond_true_iff` with the iff used on the MBU gadget and the CZ instance; the dirty phase gadget is dirty restoring (and hence conditionally clean and
 clean); `mbuCircuit` is not dirty restoring; the conditionally clean instance `CZ(x0, anc 0)` with
 both strictness facts; the composition laws on the instances. The KG bridge is tested in
 `CQRVTests.KGRegime`.
@@ -46,6 +47,28 @@ open scoped MState Kronecker
 /-- info: 'CQRV.AncRestoreCond.comp' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms AncRestoreCond.comp
+
+/-! ## R2 (REVIEW_RESPONSE_1 row 2) — Clean ⇔ Cond(true) -/
+
+/-- info: 'CQRV.supportFactor' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms supportFactor
+
+/-- info: 'CQRV.AncRestore.toCond_true' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms AncRestore.toCond_true
+
+/-- info: 'CQRV.ancRestoreCond_true_iff' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms ancRestoreCond_true_iff
+
+/-- The MBU gadget is clean (`mbu_channel_correct`), hence conditionally clean under `true`. -/
+example : AncRestoreCond 2 1 mbuCircuit czU (fun _ => true) :=
+  ancRestoreCond_true_iff.mpr mbu_channel_correct
+
+/-- And back: the CZ instance's conditional statement under `true` is its clean statement. -/
+example : AncRestore 1 1 czCondCircuit 1 :=
+  ancRestoreCond_true_iff.mp (czCond_cond.mono fun _ _ => rfl)
 
 /-! ## The dirty phase gadget -/
 
