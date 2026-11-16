@@ -1438,3 +1438,9 @@ Decision: three places said that KG Theorem 5.1 — the few-ancilla MCZ restores
 Why: the source of the error — the 23c "all-n forms" (the schedule cost bound `planB_cost` for every n, open) were conflated with the restoration theorem of 13a (proved); found by the reviewer on a re-read against DECISIONS.md 2026-10-27 / 2026-10-28.
 Rejected: leaving §5 as one row (two different statuses in one cell).
 Report §: 6.3, 9.1.1; M5_REPORT §1.1, §5, §6.2; STAGE29_NOTE §3.
+
+## 2026-11-16 — Response to the two reviews of the unified paper draft; revision tasks R1–R16 (the author's decision to start R1, R2, R15)
+Decision: the two external reviews of the unified paper draft (Review A, section by section; Review B, claim calibration) were answered point by point in `docs/REVIEW_RESPONSE_1.md`, every point checked against the Lean sources, the committed files or a primary source; the paper was restructured (draft v2, `docs/notes/`, not committed). The project work the reviews call for is the list R1–R16 of `docs/REVIEW_RESPONSE_1.md` §4. The author decided on 2026-11-16 to start with R1, R2 and R15 ("evet, R1, R2 ve R15 ile başla"); they run as one revision task, `docs/tasks/REVA_TASK.md`, on branch `rev-a`. R15 keeps the witness field `clbit_map` and adds an explicit identity check (the witness schema and the 15 committed artifacts stay unchanged).
+Why: the three items are small, change no certificate format, and turn three sentences of the paper ("planned", "not yet mechanized", "parsed but not used") into proved or checked statements.
+Rejected: dropping `clbit_map` from the witness (a schema change and 15 regenerated artifacts for no gain in soundness); starting R3–R5 first (one schema bump, better done together after the small proofs).
+Report §: 2.2.2 (Theorem 3.1), 6.2.3; PHASE2_SPEC §B.2 (23b), §C.2 (26b3); REVIEW_RESPONSE_1 §2, §4.
