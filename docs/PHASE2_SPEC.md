@@ -2569,3 +2569,127 @@ logical certificates and the three conditional ones. The pass mark is 26.
 a statement about noise". In a certificate that also carries `noise_conditional`, it should read
 as the physical-translation part. The 26c2 manifest is frozen, so the wording, under its own key,
 waits for a schema bump at the release.
+
+**27c done, accepted 2026-11-16** (CI below). Stage 27 is complete, and so is Track C.
+
+**The family.** `examples/frontier/fr_n2…fr_n7.cqr` is Grover on `x_0 ∧ … ∧ x_{n−1}` with M = 1,
+at the iteration count `cqr` chooses: r = 1, 2, 3, 4, 6, 8 for n = 2…7.
+- **Modes:** tree mbu, tree coherent, fewlog mbu; FakeWashington takes coherent only.
+- **Routings:**
+  - (a) the full coupling map;
+  - (b) the edges of calibrated error ≥ 1/2 removed: 22 directed edges on FakeTorino, 6 on
+    FakeWashington.
+- **The cost:** 30 rows, about a minute of Qiskit. No run failed, and no row clamps.
+
+**The frontier** (the largest n with `noiseBound` < 1; table in `docs/hw_frontier/FRONTIER.md`,
+source `frontier.json`):
+
+| target | mode | frontier n | `noiseBound`, routing (a) | `noiseBound`, routing (b) |
+|---|---|---|---|---|
+| FakeTorino | tree mbu | 3 | 0.7521 | 0.9590 |
+| FakeTorino | tree coherent | 3 | 0.7415 | 0.5962 |
+| FakeTorino | fewlog mbu | 3 | 0.7776 | 0.8345 |
+| FakeWashington | tree coherent | 2 | 0.2278 | 0.2110 |
+
+- **Where it turns vacuous.** Every FakeTorino series is vacuous from n = 4 (1.60–2.19), and every
+  FakeWashington series from n = 3.
+- **Routing (b)** helps where the full-map route used a noisy edge, and hurts where the route
+  grows. The frontier n is the same under both routings.
+
+**Three new frontier certificates.** Each has status `logical_certified, hardware_compatible,
+physical_translation_validated, noise_conditional`, and no emulator run:
+
+| certificate | δ' |
+|---|---|
+| `fr_n3_tree_coherent_rb_torino` | 0.5962 |
+| `fr_n3_fewlog_mbu_torino` | 0.7776 |
+| `fr_n2_tree_coherent_rb_washington` | 0.2110 |
+
+The tree-mbu frontier instance is hw_n3, certified in 27b. Each new certificate has its own
+logical certificate and check file. The artifacts record routing (b) in `manifest.routing`; the
+25a artifacts reproduce byte for byte.
+
+**The idle diagnostic** (the largest idle time over T2, at L = 0):
+- At the frontier it is between 0.05 and 0.38.
+- At n = 5 it exceeds 1 on every FakeTorino series: a qubit idles for a whole coherence time while
+  (P-idle) assumes it keeps its state.
+- So (P-idle) is the premise furthest from a device, and the frontier is where it is still
+  moderate.
+
+**CI.** Step 30 takes 166 s, with eleven Lean files and the frontier check. Step 28 checks fifteen
+files. The pass mark stays 26.
+
+**Track C in one paragraph.**
+- **What Lean checks.** For a routed circuit on a fake IBM backend, Lean checks the whole chain:
+  the table translation, the routing and reordering, the instance facts (reconstruction, coupling
+  edges, the channel, the start from all-|0⟩), the transfer of the certified realization, the
+  physical grade, selection by it, and, under four named premises, a conditional realization with
+  an exact bound.
+- **Where the bound is non-vacuous.** Only for tiny instances: n = 3 on FakeTorino (δ' 0.60–0.78),
+  n = 2 on FakeWashington (0.21), and the MBU gadget (0.0995). The 8-qubit running example stands
+  at 2.9.
+- **What this does not claim.** The framework reaches a device description. It does not reach
+  useful problem sizes on these calibrations. No device was run, Qiskit stays untrusted, and
+  nothing is "verified on hardware".
+
+**Open items closed by Track C.** "Commutation of blocks on disjoint qubits", open since 23b (§B.3
+(3)), is proved by `gateK_comm_of_disjoint` and `krausOps_reorder` (26b2).
+
+## §D. Stages 28–30: device runs (gated), the comparison not run, the release
+
+Written at the 27c review (2026-11-16) by the reviewer, under the author's delegation. PHASE2_ROADMAP
+rows 28–30.
+
+### D.1 Stage 28 (gated): device runs
+
+Stage 28 needs an account on a quantum cloud service, an access token, and the circuits sent to an
+external service. All three are the author's decision (delegation rules of 2026-11-15). The
+question was put to the author on 2026-11-16.
+- **If the author declines, or has no access** (the default), Stage 28 is not run. 30b records
+  this, and the "closing the loop" section of Paper 1 stays future work.
+- **If the author has access**, the candidates are the instances with a non-vacuous conditional
+  bound (hw_n2, hw_n3, the wrapped gadget) on an IBM device:
+  - the author sets up the account and the token; the reviewer never enters one;
+  - the run report is an experiment report; it compares p̂ with 1 − δ' and is never called
+    "verified on hardware";
+  - (P-cal) then names the device's calibration at run time, not a shipped snapshot.
+
+### D.2 Stage 29: not run
+
+As decided at M3 (§A.9 (3)). 30b writes the reason and a comparison with SQIR / VOQC and related
+work from the literature only.
+
+### D.3 Stage 30: the release
+
+Four tasks.
+
+**30a, housekeeping (implementer).** Code quality without a new claim:
+- the M4 list (§B.3 (2)): the duplicated kernel-evaluable schedule, and the layering exception
+  `Circuit/CountingCorrect.lean` → `Grover/Restore.lean`;
+- the manifest relabel (27b2 review);
+- the README restructuring of `hw/` and `examples/hw_checks/` (27c);
+- a layering check in CI.
+
+No theorem statement or declaration name changes.
+
+**30b, the reports (implementer, from the repository alone; `docs/paper/` is not read):**
+- `docs/M5_REPORT.md`, the successor of `docs/M3_REPORT.md`;
+- `docs/STAGE29_NOTE.md`;
+- `docs/RELEASE.md`: reproducibility and the trust boundary;
+- the README.
+
+**30c, the drafts (reviewer), outside `docs/paper/`.** The author approves the final text of every
+paper:
+- `docs/notes/REPORT_V5_DRAFT.md`: report v5 as the PHASE2_SPEC merged into the report's chapters;
+- `docs/notes/PAPER1_REVISION_DRAFT.md`: Tracks A and C, the claims with their evidence and scope;
+- `docs/notes/PAPER2_DRAFT.md` updated to the final state of Track B.
+
+**30d, the release (the author's).** Each step needs the author's explicit approval:
+- the public repository;
+- the archive with a DOI;
+- the preprint;
+- the submissions;
+- a CI run off this machine.
+
+Nothing is published or put online before the author says so (decision of 2026-10-29). Until
+then, Phase 2 ends at "M5 ready": 30a–30c done, 30d waiting for the author.
