@@ -2209,3 +2209,59 @@ Corrected: durations are the exact rationals of the file's decimal numbers. The 
 outside the snapshot hash, so the certificate records the hash of the target file's bytes. P1 also
 gains a Lean port of 25a's physical bound, so that the bound can be a selection component.
 `PhysCert.lean` is self-contained (the literals re-emitted), with `emitted = C` by the kernel.
+
+**26c2 done, accepted 2026-11-16** (CI below). P1–P3 are done, and the physical certificate is
+committed-ready. 26c2 stopped after P3 at the 1 200-line guard, as allowed; P4–P5 become 26c2b.
+
+**P1, `PhysGrade`** (`CQRV/Hardware/PhysGrade.lean`, Physlib-free; the cqr closure is now 59
+modules):
+- the qubits;
+- the two-qubit count;
+- the mid-circuit measurements;
+- the feed-forward count, one per conditioned basis gate;
+- the exact ASAP depth at a latency L;
+- the exact physical bound, a port of 25a's.
+
+`HardwareTarget.durations` holds exact rationals. `cqr hw grade` and `hw/physgrade.py` agree
+exactly on all twelve artifacts at L ∈ {0, 1 000 ns}. The bounds are 25a's: 0.0860, 0.1052,
+0.1500, 0.6484, and vacuous for the rest. The corrected duration rule shows in the data: FakeTorino's
+119.99999999999999 ns gives depths such as 1686999999999999991/50000000000000 ns.
+
+**P2, the physical certificate.** `cqr hw certify` writes `examples/certs/grover_pred_037_torino/`.
+`PhysCert.lean` (997 lines, 55 s, 4.1 GB) is self-contained and holds, in order:
+1. the committed `Cert.lean`'s block verbatim (`emitted`, `cert`, `front_end`);
+2. the artifact's check body (`recon` by `rfl`, `edges_ok`, `phys_channel`, `phys_zero`, tampering);
+3. **`emitted_eq : emitted = C`** by the kernel. This is the trusted link, and it depends on no
+   axiom;
+4. **`phys_realizes`**. There is a σ_f with `W.final = layOf … σ_f` such that the physical Grover
+   channel (all-|0⟩ prepared, the physical circuit run, un-embedded) `RealizesExact` the search
+   specification with δ = 7/128, at the physical circuit's own grade. It follows from `cert.1`
+   through `realizesExact_phys`;
+5. `physGrade_L0` and `physGrade_L1000` by `decide +kernel`.
+
+The main theorems have the standard three axioms.
+
+Its `PhysGrade` values:
+
+| component | value |
+|---|---|
+| qubits | 16 |
+| two-qubit gates | 315 |
+| mid-circuit measurements | 18 |
+| feed-forward | 624 |
+| depth at L = 0 ns | ≈ 33 740 ns |
+| depth at L = 1 000 ns | ≈ 43 740 ns (10 feed-forward waits on the critical path) |
+| bound | ≈ 2.4495 (vacuous) |
+
+`physical.qasm` is printed from the validated G on the 133-qubit device; a Python check parses it
+back to the artifact's gate list. `manifest.json` records:
+- the hashes, including the target file's bytes;
+- L as an assumption;
+- the `PhysGrade` values;
+- the meaning sentence.
+
+**P3, the status words.** The certificate carries `logical_certified`, `hardware_compatible` and
+`physical_translation_validated`, with `emulator_run: "vacuous bound, not tested"`.
+`emulator_validated` is left out, as specified.
+
+**26c2b**, P4–P5, is specified in STAGE26_TASK.md.

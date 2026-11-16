@@ -455,6 +455,49 @@ The pass mark becomes 25.
 
 If a statement here is false, give the counterexample and the corrected form.
 
+### 26c2b — P4–P5, selection and the CI step (note added at the 26c2 review, 2026-11-16)
+
+26c2 stopped after P3 at its guard, with the certificate ready. 26c2b does P4 and P5 above.
+Precondition: main = the 26c2 review commit; start with `git switch -c stage-26c2b main`.
+
+**`selectPhys` and `selectPhys_spec`**, Physlib-free, as `Patterns/Select.lean`:
+- **Inputs:** a list of candidates (mode, target capabilities, `PhysGrade`), one component and an
+  optional budget on it.
+- **Output:** the first minimal admissible candidate, or none.
+- **Admissibility:** mbu needs the target's feed-forward, and the budget, if given, holds.
+- **`selectPhys_spec`:** the chosen one is admissible and minimal for the component among the
+  admissible ones; none means no candidate is admissible.
+
+**`cqr hw select --request NAME --target FILE --prefer twoq|depth|bound [--ff-latency NS]
+[--budget X]`** writes `examples/hw_select/<request>__<target>/Select.lean`:
+- every candidate's G and its tables as literals, with each candidate's `physical.json` hash
+  linking it to its committed `Check.lean`;
+- each `PhysGrade` by `decide +kernel`;
+- `selectPhys … = some i` (or `none`) by `decide +kernel`;
+- the `selectPhys_spec` instance and `#print axioms`.
+
+The recon of each candidate stays in its `Check.lean`. Selection relies on that file through the
+hash: the reconstruction of each candidate is already checked in CI, so `Select.lean` does not
+repeat it.
+
+**The committed selections**, four request–target pairs (grover_pred_037 and simple_alu_x0_1, on
+FakeTorino and FakeWashington):
+- on FakeWashington only coherent is admissible;
+- on FakeTorino, the choice under twoq, under depth at L = 0 and at L = 1 000 ns, and under the
+  bound, in a table in `examples/hw_select/README.md`. Commit one `Select.lean` per pair, for
+  `--prefer bound`; give the other preferences as the table's rows, run once.
+- **A budget test:** on FakeTorino, `--prefer bound --budget 1` returns none for both requests
+  (every bound is vacuous there). Record this as the honest answer, not as an error.
+
+**P5, the CI step "Physical certificate":**
+- `lake env lean` on `PhysCert.lean` and on the four `Select.lean`;
+- the two Python checks of 26c2;
+- the regeneration of the selection files byte for byte.
+
+The pass mark becomes 25.
+
+**The guards** of 26c hold; generated files do not count.
+
 ## Closing reply (each task)
 
 Per CLAUDE.md: (a) files, (b) build tail, (c) tests, (d) SORRIES.md, (e) open questions. Send it
