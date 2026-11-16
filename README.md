@@ -1,46 +1,82 @@
 # CQRV — Certified Quantum Realization
 
-Implementation of *Applying Certified Quantum Realization: A Practical Implementation Guide*
-(`docs/cqrv_report_revised_v3.docx`). The report is the specification; `docs/PLAN.md` is the
-stage-by-stage execution plan; `CLAUDE.md` holds the rules every Claude Code session follows.
+A certifying compiler from a small classical specification language to quantum circuits, with Lean 4
+certificates. It implements the technical report *Applying Certified Quantum Realization: A Practical
+Implementation Guide* (`docs/cqrv_report_revised_v3.docx` with its errata; the report is the
+specification). A request — a Boolean predicate over `n` bits, a search or counting problem — is
+matched against a library of proof-carrying patterns, instantiated, synthesized into a circuit with
+measurement-based or coherent uncomputation, and emitted as QIR / OpenQASM 3; the output is a
+self-contained Lean file whose theorem the kernel checks: the circuit realizes the specification with
+an exact failure bound δ and a measured resource grade (width, depth, T-count, ancillae), and
+restores its ancillae. Track C extends the chain to a hardware description: the circuit routed on a
+Qiskit fake backend is checked against the certified one, and the noise statement is a theorem
+conditional on four named premises. **Nothing is "verified on hardware"**: no device was run.
 
-Status: **M3 reached (2026-11-15); Stage 21a complete (Stage 21a: the Count entry, Proposition 5.1 proved for the matcher, the QPLP record, `cqr certify --problem count`, certified selection); Stage 21b2: Theorem 3.3a exercised at `grover_pred_037` with `m = 5` — `search_unknown_M_8_32_5`, a library theorem over the two QPLP records with no committed certificate (PHASE2_SPEC §A.9 (12)); Stage 22a: the general MBU theorem `mbu_general` — any phase-exact compute block, measured in the X basis and corrected by a phase implementation of the same function, restores its ancilla, with `mbu_channel_correct` re-derived from it; Stage 22b: the Clifford corollary — the correction of MBU is Clifford iff the computed function has degree ≤ 2 over 𝔽₂ (`clifford_iff_quadratic`, `mbu_quadratic`); Stage 22c: the IR boundary — the IR admits only Clifford gates under `ifBit`, every IR Clifford gate is Clifford on the register, and a well-formed MBU circuit exists for `f` iff `f` is quadratic (`mbu_wf_forces_quadratic`, `mbu_exactly_quadratic`) (PHASE2_SPEC §B.1); Stage 23a: the restoration algebra, part one — block lists restore (`ancRestore_list`), restoration under measurement with a mixed data action (`ancRestoreMix_of_kraus`: MBU without its correction dephases, `mbu_uncorrected`), and ancilla reuse by widening (`AncRestore.widen`, `AncRestore.comp_widen`); Stage 23b: the three regimes — dirty (`AncRestoreDirty`, holding on every state by the span of the product states; the reset is never dirty, `reset_not_dirty`, so `mbuCircuit` is not), conditionally clean as a subspace regime (`AncRestoreCond`) with the exact hierarchy dirty = conditionally clean under `false` ⇒ conditionally clean ⇒ clean, both inclusions strict (`CZ(x0, anc 0)`), and the KG bridge `Inv.cond_value` in `CQRV/Grover/KGRegime.lean`; Stage 23c: the 8n − 24 counting argument as a theorem on KG Problem 1 schedules under a stated cost model (`problem1_T_lower_bound`, `CQRV/Synthesis/Problem1.lean`), candidate B attaining it for n = 6 … 12 with its emitted T-count equal to the model's cost (PHASE2_SPEC §B.2); Track C, Stage 24a: the hardware target model `HardwareTarget` (`docs/hardware_target.schema.json`), two targets extracted from Qiskit fake backends into `hw/targets/`, and `cqr hw capabilities` with the snapshot hash checked by Lean's SHA3-256; Stage 24b: the lowering of the canonical circuit JSON to Qiskit dynamic circuits (`hw/lower.py`), compared branch by branch on Aer against the statevector harness on 18 instances; Stage 24c: the weighted hardware bound δ_hw ≤ δ + Σ_types count · rate from a target's calibration snapshot, worst case over the device and exact in ℚ (`cqr hw bound`, `CQRV/Hardware/Bound.lean`; reported, not certified; vacuous on both fake backends); Stage 25a: our basis translation and Qiskit layout and routing with a checked witness (`hw/decomp.py`, `hw/transpile.py`), 11 committed physical artifacts with the bound on the physical circuit after a seed search (`hw/artifacts/`; non-vacuous for the small instances, vacuous for the committed examples) and the ideal-equivalence check of every physical circuit; Stage 25b: emulator runs on the fake backends' noise models (`hw/run.py --sim`, `docs/hw_runs/RUNS.md`) — the three non-vacuous bounds hold in the emulation, the committed examples are observations without a bound; reported, not certified, never "verified on hardware"; Stage 26a: the basis gates embedded in the IR up to a global phase and the decomposition table proved sound entry by entry (`decomp_sound`, `translate_sound`: the translation of a well-formed circuit is well formed and has the same channel; `CQRV/Hardware/DecompSound.lean`), the Lean table equal to `hw/decomp.py`'s; Stage 26b1: relabeling, the routing SWAP and the embedding of the logical register into the compact physical register proved as channel equalities (`channelDenote_relabel`, `ud_swapEntry`, `channelDenote_embed`; `CQRV/Hardware/Route.lean`); Stage 26b2: gates on disjoint qubits commute and the matcher's dependency-queue reordering preserves the Kraus operators (`gateK_comm_of_disjoint`, `krausOps_reorder`, `krausOps_swap_migrate`; `CQRV/Hardware/Reorder.lean`), and the routing witness is read and reconstructed in Lean (`applyWitness`, equal to the tool's physical circuit on the gadget by evaluation); Stage 26b3: the reconstruction is sound — `applyWitness_sound` (the physical circuit on the embedded input is the embedded logical output at the final layout), `AncRestore.phys`, `realizes_phys`, and `gadgetPhys_correct` on the artifact's physical circuit, the gadget reconstruction decided by the kernel (`CQRV/Hardware/WitnessSound.lean`); Stage 26c1 (part 1): the linear dependency-queue check `applyWitnessQ`, proved to imply `applyWitness` (`applyWitnessQ_ok`), decides the 2 541-gate reconstruction in the kernel in 24 s and 4 GB; `layPerm`/`layOf_layPerm`, `embed_zero`, `edgesOk` (`CQRV/Hardware/Check.lean`, `CheckSound.lean`); Stage 26c1b: every committed artifact has a kernel-checked `examples/hw_checks/<artifact>/Check.lean` generated by `cqr hw check` — the reconstruction by `rfl`, the coupling edges, and the channel theorem `phys_channel` at the instance with the final layout explicit —, run by the CI step "Hardware checks"; Stage 26c2 (part 1): the physical grade `PhysGrade` (exact ASAP depth at a stated feed-forward latency, the exact physical bound) equal to its Python mirror on all artifacts, and the first physical certificate `examples/certs/grover_pred_037_torino/PhysCert.lean` — the logical certificate re-derived, `emitted = C` by the kernel, the realization transferred to the routed circuit on FakeTorino from all-|0⟩ (`phys_realizes`), the grade decided by the kernel; status `logical_certified, hardware_compatible, physical_translation_validated` — not a statement about noise, not "verified on hardware"; Stage 26c2b: selection by the physical grade (`selectPhys` with `selectPhys_spec`; `cqr hw select`; four committed `examples/hw_select/*/Select.lean` decided by the kernel; a budget no candidate meets returns `none`, the honest answer), the CI step "Physical certificate" (pass mark 25; PHASE2_SPEC §C.3); Stage 27a: the noise theorem — the step semantics with the classical register equal to `channelDenote` (`channelDenote_eq_steps`), the perturbation bound (`diamondDist_steps_le`, `diamondDist_mix_le ≤ 2p` on the full register), `noisy_realization` (`δ + ½ ∑ ηᵢ`), `noisy_realization_stochastic` (`δ + ∑ pᵢ`) and `phys_noisy` on the routed physical circuit; Stage 27b (part 1): the stochastic premise at basis operations (`phys_noisy_stochastic`, `phys_noisy_inst_of`: `δ' = δ + Σ p_g + Σ r_j` for every choice of the arbitrary channels), the exact `noiseBound` (Pauli reading with the clamp) equal to its Python mirror on all artifacts, the `noise` preference, and the logical certificates of hw_n2 and hw_n3 linked by hash to their artifacts; Stage 27b2: **the first conditional certificates** — `examples/certs/hw_n2_torino`, `hw_n3_torino` (`phys_noisy_inst`: for every choice of the arbitrary channels the noisy physical channel realizes the specification with δ' = 0.1793 / 0.7521) and `mbu_gadget_torino` (`gadget_noisy`, δ' = 0.0995), each naming its four premises (P-cal, P-stoch, P-ro, P-idle) and the meaning sentence, with the emulator comparison at δ' and the CI step "Noise certificates" (pass mark 26); Stage 27c: **the feasibility frontier** `docs/hw_frontier/FRONTIER.md` — Grover on n = 2…7 ANDs, three modes, two routings: the conditional bound is below 1 up to n = 3 on FakeTorino and n = 2 on FakeWashington, with three frontier certificates (δ' 0.5962, 0.7776, 0.2110) and the idle-exposure diagnostic showing how far (P-idle) is from a device (PHASE2_SPEC §C.4), sorry-free (local CI)**; Phase 2 started (coherent uncomputation mode `--uncompute coherent` for `synthesize` and `certify`, Stages 15a–15b; a fourth certificate `examples/certs/grover_pred_037_coh`; the front end proved and stated in every certificate, Stages 16a–16b; the IR and grade extension — exact phase gates `p` / `cp` in the IR and both emitters, the second resource record `GradeExt` stated in every certificate as `gradeExt_eq` and recorded as `grade_ext`, schema 1.9.0 — Stages 17a–17b; `docs/PHASE2_ROADMAP.md`). Two Grover certificates, `grover_pred_037` and the
-RevLib benchmark cone `simple_alu_x0_1` (and the few-ancilla variant `grover_pred_037_few`), are
-`certified`: kernel-checked, axioms exactly `propext`, `Classical.choice`, `Quot.sound`, measured
-grades, exact δ, the front end proved (`toNetwork_pred`; `front_end` kernel-checked in every `Cert.lean`, Stage 16b), and since Stage 14a the solution count M is
-decided by the kernel for n ≤ 10 (`hM_count`; `--count-limit k`, default 10 since Stage 14c; larger n stay `certified
-(conditional on: solution_count = M)`) (`examples/certs/`, with run reports). Since Stage 21a4, `cqr certify --budget w,d,t,a --prefer width|depth|t|anc` picks, among the three certified candidates (tree + mbu, tree + coherent, few:log + mbu), the one with the least key that fits the budget, and the certificate's theorem `selected` is kernel-checked against the candidates' builders (`examples/certs/grover_pred_037_sel`, schema 1.11.0). Acceptance is
-the output of `scripts/ci_local.sh` (CI is not run remotely). Summary, open obligations, trust
-boundaries and the report errata: `docs/M2_REPORT.md` (M2, frozen) and `docs/M3_REPORT.md` (M3: two
-certified patterns, Proposition 5.1, certified selection; measured numbers with their sources).
-Current state (Stages 0–21a, one page: machine-checked results, certificates, trust
-boundaries, open items): `docs/PROJECT_STATUS.md`.
+Phase 2 is complete (Stages 14–30a; milestone M5 ready, 2026-11-16). The measured state of the
+project, with every number's source, is `docs/M5_REPORT.md`; reproduction and the trust boundary are
+`docs/RELEASE.md`; the earlier milestone reports are `docs/M2_REPORT.md` and `docs/M3_REPORT.md`
+(frozen). The stage-by-stage history is `docs/PROJECT_STATUS.md` and `docs/DECISIONS.md`.
 
-Layout: see CLAUDE.md. Obligations: `docs/SORRIES.md`. Decisions: `docs/DECISIONS.md`.
+## The three tracks
 
-## Certifying a predicate
+**Track A — the certifying compiler.** Two patterns, Grover search and quantum counting (amplitude
+estimation with an exact or approximate inverse QFT), each a parametric lemma in the library;
+`cqr certify` specializes the lemma to a request and the kernel decides the instance facts — the front
+end's translation, the synthesizer's output, the solution count, the exact δ, the grade. The matcher
+is proved sound and complete for its fragment (Miller patterns with uniform arity), and selection
+under a resource budget is certified. Six logical certificates for the worked predicates
+(`examples/certs/grover_pred_037*`, `simple_alu_x0_1`) plus five for the hardware instances
+(`hw_n2`, `hw_n3`, `fr_*`); kernel times 0.3–25 s each.
+
+**Track B — restoration under measurement.** The mathematics of measurement-based uncomputation
+(MBU): any phase-exact compute block, measured in the X basis and corrected by a phase implementation
+of the same function, restores its ancilla (`mbu_general`); the correction is Clifford iff the
+function is quadratic over 𝔽₂, and the IR admits exactly those (`clifford_iff_quadratic`,
+`mbu_exactly_quadratic`); the restoration algebra (block lists, mixed data actions, ancilla reuse by
+widening) and the three regimes dirty ⇒ conditionally clean ⇒ clean with a strict hierarchy; and the
+8n − 24 bound on Khattar–Gidney Problem 1 schedules under a stated cost model, attained by the
+few-ancilla construction for n = 6 … 12 (`problem1_T_lower_bound`).
+
+**Track C — the hardware chain, on fake backends.** A hardware target (basis gates, coupling map,
+capabilities, calibration snapshot, durations) is read from a Qiskit fake backend; our basis
+translation is proved sound; Qiskit's layout and routing is untrusted and produces a witness, which
+Lean reconstructs and proves sound (`applyWitness_sound`); every committed artifact has a
+kernel-checked `Check.lean`; the physical certificate transfers the realization to the routed circuit
+from all-|0⟩ (`phys_realizes`) with an exact physical grade; the noise theorem on a step semantics
+with the classical register gives the conditional certificate (`phys_noisy_inst`): under (P-cal),
+(P-stoch), (P-ro), (P-idle), for every choice of the arbitrary error channels, the noisy physical
+channel realizes the specification with an exact δ'. The feasibility frontier
+(`docs/hw_frontier/FRONTIER.md`) shows the bound is below 1 only up to n = 3 ANDs on FakeTorino and
+n = 2 on FakeWashington on the shipped calibrations; the emulator runs (`docs/hw_runs/`) agree with
+the non-vacuous bounds as a sanity check.
+
+## Building and checking
 
 ```bash
-lake exe cqr certify examples/grover_pred_037.cqr --report
-lake exe cqr certify examples/simple_alu_x0_1.cqr --solutions 30 --report   # M from the harness
-lake exe cqr certify examples/grover_pred_037.cqr --profile illustrative_sc  # + declared budget
-lake exe cqr certify examples/grover_pred_037.cqr --count-limit 0           # M as a hypothesis
-lake exe cqr certify examples/grover_pred_037.cqr --problem count --precision 4      # counting certificate
-lake exe cqr certify examples/grover_pred_037.cqr --budget 12,200,100,8 --prefer depth  # certified selection
-scripts/ci_local.sh                                                         # local CI
+export LEAN_NUM_THREADS=4                  # Windows: one Lean per core exhausts memory
+lake exe cache get && lake build           # library, tests, the cqr executable
+lake exe cqr certify examples/grover_pred_037.cqr --report       # a certificate, with its run report
+lake env lean examples/certs/grover_pred_037/Cert.lean           # check it yourself: #print axioms
+scripts/ci_local.sh                        # the 26 local CI steps (pass mark 26 PASS, 0 FAIL, 4 n/a)
 ```
 
-## Building on Windows
+The Python test harness lives in `.venv` (`tests/diff/requirements.lock`); the hardware tools of
+Track C in a separate git-ignored `.venv-hw` (`hw/requirements.lock`: qiskit 2.6.2, qiskit-aer 0.18.2,
+qiskit-ibm-runtime 0.52.1, offline fake backends only; `hw/README.md`). Setting up a workstation:
+`docs/SETUP_WORKSTATION.md`. Toolchain and dependency pins: `lean-toolchain`, `lake-manifest.json`
+(never bumped ad hoc).
 
-Builds that compile Physlib (e.g. `lake build CQRVTests`) can exhaust memory on Windows when
-Lake runs one Lean process per core, failing with `failed to read file '…olean': Invalid argument`.
-Limit parallelism (Git Bash):
+## Where to look
 
-```bash
-export LEAN_NUM_THREADS=4
-lake exe cache get && lake build
-```
-
-Setting up a new workstation (repository and toolchain on an SSD, build, CI): `docs/SETUP_WORKSTATION.md`.
-
-The hardware-study tools of Track C live in `hw/` and run in a separate git-ignored venv `.venv-hw`, pinned by `hw/requirements.lock` (`hw/README.md`); they are untrusted tools whose output Lean checks, and the test-harness `.venv` is unaffected by them.
+- `docs/RELEASE.md` — reproduction (pins, venvs, every CI step with its command and time, what
+  reproduces byte for byte) and the trust boundary (kernel-checked / untrusted / premise).
+- `docs/M5_REPORT.md` — what is certified, with axiom lines; the committed certificates with grades,
+  `PhysGrade`, δ and δ', kernel times; the CI; the open items; the claims the papers may make and
+  must not make.
+- `docs/STAGE29_NOTE.md` — why the SQIR / VOQC comparison is not run; the literature comparison.
+- `examples/` — the predicates (`*.cqr`), the certificates (`certs/`), the hardware check files
+  (`hw_checks/`), the selections (`hw_select/`), the frontier family (`frontier/`).
+- `hw/` — the hardware tools and the committed artifacts (`hw/artifacts/`, `hw/targets/`).
+- `CLAUDE.md` — the layout of the Lean packages and the rules of the project; `docs/SORRIES.md` — the
+  tracked proof obligations (none open); `docs/PHASE2_SPEC.md`, `docs/PHASE2_ROADMAP.md` — the Phase 2
+  specification and roadmap.
