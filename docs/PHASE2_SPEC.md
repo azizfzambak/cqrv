@@ -2265,3 +2265,147 @@ back to the artifact's gate list. `manifest.json` records:
 `emulator_validated` is left out, as specified.
 
 **26c2b**, P4–P5, is specified in STAGE26_TASK.md.
+
+**26c2b done, accepted 2026-11-16** (CI below).
+- **Selection.** `CQRV/Hardware/SelectPhys.lean` (Physlib-free; closure 60) proves
+  **`selectPhys_spec`**: the chosen candidate is admissible and minimal for the preferred
+  component, and `none` holds exactly when no candidate is admissible. A candidate in mbu mode is
+  admissible only on a target with feed-forward, and only within the budget.
+- **`cqr hw select`.** It writes the four `examples/hw_select/*/Select.lean`, one per request and
+  target: grover_pred_037 and simple_alu_x0_1, on FakeTorino and on FakeWashington. In each file,
+  every candidate's `PhysGrade` and the choice are closed by `decide +kernel`. Each candidate is
+  linked to its committed `Check.lean` through its `physical.json` hash.
+
+**The choices:**
+
+| request / target | twoq | depth (L = 0 and 1 000 ns) | bound |
+|---|---|---|---|
+| grover_pred_037 / FakeTorino | fewlog mbu (262) | tree coherent | fewlog mbu (1.72) |
+| simple_alu_x0_1 / FakeTorino | fewlog mbu | tree coherent | fewlog mbu (3.44) |
+| either request / FakeWashington | tree coherent only (no feed-forward) | — | — |
+
+The bound picks fewlog mbu, while the committed physical certificate is of the tree mbu artifact.
+That is reported, not forced.
+
+**The budget test.** On FakeTorino, `--prefer bound --budget 1` returns `none` for both requests.
+No candidate there has a non-vacuous bound, and that is the honest answer.
+
+**CI step 29, "Physical certificate"** (139 s):
+- the three Python checks;
+- `lake env lean` on `PhysCert.lean` and on the four `Select.lean`.
+
+The pass mark becomes 25.
+
+**Stage 26 is complete** (26a–26c2b, 2026-11-15/16). For a routed circuit, Lean now checks the
+whole chain from the logical certificate to the physical circuit:
+- the table translation (`translate_sound`);
+- the routing and reordering (`applyWitness_sound`, through the linear `applyWitnessQ`);
+- on all twelve artifacts, the instance facts: reconstruction, coupling edges, the channel
+  equation, and the start from all-|0⟩;
+- for grover_pred_037 on FakeTorino, the certified realization of the routed circuit
+  (`phys_realizes`);
+- the physical grade and selection by it.
+
+Qiskit stays untrusted. Nothing in Stage 26 is a statement about noise; that is Stage 27.
+
+### C.4 The noise theorem and the conditional certificate (Stage 27)
+
+Written at the 26c2b review (2026-11-16) by the reviewer, under the author's delegation. Report:
+§2.3.2 (Theorem 3.3b, `dist⋄`), §6.6 (noise), §3.1.3. PHASE2_ROADMAP row 27.
+
+**What Stage 26 left.** Stage 26 proves `phys_realizes`: the ideal physical channel of a routed
+circuit realizes the specification with the certified δ. A device does not run the ideal channel,
+so Stage 27 bounds what noise costs. The certificate becomes conditional, on premises stated by
+name.
+
+**1. A step semantics with the classical register.** `channelDenote` is a sum over branches of
+classical bits. A measurement and the conditioned gates that read its bit are linked through
+those bits, so the channel is not a composition of per-gate channels on the quantum register.
+
+Stage 27 therefore adds an extended register `X⁺ = X × Bits m`: the bits are qubits that are only
+ever dephased. Each operation gets a channel on `X⁺`:
+- a unitary gate is `Ad(gateU g ⊗ 1)`;
+- `measure q → j` has Kraus operators `P_{q=v} ⊗ X_j^v` (v ∈ {0, 1}). This is a channel on every
+  input; on a bit that is still 0, which `bitsOk` guarantees, it records the outcome;
+- `ifBit j g` is the controlled unitary `|0⟩⟨0|_j ⊗ 1 + |1⟩⟨1|_j ⊗ gateU g`.
+
+`stepChan P` is their composition. **`channelDenote_eq_steps`**: for a well-formed P,
+`channelDenote P ρ = traceBits (stepChan P (ρ ⊗ |0…0⟩⟨0…0|))`.
+
+The proof:
+1. The product of the step Kraus operators along one choice of outcomes is
+   `krausOps … c ⊗ |c⟩⟨0|`.
+2. Tracing out the bits kills the cross terms.
+
+The existing semantics is unchanged.
+
+**2. The perturbation bound.** All step channels act on one space `X⁺`, so the fixed-reference
+diamond distance of Stage 13b composes:
+- **`diamondDist_precompose_le`**: `diamondDist (Ψ ∘ Λ) (Φ ∘ Λ) ≤ diamondDist Ψ Φ` for any
+  `Λ : X⁺ → X⁺`. The reference system has the input's dimension on both sides. Post-composition
+  is 13b's `diamondDist_compose_le`.
+- **`diamondDist_steps_le`**: if `diamondDist Ψ_i Φ_i ≤ η_i` for every i, then the noisy
+  composite is within `Σ η_i` of the ideal one.
+- **`diamondDist_mix_le`**: `diamondDist ((1 − p) • Φ + p • Φ') Φ ≤ 2p` for any channel Φ' on
+  the full space. This is the stochastic premise. With probability at least 1 − p the operation
+  is ideal; otherwise it is an arbitrary channel on the whole register, crosstalk and correlated
+  errors included. So no stability under tensoring (`diamondDist_tensor_id`) is needed: the
+  premise is stated on the full register, and the bound holds there directly. The roadmap's
+  fallback becomes the main route, at no cost in generality.
+
+**3. `noisy_realization`.** Assume:
+- `RealizesExact S dec ⟨Γ ∘ traceBits ∘ stepChan P ∘ prep, g⟩ δ r`;
+- every step i of a noisy implementation `Ψ` is within `η_i` of its ideal.
+
+Then the noisy channel realizes `S` with `δ + ½ Σ η_i`, through `diamond_dominates` and the
+measurement bound, as in Theorem 3.3b. The same holds for `Realizes` with ε.
+
+Readout is modeled the same way: a readout step on each data qubit, before the ideal decoding,
+with the premise `(1 − r_j) • id + r_j • Φ'_j`.
+
+The corollary **`noisy_realization_stochastic`**: under the stochastic premise with probabilities
+`p_i` for the operations and `r_j` for the readouts, the bound is `δ + Σ p_i + Σ r_j`.
+
+**4. The premises of the conditional certificate**, stated by name, never as facts about a
+device:
+- **(P-cal)** the calibration snapshot of the target file, by its hash. For the fakes it is the
+  snapshot that qiskit-ibm-runtime ships, recorded from a real device on a past date. It is not a
+  live calibration, and fetching one would need the author (account and download).
+- **(P-stoch)** every operation i is `(1 − p_i)` times ideal plus `p_i` times an arbitrary channel
+  on the whole register, with `p_i = (d_i + 1)/d_i · r_i`:
+  - `r_i` is the calibrated error of the operation on its qubit or edge;
+  - `d_i = 2^{qubits}`, so the factor is 3/2 for one qubit and 5/4 for two;
+  - this is the Pauli reading of a randomized-benchmarking error: for a Pauli error channel of
+    total probability p, the average infidelity is `d p / (d + 1)`;
+  - virtual `rz` has r = 0.
+- **(P-ro)** every readout, the mid-circuit measurements included (25a's labelled assumption), is
+  `(1 − r_j)` times ideal plus `r_j` times arbitrary, with `r_j` the calibrated readout error.
+- **(P-idle)** idle qubits suffer no error. This is the premise furthest from a device: the
+  1 560 ns measurements and the feed-forward latency are long against T2. It stays a named
+  premise, and 27c reports an idle-exposure diagnostic from the ASAP schedule, which is not part
+  of the bound.
+
+**The conditional bound is not 25a's.** 25a's figure `δ + Σ r_i + Σ readouts` is the bound under
+`p_i = r_i`, which is not the Pauli reading. The Pauli reading's bound is `δ + Σ (d_i + 1)/d_i ·
+r_i + Σ r_j`, at most 3/2 times larger in the gate part. Both are reported; the certificate uses
+the Pauli reading.
+
+**5. Randomized compiling is not in the certified path.**
+- A twirled circuit differs from shot to shot by inserted Paulis. Each would need its own
+  reconstruction check, and the twirling passes insert gates that the witness does not record.
+- The emulator's noise model (`NoiseModel.from_backend`: depolarizing plus thermal relaxation) is
+  not exactly of the (P-stoch) form either, because amplitude damping is not a mixture with the
+  identity.
+
+The premise stays a premise. Randomized compiling goes to the Stage 30 future-work list.
+
+**6. The feasibility frontier.** For each target: the largest instance (n, r, number of ANDs,
+mode) with a non-vacuous conditional bound.
+- Routing may use the coupling map with the edges of error ≥ 0.5 removed. It is still checked by
+  `edges_ok`, since a subgraph's edges are edges.
+- The frontier is a measured table, not a certificate.
+
+**The split:**
+- **27a:** the Lean theory (1–3);
+- **27b:** the conditional certificates of the small instances (4);
+- **27c:** the frontier (6) and the idle diagnostic.
