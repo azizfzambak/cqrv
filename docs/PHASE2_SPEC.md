@@ -2131,3 +2131,81 @@ circuit. No block split is needed, and every instance fits in CI.
 The physical WF and bit count take seconds, so deriving them (26b3 decision) stays unnecessary.
 
 **26c1b**, L4–L5, follows the implementer's design. Its specification is in STAGE26_TASK.md.
+
+**26c1b done, accepted 2026-11-16** (CI below). L4 and L5 are done, and 26c1 is complete. About 800
+lines are hand-written; the twelve generated files (1.0 MB) do not count. No existing artifact byte
+changed, and the cqr closure grows from 54 to 58 modules (Lean + Mathlib).
+
+**The artifacts.** `hw/artifact.py --extra` re-runs every instance with its recorded seed.
+- It requires the re-run witness and QASM to be byte-identical to the committed ones. All twelve
+  are.
+- It then writes `logical.json` (its SHA3 is the manifest's `logical_circuit`) and
+  `physical.json`.
+
+**σ_f explicit.**
+- `applyWitness_sound_core` names `σ_f = irPerm N st.steps * σ₀`, and `applyWitness_sound` is its
+  corollary, with its statement unchanged.
+- On the queue side, `finalPerm b C w N σ₀` is a closed term, and `applyWitnessQ_sound` gives
+  `W.final = layOf … (finalPerm …)` together with the channel equation.
+
+**The generator**, `cqr hw check` (`CheckGen.lean`, Physlib-free), re-checks three hashes:
+- the logical circuit, both from `logical.json` and from the Lean literal's own `circuitHash`;
+- the witness;
+- the target snapshot.
+
+The literal-hash check caught a generator bug before it was committed. A `return` inside a
+`match` in a `do` block dropped the `if` of every conditioned gate. The eight mbu instances failed
+the check, and the four coherent ones passed.
+
+**The twelve `examples/hw_checks/<artifact>/Check.lean` files.** Each holds:
+- `recon` (by `rfl`), `phys_wf`, `phys_nBits`, `edges_ok` and `init_eq`;
+- `phys_channel` and `phys_zero`: from the all-|0⟩ physical state, the output is σ_f's
+  embedding of the logical output from |0⟩;
+- two tampering theorems.
+
+`twoQubitPairs` was made structural, because the kernel cannot reduce well-founded recursion. Each
+file's two axiom lines are the standard three, which the CI step checks in every file. The link
+from C to the logical circuit is the hash, and it is untrusted; 26c2 adds the trusted link.
+
+**CI step 28, "Hardware checks".** It runs `tests/diff/hw_checks_check.py --cqr`:
+- the four digests;
+- the byte-for-byte regeneration;
+- twelve check directories for twelve artifacts.
+
+It then runs `lake env lean` on each file. The pass mark is 24.
+
+**The table re-measured on the committed files** (wall time including about 10 s of loading, and
+peak memory):
+
+| instance | time | peak |
+|---|---|---|
+| mbu_gadget | 11 s | 1.8 GB |
+| mbu_gadget_wrapped | 11 s | 1.9 GB |
+| hw_n2 | 12 s | 1.9 GB |
+| hw_n3 | 15 s | 2.3 GB |
+| grover tree mbu @ torino | 31 s | 4.0 GB |
+| grover tree coherent @ torino | 31 s | 4.1 GB |
+| grover tree coherent @ washington | 19 s | 2.7 GB |
+| grover fewlog mbu | 22 s | 3.1 GB |
+| alu tree mbu | 31 s | 4.0 GB |
+| alu tree coherent @ torino | 31 s | 3.9 GB |
+| alu tree coherent @ washington | 18 s | 2.6 GB |
+| alu fewlog mbu | 28 s | 3.7 GB |
+
+The step takes about 4.4 min in all.
+
+**The meaning of the statement.** For every one of the twelve routed circuits, the Lean kernel
+checks the following. On an ideal device with the target's basis gates and coupling map, the
+circuit, started from all-|0⟩ on its used qubits, produces the logical circuit's output under the
+final layout. This is a translation validation of Qiskit's output, which remains an untrusted
+tool. It is not a statement about noise (that is Stage 27), and it is not "verified on hardware".
+
+**A correction to my 26c2 text, made at this review.** P1 said "durations converted exactly to an
+integer unit; if not exact, stop". That rule would stop on both targets:
+- FakeWashington's durations are multiples of dt = 2/9 ns (35.555… ns);
+- FakeTorino lists 119.99999999999999 ns.
+
+Corrected: durations are the exact rationals of the file's decimal numbers. The durations are
+outside the snapshot hash, so the certificate records the hash of the target file's bytes. P1 also
+gains a Lean port of 25a's physical bound, so that the bound can be a selection component.
+`PhysCert.lean` is self-contained (the literals re-emitted), with `emitted = C` by the kernel.

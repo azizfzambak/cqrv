@@ -358,14 +358,29 @@ and a feed-forward latency L, and has these components:
 - the physical qubits used;
 - the two-qubit count;
 - the mid-circuit measurements;
-- the feed-forward count;
-- the wall-clock depth.
+- the feed-forward count, counted as `GradeExt` counts it (one per conditioned basis gate);
+- the wall-clock depth;
+- **the physical bound**: a port of 25a's `physical_bound` (exact; δ plus each physical
+  operation's rate on its qubit or edge, plus the data readouts at their final positions). It must
+  be equal to the Python figure on all 12 artifacts, with the vacuous flag.
 
 **The timing model:**
 - **ASAP.** A gate starts when all its qubits are free. A gate conditioned on a bit waits for the
   end of the measurement that wrote the bit, plus L.
-- **Durations** come from the target file's `durations`, converted exactly to an integer unit.
-  If a conversion is not exact, stop.
+- **Durations** are the exact rational values of the decimal numbers written in the target
+  file's `durations` (ns), not rounded.
+  - Lean reads them through `JsonNumber`, which is exact. `HardwareTarget` gains the field;
+    every existing output stays byte-identical.
+  - Python reads them with `parse_float=Fraction` or `Decimal`, never through a float.
+  - The depth is an exact rational, printed also as a rounded decimal for display.
+  - *Corrected at the 26c1b review.* The earlier text said "converted exactly to an integer unit;
+    if not exact, stop". It would stop on both targets: FakeWashington's durations are multiples
+    of dt = 2/9 ns (35.555… ns), and FakeTorino has 119.99999999999999 ns.
+- **The durations are not covered by the snapshot hash**, which covers `calibration` only. So the
+  physical certificate records the SHA3-256 of the target file's bytes, and the generator
+  re-checks it.
+- A two-qubit gate's duration is looked up by its directed pair, or the reverse if only that is
+  listed. A missing duration is an error, not a default.
 - **L is a named parameter.** The fakes give no value, so every certificate states the L it used
   as an assumption, not a property of the device.
 
@@ -374,19 +389,22 @@ A Python mirror in `hw/` computes the same record. CI checks equality on all 12 
 
 **P2. The physical certificate.** `cqr hw certify --cert DIR --artifact DIR --ff-latency NS`
 writes `examples/certs/grover_pred_037_torino/` (committed):
-- **`PhysCert.lean`:**
+- **`PhysCert.lean`**, self-contained: the literals are re-emitted, not imported, since
+  `examples/` is not a Lake library. It holds:
   - the logical part, on the same `emitted` literal as the committed logical certificate (same
-    `circuit_hash`), with its theorem re-derived in the file as `Cert.lean` derives it. This is
-    the trusted link from C to the logical circuit;
-  - 26c1's instance theorems;
+    `circuit_hash`), with its theorem re-derived in the file as `Cert.lean` derives it;
+  - `emitted = C` by the kernel, where C is the artifact's logical literal. This and the logical
+    part are the trusted link from C to the specification;
+  - 26c1b's instance theorems (`recon`, `edges_ok`, `phys_channel`, `phys_zero`, …);
   - `realizes_phys` at the instance, from the all-|0⟩ physical state;
   - `PhysGrade` evaluated by the kernel at L = 0 and at L = 1 000 ns (both stated as
     assumptions).
 - **`physical.qasm`**, printed by cqr from the validated G (an unverified printer, as in §5.3).
   This is the file one would run. A Python check confirms that it parses back to the artifact's
   gate list.
-- **`manifest.json`**: the hashes (logical `circuit_hash`, artifact files, target snapshot), L, the
-  physical bound of 25a (worst and median, vacuous or not, as computed) and the status words.
+- **`manifest.json`**: the hashes (logical `circuit_hash`, the artifact files, the target
+  snapshot, the target file's bytes), L, the `PhysGrade` values, the physical bound (vacuous or
+  not, as computed) and the status words.
 
 The committed logical certificate `examples/certs/grover_pred_037` is not regenerated.
 
@@ -409,7 +427,7 @@ Stage 27.
   - mbu needs the target's feed-forward;
   - on a target without it, only coherent is admissible (§A.9 (5)).
 - **The preference** is one component (two-qubit count, depth at a stated L, or the physical
-  bound), with an optional budget.
+  bound of P1), with an optional budget.
 - **The theorem** `selectPhys_spec`: the chosen candidate is admissible and minimal for the
   component among the admissible ones.
 - **The CLI** is `cqr hw select`. Every candidate's `PhysGrade` is computed by the kernel; only
