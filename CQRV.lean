@@ -39,9 +39,11 @@ import CQRV.Hardware.Reorder
 import CQRV.Hardware.WitnessSound
 import CQRV.Hardware.Check
 import CQRV.Hardware.CheckSound
+import CQRV.Hardware.Noise
 import CQRV.Noise.Perturb
 import CQRV.Noise.Steps
 import CQRV.Noise.Realize
+import CQRV.Noise.Stochastic
 import CQRV.Grover.Basic
 import CQRV.Grover.SearchUnknownM
 import CQRV.Grover.KGRegime

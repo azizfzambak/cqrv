@@ -1,0 +1,115 @@
+; QIR Adaptive Profile — hw_n2 (CQRV, report §8.4.3); unverified emitter (§5.3)
+; data qubits 0..2, ancillae 2..3; mid-circuit results 0..2, terminal results 2..4
+
+@out = internal constant [4 x i8] c"out\00"
+@out0 = internal constant [7 x i8] c"out[0]\00"
+@out1 = internal constant [7 x i8] c"out[1]\00"
+
+define i64 @hw_n2() #0 {
+entry:
+  call void @__quantum__rt__initialize(ptr null)
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 1 to ptr))
+  ; cqrv: alloc 2
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 1 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__z__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 0 to ptr))
+  %c19 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 0 to ptr))
+  br i1 %c19, label %then19, label %cont19
+then19:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 1 to ptr))
+  br label %cont19
+cont19:
+  %c20 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 0 to ptr))
+  br i1 %c20, label %then20, label %cont20
+then20:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 2 to ptr))
+  br label %cont20
+cont20:
+  ; cqrv: free 2
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 1 to ptr))
+  ; cqrv: alloc 2
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 1 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__t__adj__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__t__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__cnot__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__s__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__z__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 2 to ptr), ptr inttoptr (i64 1 to ptr))
+  %c43 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 1 to ptr))
+  br i1 %c43, label %then43, label %cont43
+then43:
+  call void @__quantum__qis__cz__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 1 to ptr))
+  br label %cont43
+cont43:
+  %c44 = call i1 @__quantum__qis__read_result__body(ptr inttoptr (i64 1 to ptr))
+  br i1 %c44, label %then44, label %cont44
+then44:
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 2 to ptr))
+  br label %cont44
+cont44:
+  ; cqrv: free 2
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__x__body(ptr inttoptr (i64 1 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 0 to ptr))
+  call void @__quantum__qis__h__body(ptr inttoptr (i64 1 to ptr))
+  br label %measurements
+measurements:
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 0 to ptr), ptr inttoptr (i64 2 to ptr))
+  call void @__quantum__qis__mz__body(ptr inttoptr (i64 1 to ptr), ptr inttoptr (i64 3 to ptr))
+  br label %output
+output:
+  call void @__quantum__rt__array_record_output(i64 2, ptr @out)
+  call void @__quantum__rt__result_record_output(ptr inttoptr (i64 2 to ptr), ptr @out0)
+  call void @__quantum__rt__result_record_output(ptr inttoptr (i64 3 to ptr), ptr @out1)
+  ret i64 0
+}
+
+declare void @__quantum__qis__h__body(ptr)
+declare void @__quantum__qis__s__body(ptr)
+declare void @__quantum__qis__s__adj__body(ptr)
+declare void @__quantum__qis__t__body(ptr)
+declare void @__quantum__qis__t__adj__body(ptr)
+declare void @__quantum__qis__x__body(ptr)
+declare void @__quantum__qis__z__body(ptr)
+declare void @__quantum__qis__cnot__body(ptr, ptr)
+declare void @__quantum__qis__cz__body(ptr, ptr)
+declare void @__quantum__qis__mz__body(ptr, ptr writeonly) #1
+declare i1 @__quantum__qis__read_result__body(ptr)
+declare void @__quantum__rt__initialize(ptr)
+declare void @__quantum__rt__array_record_output(i64, ptr)
+declare void @__quantum__rt__result_record_output(ptr, ptr)
+
+attributes #0 = { "entry_point" "output_labeling_schema" "qir_profiles"="adaptive_profile" "required_num_qubits"="3" "required_num_results"="4" }
+attributes #1 = { "irreversible" }
+
+!llvm.module.flags = !{!0, !1, !2, !3}
+!0 = !{i32 1, !"qir_major_version", i32 1}
+!1 = !{i32 7, !"qir_minor_version", i32 0}
+!2 = !{i32 1, !"dynamic_qubit_management", i1 false}
+!3 = !{i32 1, !"dynamic_result_management", i1 false}

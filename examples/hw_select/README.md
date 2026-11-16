@@ -24,12 +24,20 @@ certificate", pass mark 25) runs them through the kernel.
 Component values in parentheses: two-qubit count; depth in ns (rounded here, exact in the files);
 the physical bound (every bound of these candidates is vacuous, ≥ 1: the error-1.0 edges of the fakes' calibrations, 25a).
 
-| request | target | twoq | depth @ L=0 | depth @ L=1000 ns | bound |
-|---|---|---|---|---|---|
-| grover_pred_037 | FakeTorino | fewlog mbu (262) | tree coherent (20116) | tree coherent (20116) | fewlog mbu (1.7215) |
-| grover_pred_037 | FakeWashington | tree coherent (327) | tree coherent (71068.4) | tree coherent (71068.4) | tree coherent (5.0248) |
-| simple_alu_x0_1 | FakeTorino | fewlog mbu (435) | tree coherent (24948) | tree coherent (24948) | fewlog mbu (3.4382) |
-| simple_alu_x0_1 | FakeWashington | tree coherent (515) | tree coherent (116536.9) | tree coherent (116536.9) | tree coherent (7.1898) |
+| request | target | twoq | depth @ L=0 | depth @ L=1000 ns | bound | noise (27b) |
+|---|---|---|---|---|---|---|
+| grover_pred_037 | FakeTorino | fewlog mbu (262) | tree coherent (20116) | tree coherent (20116) | fewlog mbu (1.7215) | fewlog mbu (2.0931) |
+| grover_pred_037 | FakeWashington | tree coherent (327) | tree coherent (71068.4) | tree coherent (71068.4) | tree coherent (5.0248) | tree coherent (6.2337) |
+| simple_alu_x0_1 | FakeTorino | fewlog mbu (435) | tree coherent (24948) | tree coherent (24948) | fewlog mbu (3.4382) | fewlog mbu (4.1504) |
+| simple_alu_x0_1 | FakeWashington | tree coherent (515) | tree coherent (116536.9) | tree coherent (116536.9) | tree coherent (7.1898) | tree coherent (8.8609) |
+
+The `noise` column (Stage 27b, `cqr hw select --prefer noise`, `selectNoise`) is the conditional
+noise bound `δ + Σ p_g + Σ r_j` of `CQRV/Hardware/Noise.lean` (the Pauli reading with the clamp;
+none of these candidates clamps); the other FakeTorino candidates: grover_pred_037 tree coherent
+2.4046, tree mbu 2.8990; simple_alu_x0_1 tree coherent 4.3220, tree mbu 4.5368. Every noise bound here
+is vacuous (≥ 1), so `--prefer noise --budget 1` returns `none` for both requests on FakeTorino — the
+honest answer. The `noise` preference writes no `Select.lean`; the committed files are the grade
+preferences'. Conditional on the premises (P-stoch), (P-ro), (P-idle), (P-cal); not a fact about a device.
 
 The other candidates on FakeTorino — grover_pred_037: tree coherent 375 two-qubit / 20116 ns /
 bound 1.9141, tree mbu 315 / 33740 → 43740 ns / 2.4495; simple_alu_x0_1: tree coherent 536 / 24948 ns

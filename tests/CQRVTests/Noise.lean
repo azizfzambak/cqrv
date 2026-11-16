@@ -1,7 +1,9 @@
 module
 
-public import CQRV.Noise.Realize
-meta import CQRV.Noise.Realize
+public import CQRV.Noise.Stochastic
+public import CQRV.Hardware.SelectPhys
+meta import CQRV.Noise.Stochastic
+meta import CQRV.Hardware.SelectPhys
 
 /-!
 # Tests for `CQRV.Noise` (Stage 27a; PHASE2_SPEC §C.4; report §2.3.2, §6.6)
@@ -39,6 +41,22 @@ open scoped MState
 /-- info: 'CQRV.phys_noisy' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms phys_noisy
+
+/-- info: 'CQRV.phys_noisy_stochastic' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms phys_noisy_stochastic
+
+/-- info: 'CQRV.phys_noisy_inst_of' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms phys_noisy_inst_of
+
+/-- info: 'CQRV.phys_noisy_channel_stochastic' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms phys_noisy_channel_stochastic
+
+/-- info: 'CQRV.Hardware.selectNoise_spec' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms Hardware.selectNoise_spec
 
 /-! ## `channelDenote_eq_steps` on the MBU gadget -/
 

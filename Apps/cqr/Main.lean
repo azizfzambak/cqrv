@@ -10,6 +10,7 @@ import CQRV.Hardware.Bound
 import CQRV.Hardware.Decomp
 import CQRV.Hardware.CheckGen
 import CQRV.Hardware.PhysGrade
+import CQRV.Hardware.Noise
 
 /-!
 # `cqr` command-line interface
@@ -141,7 +142,8 @@ def usage : String :=
     "  hw check --artifact <dir> --target <target.json> [--out <dir>]\n" ++
     "  hw grade --artifact <dir> --target <target.json> --ff-latency <ns> [--json]\n" ++
     "  hw certify --cert <dir> --artifact <dir> --target <target.json> --ff-latency <ns> [--out <dir>]\n" ++
-    "  hw select --request <name> --target <target.json> --prefer twoq|depth|bound [--ff-latency <ns>] [--budget X] [--out <dir>] [--table]\n"
+    "  hw select --request <name> --target <target.json> --prefer twoq|depth|bound|noise [--ff-latency <ns>] [--budget X] [--out <dir>] [--table]\n" ++
+    "  hw noise --artifact <dir> --target <target.json> [--json]\n"
 
 /-- Report §4.2.2 — parse and surface-check a source file; also returns the position of the
 entry `fn` (the last one), used by the `--solutions` diagnostic. -/
@@ -1086,6 +1088,39 @@ def runHwGrade (artifactDir target lat : String) (json : Bool) : IO UInt32 := do
           IO.println "reported, not certified: the bound is a sum of calibrated rates (Stage 27 is the noise theorem)"
         return 0
 
+/-- PHASE2_SPEC §C.4 (4) (Stage 27b, B2) — `cqr hw noise --artifact <dir> --target <target.json>
+[--json]`: the conditional noise bound `δ' = δ + Σ p_g + Σ r_j` of the artifact's physical circuit on
+the target under (P-stoch) (the Pauli reading `p = min 1 ((d+1)/d · r)`; virtual `rz` has `p = 0`) and
+(P-ro) (`p = r` for measurements and the data readouts), exact, with the clamp flag and the vacuity,
+beside 25a's `p = r` figure. `--json`: the canonical JSON `hw/noisebound.py` prints. Conditional on
+the premises; never a fact about a device. -/
+def runHwNoise (artifactDir target : String) (json : Bool) : IO UInt32 := do
+  match ← readArtifactData artifactDir with
+  | .error msg => IO.eprintln s!"cqr hw noise: {msg}"; return 2
+  | .ok a =>
+    match ← Hardware.readTarget target with
+    | .error msg => IO.eprintln s!"cqr hw noise: {msg}"; return 2
+    | .ok t =>
+      match Hardware.physGradeOf t a.manifest.basis a.manifest.usedQubits a.G 0 a.dataPhys a.delta,
+          Hardware.noiseBoundOf t a.manifest.usedQubits a.G a.dataPhys a.delta with
+      | .error msg, _ | _, .error msg => IO.eprintln s!"cqr hw noise: {msg}"; return 1
+      | .ok g, .ok nb =>
+        if json then
+          IO.println (nb.toJson g.bound).compress
+        else
+          IO.println s!"{a.manifest.instance_} on {t.name}: conditional noise bound under (P-stoch), (P-ro), (P-idle), (P-cal)"
+          IO.println s!"noise_bound: {Hardware.ratStr nb.bound} (≈ {Hardware.ratFloat nb.bound}){if nb.vacuous then " VACUOUS (≥ 1)" else ""}{if nb.clamped then "; some p clamped to 1" else ""}"
+          IO.println s!"physical_bound_p_eq_r (25a): {Hardware.ratStr g.bound} (≈ {Hardware.ratFloat g.bound})"
+          IO.println "conditional on the premises, which are assumptions about the device, not facts proved here; not verified on hardware"
+        return 0
+
+def hwNoiseFlags : List String → Option (Option String × Option String × Bool)
+  | [] => some (none, none, false)
+  | "--artifact" :: d :: rest => do let (_, t, j) ← hwNoiseFlags rest; return (some d, t, j)
+  | "--target" :: t :: rest => do let (d, _, j) ← hwNoiseFlags rest; return (d, some t, j)
+  | "--json" :: rest => do let (d, t, _) ← hwNoiseFlags rest; return (d, t, true)
+  | _ => none
+
 /-- `--artifact d`, `--target t`, `--ff-latency l`, `--json` of `cqr hw grade`, in any position. -/
 def hwGradeFlags : List String → Option (Option String × Option String × Option String × Bool)
   | [] => some (none, none, none, false)
@@ -1202,17 +1237,38 @@ def selCandidates (request targetName : String) (t : Hardware.HardwareTarget) :
                          rates := rates.restrict a.manifest.usedQubits }]
     return .ok out
 
+/-- The noise candidates of a selection (Stage 27b, B2): each candidate with its conditional noise
+bound (`noiseBound`) beside its grade. -/
+def noiseCands (cs : List Hardware.SelCand) (L : Rat) : Except String (List Hardware.NoiseCand) := do
+  let gs ← Hardware.gradeCands cs L
+  gs.mapM fun (c, g) => do
+    let nb ← Hardware.noiseBound c.rates c.dev c.G c.dataPhys c.delta
+    return ⟨⟨c.name, c.mbu, g⟩, nb.bound, nb.clamped⟩
+
+/-- The `noise` row of the choice table. -/
+def noiseRow (ff : Bool) (budget : Option Rat) (cs : List Hardware.SelCand) : Except String String := do
+  let ncs ← noiseCands cs 0
+  let choice := Hardware.selectNoise ff budget ncs
+  let all := ", ".intercalate (ncs.map fun c =>
+    s!"{c.cand.name}: {Hardware.ratStr c.noise}{if c.clamped then " (clamped)" else ""}")
+  return s!"noise: {match choice with
+    | some c => s!"{c.cand.name} ({Hardware.ratStr c.noise})"
+    | none => "none (no admissible candidate)"} [{all}]"
+
 /-- PHASE2_SPEC §C.3 (Stage 26c2b, P4) — `cqr hw select --request <name> --target <target.json>
---prefer twoq|depth|bound [--ff-latency <ns>] [--budget X] [--out <dir>] [--table]`: the request's
+--prefer twoq|depth|bound|noise [--ff-latency <ns>] [--budget X] [--out <dir>] [--table]`: the request's
 committed artifacts on the target are the candidates; each is graded (`PhysGrade` at the latency,
 default 0) and `selectPhys` chooses the first minimal admissible one (mbu needs the target's
 feed-forward; the budget, if given, bounds the component). Writes
 `<out>/<request>__<target>/Select.lean` (default `examples/hw_select`), where the kernel re-decides
 every grade and the choice; prints the choice (or `none`, the honest answer). `--table`: the choice
-under every preference (twoq; depth at L = 0 and 1000; bound), no file. -/
+under every preference (twoq; depth at L = 0 and 1000; bound; noise), no file. `--prefer noise` (Stage 27b, B2)
+selects by the conditional noise bound (`selectNoise`) and writes no file. -/
 def runHwSelect (request target pref : String) (lat : Option String) (budget : Option String)
     (out : Option String) (table : Bool) : IO UInt32 := do
-  let some p := Hardware.PhysPref.parse? pref | IO.eprintln s!"cqr hw select: --prefer {pref}"; return 2
+  let isNoise := pref == "noise"
+  let some p := (if isNoise then some Hardware.PhysPref.bound else Hardware.PhysPref.parse? pref)
+    | IO.eprintln s!"cqr hw select: --prefer {pref}"; return 2
   let some L := Hardware.parseDecimalSci (lat.getD "0") | IO.eprintln s!"cqr hw select: --ff-latency {lat.getD ""} is not a decimal"; return 2
   let budgetR ← match budget with
     | none => pure (none : Option Rat)
@@ -1233,7 +1289,22 @@ def runHwSelect (request target pref : String) (lat : Option String) (budget : O
           match Hardware.choiceRow pp l ff budgetR cs with
           | .error msg => IO.eprintln s!"cqr hw select: {msg}"; return 1
           | .ok row => IO.println row
+        match noiseRow ff budgetR cs with
+        | .error msg => IO.eprintln s!"cqr hw select: {msg}"; return 1
+        | .ok row => IO.println row
         return 0
+      if isNoise then
+        -- Stage 27b (B2): the `noise` preference selects by the conditional noise bound (`selectNoise`);
+        -- it writes no file — the committed `Select.lean` files are the grade preferences'
+        match noiseCands cs L with
+        | .error msg => IO.eprintln s!"cqr hw select: {msg}"; return 1
+        | .ok ncs =>
+          let name := s!"{request}__{targetName}"
+          match Hardware.selectNoise ff budgetR ncs with
+          | some c => IO.println s!"{name}: noise → {c.cand.name} (noise_bound {Hardware.ratStr c.noise} ≈ {Hardware.ratFloat c.noise}{if c.clamped then ", clamped" else ""}); conditional on the premises (P-stoch), (P-ro), (P-idle), (P-cal); no file written"
+          | none => IO.println s!"{name}: noise → none: no admissible candidate\
+              {match budgetR with | some b => s!" within the budget {Hardware.ratStr b}" | none => ""} (the honest answer); no file written"
+          return 0
       match Hardware.gradeCands cs L with
       | .error msg => IO.eprintln s!"cqr hw select: {msg}"; return 1
       | .ok gs =>
@@ -1526,6 +1597,10 @@ def main (args : List String) : IO UInt32 := do
   | "hw" :: "certify" :: flags =>
     match hwCertifyFlags flags with
     | some (some c, some a, some t, some l, o) => runHwCertify c a t l o
+    | _ => IO.eprint usage; return 2
+  | "hw" :: "noise" :: flags =>
+    match hwNoiseFlags flags with
+    | some (some d, some t, j) => runHwNoise d t j
     | _ => IO.eprint usage; return 2
   | "hw" :: "grade" :: flags =>
     match hwGradeFlags flags with

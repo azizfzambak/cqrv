@@ -135,6 +135,122 @@ theorem selectPhys_spec (ff : Bool) (budget : Option Rat) (p : PhysPref) : (cs :
           have := h a (List.mem_cons_of_mem _ hmem)
           rw [this] at hab; cases hab
 
+/-! ## Selection by any component (Stage 27b, B2): the key as a parameter
+
+`PhysGrade` and `PhysCand` are frozen (their literals are in the committed `PhysCert.lean` and
+`Select.lean` files), so the `noise` preference cannot be a `PhysPref` constructor with a key on
+`PhysGrade`. `selectKey` generalizes `selectPhys` to any admissibility test and any key;
+`selectPhys_eq_selectKey` shows `selectPhys` is the instance, and `selectNoise` on `NoiseCand`
+(a candidate with its `noiseBound`) is the `noise` preference, with the same specification. -/
+
+section Generic
+
+variable {α : Type}
+
+/-- The first admissible element with the least key; among equal keys the first in the list. -/
+def selectKey (adm : α → Bool) (key : α → Rat) : List α → Option α
+  | [] => none
+  | c :: cs =>
+    match selectKey adm key cs with
+    | none => if adm c then some c else none
+    | some a => if adm c ∧ ¬ key a < key c then some c else some a
+
+/-- The specification of `selectKey`: a result is in the list, admissible, and minimal for the key
+among the admissible elements; `none` exactly when no element is admissible. -/
+theorem selectKey_spec (adm : α → Bool) (key : α → Rat) : (cs : List α) →
+    (∀ x, selectKey adm key cs = some x →
+      x ∈ cs ∧ adm x = true ∧ ∀ y ∈ cs, adm y = true → key x ≤ key y) ∧
+    (selectKey adm key cs = none ↔ ∀ y ∈ cs, adm y = false)
+  | [] => by simp [selectKey]
+  | c :: cs => by
+    obtain ⟨ih_some, ih_none⟩ := selectKey_spec adm key cs
+    simp only [selectKey]
+    split
+    · rename_i hnone
+      have hrest := ih_none.1 hnone
+      refine ⟨?_, ?_⟩
+      · intro x h
+        split at h
+        · rename_i hc
+          simp only [Option.some.injEq] at h; subst h
+          refine ⟨List.mem_cons_self .., hc, ?_⟩
+          intro y hy hyb
+          rcases List.mem_cons.1 hy with rfl | hy
+          · exact le_rfl
+          · rw [hrest y hy] at hyb; cases hyb
+        · simp at h
+      · constructor
+        · intro h y hy
+          rcases List.mem_cons.1 hy with rfl | hy
+          · by_cases hc : adm y = true
+            · simp [hc] at h
+            · simpa using hc
+          · exact hrest y hy
+        · intro h; simp [h c (List.mem_cons_self ..)]
+    · rename_i a ha
+      obtain ⟨hmem, hab, hbest⟩ := ih_some a ha
+      refine ⟨?_, ?_⟩
+      · intro x h
+        split at h
+        · rename_i hc
+          simp only [Option.some.injEq] at h; subst h
+          refine ⟨List.mem_cons_self .., hc.1, ?_⟩
+          intro y hy hyb
+          rcases List.mem_cons.1 hy with rfl | hy
+          · exact le_rfl
+          · exact le_trans (not_lt.mp hc.2) (hbest y hy hyb)
+        · rename_i hc
+          simp only [Option.some.injEq] at h; subst h
+          refine ⟨List.mem_cons_of_mem _ hmem, hab, ?_⟩
+          intro y hy hyb
+          rcases List.mem_cons.1 hy with rfl | hy
+          · by_cases hlt : key a < key y
+            · exact le_of_lt hlt
+            · exact absurd ⟨hyb, hlt⟩ hc
+          · exact hbest y hy hyb
+      · constructor
+        · intro h; split at h <;> simp at h
+        · intro h
+          have := h a (List.mem_cons_of_mem _ hmem)
+          rw [this] at hab; cases hab
+
+end Generic
+
+/-- `selectPhys` is `selectKey` with `admissible` and the preference's component. -/
+theorem selectPhys_eq_selectKey (ff : Bool) (budget : Option Rat) (p : PhysPref) (cs : List PhysCand) :
+    selectPhys ff budget p cs = selectKey (admissible ff budget p) (fun c => p.key c.grade) cs := by
+  induction cs with
+  | nil => rfl
+  | cons c cs ih =>
+    simp only [selectPhys, selectKey, ih]
+    cases selectKey (admissible ff budget p) (fun c => p.key c.grade) cs <;> rfl
+
+/-- A candidate with its conditional noise bound (`CQRV.Hardware.Noise.noiseBound`): the `noise`
+preference of Stage 27b. -/
+structure NoiseCand where
+  cand : PhysCand
+  noise : Rat
+  clamped : Bool
+  deriving Repr, DecidableEq
+
+/-- Admissible for the `noise` preference: mbu needs the target's feed-forward; the budget, if given,
+bounds the noise bound. A budget `noise < 1` is a certified admissibility test: an admissible
+candidate has a non-vacuous conditional realization. -/
+def noiseAdmissible (ff : Bool) (budget : Option Rat) (c : NoiseCand) : Bool :=
+  (!c.cand.mbu || ff) && (match budget with | some b => decide (c.noise ≤ b) | none => true)
+
+/-- PHASE2_SPEC §C.4 (4) — **`selectNoise`**: the first admissible candidate with the least noise bound. -/
+def selectNoise (ff : Bool) (budget : Option Rat) : List NoiseCand → Option NoiseCand :=
+  selectKey (noiseAdmissible ff budget) (·.noise)
+
+/-- The specification of `selectNoise`, from `selectKey_spec`. -/
+theorem selectNoise_spec (ff : Bool) (budget : Option Rat) (cs : List NoiseCand) :
+    (∀ x, selectNoise ff budget cs = some x →
+      x ∈ cs ∧ noiseAdmissible ff budget x = true ∧
+        ∀ y ∈ cs, noiseAdmissible ff budget y = true → x.noise ≤ y.noise) ∧
+    (selectNoise ff budget cs = none ↔ ∀ y ∈ cs, noiseAdmissible ff budget y = false) :=
+  selectKey_spec _ _ cs
+
 /-- The CLI / JSON form of a choice. -/
 def PhysCand.toJson (c : PhysCand) (L : Rat) : Lean.Json :=
   Lean.Json.mkObj [("artifact", c.name), ("uncompute", if c.mbu then "mbu" else "coherent"),

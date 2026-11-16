@@ -126,3 +126,18 @@ FakeTorino every bound is vacuous, so `--budget 1` admits nothing — the honest
 The CI step "Physical certificate" (`scripts/check_physcert.sh`, pass mark 25) runs the three Python
 checks and the kernel on the certificate and the four selections.
 
+## The conditional noise bound (Stage 27b)
+
+`cqr hw noise --artifact <dir> --target <target.json> [--json]` computes `noiseBound = δ + Σ p_g + Σ r_j`
+(`CQRV/Hardware/Noise.lean`; mirror `hw/noisebound.py`; equality on all artifacts by
+`tests/diff/hw_noise_check.py`): under (P-stoch) every basis operation on k qubits is ideal with
+probability `1 − p_g`, `p_g = min 1 ((d+1)/d · r_g)`, d = 2^k (3/2 · r one-qubit, 5/4 · r two-qubit;
+virtual `rz` has r = 0), and otherwise an arbitrary channel on the whole register; under (P-ro) every
+measurement and data readout is ideal with probability `1 − r_j`; (P-idle) only the listed steps act;
+(P-cal) the rates are the target file's snapshot. `clamped` says whether some p reached the clamp
+(then the bound is vacuous). `cqr hw select --prefer noise` selects by it (`selectNoise`, no file
+written). The theorem behind it is `phys_noisy_stochastic` (`CQRV/Noise/Stochastic.lean`): for every
+choice of the arbitrary channels, the noisy physical channel realizes the specification with δ'.
+Conditional on the premises, which are assumptions about the device, not facts proved here; the
+emulator's noise model is not of the (P-stoch) form; nothing is "verified on hardware".
+
