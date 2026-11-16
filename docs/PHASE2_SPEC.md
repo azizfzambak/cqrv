@@ -2452,3 +2452,64 @@ gate per basis gate". That is false for `sx`, which expands to `h, s, h`, three 
 on an sx expands to three conditioned steps. So the stochastic premise is attached to basis
 operations: one list entry per basis gate, whose ideal is the composite of its expansion. 27b
 states `phys_noisy_stochastic` in that form.
+
+**27b (part 1) done, accepted 2026-11-16** (CI below). B1–B3 are done, with no `sorry`. The task
+stopped after B3 at the line guard, as allowed, with about 740 lines; B4–B5 become 27b2.
+
+**B1** (`CQRV/Noise/Stochastic.lean`):
+- **`basisChan g`**, the composite of a basis gate's expansion; `sx` becomes `h, s, h`.
+- **`stepsOf_physCircuit`.**
+- **`phys_noisy_stochastic`**: the noisy steps are `mix p_g (basisChan g) Φ'_g` per basis gate,
+  then `mix r_j id Φ'_j` per data readout. For every list of the arbitrary channels Φ', the
+  conclusion is `RealizesExact` with `δ + Σ p_g + Σ r_j`.
+- **`phys_noisy_channel_stochastic`**, the channel form, for the gadget.
+- **`phys_noisy_inst_of`**, the link to an exact rational bound through
+  `probOfRat = clamp01`.
+
+**B2** (`CQRV/Hardware/Noise.lean`, Physlib-free; closure 61):
+- **`noiseBound`** with the Pauli factor (3/2, 5/4, 1 for a measurement, 0 for virtual rz) and
+  the clamp.
+- **`cqr hw noise`**; Lean = Python on all twelve artifacts.
+- **No committed artifact clamps**: 25a's seed search had avoided the error-1.0 edges.
+- **The corrected form of the `noise` preference.** `PhysGrade` and `PhysCand` are frozen, because
+  their literals sit in committed files that must stay byte-identical. So selection is generalized
+  instead:
+  - `selectKey adm key`, with `selectKey_spec`;
+  - `selectPhys_eq_selectKey`;
+  - `selectNoise` over `NoiseCand`, with `selectNoise_spec`.
+
+  `--prefer noise` chooses fewlog mbu on FakeTorino and coherent on FakeWashington. With
+  `--budget 1` it returns `none` on FakeTorino for both requests.
+
+**B3.** The logical certificates `examples/certs/hw_n2` (n = 2, M = 1, r = 1, δ = 0) and
+`examples/certs/hw_n3` (r = 2, δ = 7/128) are `certified`. Their circuit hashes equal the
+artifacts' logical hashes.
+
+All have the standard three axioms.
+
+**The conditional bound** (`noiseBound`, against 25a's `p = r` reading):
+
+| instance | `noiseBound` | 25a (`p = r`) |
+|---|---|---|
+| mbu_gadget | 0.0995 | 0.0860 |
+| mbu_gadget_wrapped | 0.1240 | 0.1052 |
+| hw_n2 | 0.1793 | 0.1500 |
+| hw_n3 | 0.7521 | 0.6484 |
+| the eight larger artifacts | 2.09–8.86 (vacuous) | — |
+
+The Pauli factor raises the bound by 17–25 %.
+
+**The emulator comparison.** 25b's criterion (α = 0.05, margin ≈ 0.0194) was applied to the
+recorded runs at the new δ', with no re-run:
+
+| run | p̂ | threshold |
+|---|---|---|
+| hw_n2 | 0.882 | 0.801 |
+| hw_n3 | 0.590 | 0.229 |
+| wrapped gadget | 0.900 | 0.857 |
+
+All three pass. The emulator's noise model is not of the (P-stoch) form, so these are sanity
+checks, not evidence for the premise.
+
+**One cost to diagnose in 27b2.** hw_n2's `Cert.lean` takes 256 s under `lake env lean`, and
+hw_n3's takes 13 s. Since the file enters CI, 27b2 diagnoses the cost in a time box.

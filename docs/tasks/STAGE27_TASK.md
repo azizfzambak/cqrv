@@ -189,6 +189,36 @@ The pass mark becomes 26.
 
   If the line guard comes near, stop after B3 and leave B4–B5 to a 27b2.
 
+### 27b2 — B4–B5, the conditional certificates and the CI step (note added at the 27b review, 2026-11-16)
+
+27b stopped after B3 at its guard. 27b2 does B4 and B5 above. Precondition: main = the 27b review
+commit; start with `git switch -c stage-27b2 main`.
+
+**Step 0, a time-boxed diagnosis (30 min, report only).** `examples/certs/hw_n2/Cert.lean` takes
+256 s, hw_n3's 13 s.
+- Find the slow declaration with `set_option profiler true` on a scratch copy, and say why it is
+  slow.
+- Neither the committed file nor the generator changes in 27b2. If the cause calls for a
+  generator change, propose it for the 27b2 review.
+
+**B4 as specified, with the implementer's design:**
+- `phys_noisy_inst` for hw_n2 and hw_n3, a one-line instance of `phys_noisy_inst_of`, with
+  `hkey` decided by the kernel;
+- the gadget through `phys_noisy_channel_stochastic` and `mbu_channel_correct`, after
+  `C = mbuCircuit` by the kernel. Its bound is 0.0995;
+- the manifest with `noise_conditional`, the four premises and the meaning sentence;
+- the emulator comparison computed by the generator, exactly in `Rat`, from the recorded run's
+  `p_hat`, `shots` and `alpha`. `emulator_validated` is given only on a pass.
+
+**Which runs exist.** The bare gadget has no recorded run, because 25b ran the wrapped gadget.
+- The bare gadget's certificate carries `emulator_run: "no run recorded for this artifact"`.
+- Whether the wrapped gadget gets a conditional certificate too is the implementer's call. It is
+  not required.
+
+**B5 as specified.** The pass mark becomes 26.
+
+**The guards** of 27b hold; generated files do not count.
+
 ## 27c — The feasibility frontier (outline)
 
 - **The family:** Grover on n = 2…8 with an increasing number of ANDs, in the three modes, on
