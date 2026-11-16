@@ -154,8 +154,8 @@ already contains a change listed here, the item reduces to a check.
 - **Revise §9 (the plan) into a record.** Phase 1 covered Stages 0–13c. Phase 2 covers Stages
   14–30, with milestones M3 (Stage 21) and M4 (Stage 23). M5 is the release.
   - The stage table, with each stage's scope and status, comes from `docs/PHASE2_ROADMAP.md`.
-  - Stage 28 (device runs) is gated on the author. Stage 29 (the SQIR / VOQC comparison) was not
-    run; see `docs/STAGE29_NOTE.md`.
+  - Stage 28 (device runs) was not run, by the author's decision of 2026-11-16. Stage 29 (the
+    SQIR / VOQC comparison) was not run; see `docs/STAGE29_NOTE.md`.
 - **Revise §9.5 (risks), outcome by risk:**
   - the pinned toolchain held, with no bump in Phase 2;
   - the kernel ceilings were measured and met by the compositional form;
@@ -167,7 +167,7 @@ already contains a change listed here, the item reduces to a check.
 **Revise to the open list at M5** (from M5_REPORT):
 - **Selection and proofs.** Count selection; clean ⇒ Cond(true); the dirty widening; the all-n
   forms of the 8n − 24 bound.
-- **Device runs and noise.** Device runs (Stage 28); randomized compiling in the certified path;
+- **Device runs and noise.** Device runs (Stage 28, not run by the author's decision); randomized compiling in the certified path;
   idle noise in the bound; noise-aware routing beyond the pruned coupling map.
 - **Structure and comparison.** "Circuit never imports Synthesis" as a stricter layering rule;
   the SQIR / VOQC comparison.

@@ -1425,3 +1425,10 @@ Decision: 30b accepted (CI on 412fc22 plus the working tree: 26 PASS, 0 FAIL, 4 
 Why: PHASE2_SPEC §D.3 — Phase 2 ends at "M5 ready": 30a–30c done, 30d waiting for the author; the delegation of 2026-11-15 covered the process up to here and no further.
 Rejected: none.
 Report §: 9.1, 9.3, 9.5; PHASE2_SPEC §D; PHASE2_ROADMAP row 30, M5; STAGE30_TASK.md 30b–30d.
+
+## 2026-11-16 — Stage 28 not run (the author's decision)
+Decision: Stage 28 (device runs, PHASE2_SPEC §D.1) is not run. The author answered the question of §D.1 on 2026-11-16 ("skip Stage 28, let's not run it"); this is the author's decision, not a delegated one.
+What follows: no IBM account, no token, no circuit sent to an external service; Paper 1's "closing the loop" (a certificate compared with a device run) stays future work; the premise (P-cal) keeps naming the shipped calibration snapshot of qiskit-ibm-runtime 0.52.1, not a live calibration; every report file keeps "emulator run on the fake backend's noise model; reported, not certified" and nothing says "verified on hardware". The Stage 28 sentence of `docs/M5_REPORT.md` §5, `docs/RELEASE.md` §3 and the reviewer's drafts now reads "not run, by the author's decision of 2026-11-16".
+What remains with the author: 30d (the release, step by step: the public repository, the archive with a DOI, the preprint) and the final texts of report v5, Paper 1 and Paper 2.
+Rejected: running Stage 28 on an emulator in its place (the emulator runs of 25b already exist and are not device runs); keeping the "put to the author" wording (the question is answered).
+Report §: 9.1.1, 9.3; PHASE2_SPEC §D.1; PHASE2_ROADMAP row 28.

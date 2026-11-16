@@ -2749,3 +2749,14 @@ ones stay "to be checked by the author".
 **M5 is ready.** Phase 2's work is done: Tracks A, B and C are certified, and the reports and
 drafts are written. M5 itself is the release, which waits for the author, together with the
 author's answer on Stage 28.
+
+**Stage 28 decided by the author, 2026-11-16: not run.** The author declined the device runs of
+§D.1.
+- **What is not done:** no account, no access token, and no circuit sent to an external service.
+- **The papers:** the "closing the loop" section of Paper 1 stays future work.
+- **The premise:** (P-cal) keeps its present form, the snapshot shipped with qiskit-ibm-runtime.
+- **The documents** (M5_REPORT §5 and §8, RELEASE §3, the drafts in `docs/notes/`) now say "not run,
+  by the author's decision of 2026-11-16" in place of "put to the author".
+
+The only open items of Phase 2 left with the author are 30d (the release, step by step) and the
+final text of the papers and of report v5.

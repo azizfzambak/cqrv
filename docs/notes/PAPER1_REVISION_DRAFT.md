@@ -106,7 +106,7 @@ These are carried unchanged; M3 §7 gives the evidence and scope column for each
    - The frontier table.
 8. **Related work.** Verified compilation (SQIR / VOQC and others; see `docs/STAGE29_NOTE.md` for
    what is and is not compared), translation validation, and certified resource analysis.
-9. **Limitations and future work.** Device runs (Stage 28, the author's decision), randomized
+9. **Limitations and future work.** Device runs (Stage 28, not run by the author's decision of 2026-11-16), randomized
    compiling, idle noise in the bound, count selection, noise-aware routing.
 
 ## 4. Numbers to quote, with sources

@@ -225,7 +225,7 @@ kernel-evaluable few-ancilla schedule is one definition, `CQRV.Synthesis.FewSche
 | Count selection (precision first, composed bounds) | no Phase 2 stage; Paper 1 limitation and future work (PHASE2_SPEC §A.9 (4)) |
 | Proposition 5.1 (3), the cost bound of matching | not formalized (`docs/M3_REPORT.md` §3) |
 | Tracked `sorry` obligations | none (`docs/SORRIES.md`: 0 tracked; `scripts/check_sorries.sh`) |
-| Stage 28, device runs | put to the author on 2026-11-16; not run as of this report; the default, if declined or without access, is that it is not run (PHASE2_SPEC §D.1) |
+| Stage 28, device runs | not run, by the author's decision of 2026-11-16 (PHASE2_SPEC §D.1) |
 | Stage 29, the SQIR / VOQC comparison | not run; `docs/STAGE29_NOTE.md` gives the reason and a literature comparison (PHASE2_SPEC §A.9 (3), §D.2) |
 
 ## 6. Claims

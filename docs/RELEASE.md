@@ -176,5 +176,4 @@ FakeWashington.
 
 Nothing is published or pushed as of this document: the public repository, the archive with a DOI and
 the preprint are the author's steps (PHASE2_SPEC §D.3, 30d), each needing explicit approval. Stage 28
-(device runs) was put to the author on 2026-11-16 and is not run as of this document; the default, if
-declined or without access, is that it is not run. Stage 29 is not run (`docs/STAGE29_NOTE.md`).
+(device runs) is not run, by the author's decision of 2026-11-16 (PHASE2_SPEC §D.1). Stage 29 is not run (`docs/STAGE29_NOTE.md`).
