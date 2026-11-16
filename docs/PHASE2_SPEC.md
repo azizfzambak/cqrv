@@ -2693,3 +2693,28 @@ paper:
 
 Nothing is published or put online before the author says so (decision of 2026-10-29). Until
 then, Phase 2 ends at "M5 ready": 30a–30c done, 30d waiting for the author.
+
+**30a done, accepted 2026-11-16** (CI below). About 300 lines. No theorem statement and no
+declaration name changed.
+
+- **A1, the duplicated schedule.** The kernel-evaluable schedule now lives once, in
+  `CQRV/Synthesis/MczFewK.lean` (`CQRV.Synthesis.FewScheduleK`, Physlib-free).
+  `Grover.FewSchedule.*` and `Synthesis.Problem1.*` keep every name as aliases. The definition to
+  cite is `FewScheduleK.planK`. The few:log certificate kernel-checks through the alias chain.
+- **A2, the layering exception.** `CountingCorrect.lean` moved up into `CQRV/Grover/`, with its
+  namespace and names unchanged, because it uses 21 declarations of `Grover.Restore`.
+- **A3, the manifest relabel.** The physical certificates' top-level `meaning` is now
+  `meaning_physical_translation`. No JSON schema governs these manifests, so the bump is their own
+  `schema_version`, 1.0.0 → 1.1.0. The seven manifests changed by one line each; every `.lean` and
+  `physical.qasm` is byte-identical.
+- **A4, the READMEs.** `hw/README.md` has eight topical sections, and
+  `examples/hw_checks/README.md` has one table of the fifteen files.
+- **A5, the layering check.** `scripts/check_layering.sh` runs in the sorry-check step.
+  - **The hard rule:** no `Circuit/*` or `Synthesis/*` module imports `Grover/*`. It holds now.
+  - **Nine other upward imports** are listed, each by design:
+    - Patterns → Certify and Patterns → Grover/AE: the library's soundness, 21a3;
+    - Certify/Specialize → Grover: the specialization;
+    - Circuit → Synthesis, twice: the oracle and QFT correctness proofs, which import the
+      synthesizer they prove correct.
+
+  A stricter rule, "Circuit never imports Synthesis", is not adopted.
