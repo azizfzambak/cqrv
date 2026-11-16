@@ -2513,3 +2513,59 @@ checks, not evidence for the premise.
 
 **One cost to diagnose in 27b2.** hw_n2's `Cert.lean` takes 256 s under `lake env lean`, and
 hw_n3's takes 13 s. Since the file enters CI, 27b2 diagnoses the cost in a time box.
+
+**27b2 done, accepted 2026-11-16** (CI below). Stage 27b is complete.
+
+**Step 0.** hw_n2's 256 s does not reproduce: three re-runs take 10–11 s, and the profiler finds
+nothing slow. It was machine load, as in 27a's CI. No change.
+
+**The three conditional certificates on FakeTorino** (`cqr hw noisecert`, `NoiseCertGen.lean`,
+Physlib-free; closure 62):
+
+| certificate | δ' | 25a's `p = r` |
+|---|---|---|
+| `examples/certs/hw_n2_torino` | 0.1793 (exact rational) | 0.1500 |
+| `examples/certs/hw_n3_torino` | 0.7521 | 0.6484 |
+| `examples/certs/mbu_gadget_torino` | 0.0995 | 0.0860 |
+
+- **hw_n2 and hw_n3.**
+  - **`phys_noisy_inst`**: for every list of arbitrary channels, the noisy physical channel
+    realizes the search specification with δ' = `noiseBound`. The probabilities are kernel-decided
+    from the rate tables (`ps_eq`, `rs_eq`, `noise_key`).
+  - **The status words:** `logical_certified, hardware_compatible, physical_translation_validated,
+    noise_conditional, emulator_validated`.
+- **The MBU gadget.**
+  - **`gadget_noisy`**, the channel form: for every list of arbitrary channels, the noisy
+    gadget's output is within δ' of the correct one in trace distance (`mbu_channel_correct`
+    through `c_eq : C = mbuCircuit`, axiom-free).
+  - **The status words:** `hardware_compatible, physical_translation_validated,
+    noise_conditional`. There is no `logical_certified`: its logical statement is the theorem
+    `mbu_channel_correct`, named in the manifest. There is also no run, since 25b ran the wrapped
+    gadget, and the wrapped gadget gets no certificate.
+
+All theorems have the standard three axioms, and the links `emitted_eq` and `c_eq` depend on no
+axiom.
+
+**The manifests** name the four premises in full: (P-cal) with the snapshot hash and "not a live
+calibration", (P-stoch) with the Pauli reading and "no p reached the clamp", (P-ro) and (P-idle).
+They also carry:
+- the meaning sentence: "conditional on the premises …, the device's success probability is at
+  least 1 − δ'; the premises are assumptions about the device, not facts proved here; not
+  verified on hardware";
+- the emulator comparison.
+
+**Two corrected readings:**
+1. **25b's margin** `√(ln(1/α)/(2·shots))` is irrational. So the comparison uses the recorded
+   margin, as the exact rational of its printed decimals: threshold' = threshold_recorded +
+   δ_recorded − δ'. hw_n2 passes (0.882 ≥ 0.801), and so does hw_n3 (0.590 ≥ 0.229).
+2. **The hw_n2 and hw_n3 artifacts record `certificate_json: null`.** 25a made them before their
+   certificates existed. Their link is `circuit_hash = logical_circuit`. The 26c2 path is unchanged
+   and its certificate regenerates byte for byte.
+
+**CI step 30, "Noise certificates"** (73 s): the two Python checks, then `lake env lean` on the two
+logical certificates and the three conditional ones. The pass mark is 26.
+
+**Stage 30 housekeeping.** The top-level `meaning` of the physical-certificate manifests says "not
+a statement about noise". In a certificate that also carries `noise_conditional`, it should read
+as the physical-translation part. The 26c2 manifest is frozen, so the wording, under its own key,
+waits for a schema bump at the release.
