@@ -50,7 +50,7 @@ warning; this is the reviewer's own report and is not repeated in the paper.
   is a literal from the transpile tool. It selects the readout terms of δ′ and enters `PhysGrade`,
   and the kernel does not check it against the witness's final layout. Table 1 did not say so.
 - **Factual slips.** README certificate count, CI step count, a CI-logs claim, the idle diagnostic, a
-  threshold typo, a cross-reference.
+  threshold typo (not a typo: see #28, corrected in version 1.2), a cross-reference.
 
 ---
 
@@ -92,7 +92,7 @@ warning; this is the reviewer's own report and is not repeated in the paper.
 | 25 | "Search after count": spaces, metric, and the constant-circuit hypothesis | A | §6.6: S<sub>f</sub>, S<sub>g</sub> = `SearchAfterCount`, the discrete metric on Reg<sub>n</sub>; the two simplifications named |
 | 26 | Theorem 8.4 is stated with (ε, δ) but Appendix A shows `RealizesExact` | A | The ε form exists (`noisy_realization_realizes`, Realize.lean:101); cited and added to Appendix A |
 | 27 | In `phys_noisy_stochastic` the readout list R is unconstrained | A + P | Verified, and the check found more: the certificate fixes R to the rates of `dataPhys` (`rs_eq`), but `dataPhys` is not checked against the witness's final layout. Table 1, §8.2, §11 now say so; a kernel check is task R19 |
-| 28 | The wrapped gadget's threshold 0.857 does not follow from the text | A | The paper had a typo: the run report gives threshold 0.875 (δ′ = 0.1052, 3598/4000). R2's inferred δ′ ≈ 0.124 came from the typo. Table and a sentence fixed |
+| 28 | The wrapped gadget's threshold 0.857 does not follow from the text | A | The paper had a typo: the run report gives threshold 0.875 (δ′ = 0.1052, 3598/4000). R2's inferred δ′ ≈ 0.124 came from the typo. Table and a sentence fixed. **Corrected in version 1.2 (`REVIEW_RESPONSE_3.md`, #1): this decision was wrong.** 0.857 was right: it uses δ′ = 0.1240, the Pauli reading of §8.4, like the table's other two rows; 0.875 is the run report's earlier reading p = r (0.1052). R2's inferred δ′ ≈ 0.124 was correct. Version 1.2 restores 0.857 and states both readings |
 | 29 | Tables 6 and 7 do not label δ′ or the coupling map | A | Labelled; `_rb` artifacts are the pruned map |
 | 30 | Appendix A: shadowed variable r, `XReg` unexplained | A | Sums written as list sums; `XReg N 0 m` explained |
 | 31 | Minor: max subscripts (Def. 3.2), Figure 1 printer, b ∈ {0,1}<sup>n</sup> (Def. 5.9), φ glyph and the split `diag(...)`, CountSpec set notation, Theorem 6.9 typography, §7.2 (a, k), the `nData` field, "injectivity of the layouts", 315 and 375, the bit operators of §8.1, 3598/4000, cross-reference §6.3 → §6.4 | A | All changed |

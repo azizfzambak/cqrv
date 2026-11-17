@@ -19,12 +19,13 @@ project, with every number's source, is `docs/M5_REPORT.md`; reproduction and th
 `docs/RELEASE.md`; the earlier milestone reports are `docs/M2_REPORT.md` and `docs/M3_REPORT.md`
 (frozen). The stage-by-stage history is `docs/PROJECT_STATUS.md` and `docs/DECISIONS.md`.
 
-**Release v1.1.0 (November 2026).** Everything up to Phase 3 is described in one paper,
+**Release v1.2.0 (November 2026).** Everything up to Phase 3 is described in one paper,
 `paper/Zambak_2026_CQRV.pdf` (source `paper/Zambak_2026_CQRV.md`, build `paper/tools/build.ps1`),
 published as a preprint on Zenodo (https://doi.org/10.5281/zenodo.24302652, all versions). The code the paper describes is
-commit `2f8200b`; the tags `v1.0.0` and `v1.1.0` add only documentation (license, citation file, release
-notes, the paper). Version 1.1 corrects the paper after three AI-generated reviews
-(`docs/REVIEW_RESPONSE_2.md`); the code and the certificates are unchanged.
+commit `2f8200b`; the tags `v1.0.0`, `v1.1.0` and `v1.2.0` add only documentation (license, citation
+file, release notes, the paper). Version 1.1 corrects the paper after three AI-generated reviews
+(`docs/REVIEW_RESPONSE_2.md`), and version 1.2 after two more (`docs/REVIEW_RESPONSE_3.md`); the code
+and the certificates are unchanged.
 
 ## The three tracks
 
@@ -43,7 +44,9 @@ under a resource budget is certified. Fourteen logical certificates: six for the
 of the same function, restores its ancilla (`mbu_general`); the correction is Clifford iff the
 function is quadratic over 𝔽₂, and the IR admits exactly those (`clifford_iff_quadratic`,
 `mbu_exactly_quadratic`); the restoration algebra (block lists, mixed data actions, ancilla reuse by
-widening) and the three regimes dirty ⇒ conditionally clean ⇒ clean with a strict hierarchy; and the
+widening) and the three regimes dirty ⇒ conditionally clean ⇒ clean, with conditionally clean under
+`true` equivalent to clean and two separations proved (implications and separations, not a strict
+hierarchy); and the
 8n − 24 bound on Khattar–Gidney Problem 1 schedules under a stated cost model, attained by the
 few-ancilla construction for n = 6 … 12 (`problem1_T_lower_bound`).
 

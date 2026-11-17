@@ -309,6 +309,8 @@ Then Ψ<sub>2</sub> ∘ Φ<sub>2</sub>, at grade Φ<sub>2</sub>.grade ⊕ Ψ<sub
 
 **The proof** uses only the triangle inequality, data processing for Ψ<sub>2</sub>, and domination on the basis input. It does not use pre-composition, which is why Φ<sub>1</sub> need not be an endomorphism. The n-step noise theorem of Section 8 does need pre-composition, and therefore works on one space.
 
+**Its one client.** In this development the theorem is used once, through its pseudo-metric variant `coherent_composition_diamond_pseudo`, by the approximate-QFT counting lemma of Section 6.3. At the sizes of this paper that instance is vacuous, and no certificate uses it (Section 6.3). The theorem is proved, but it has no non-vacuous instance here.
+
 ### 3.5 The obstruction theorem
 
 The report's Theorem 3.1 is a categorical no-cloning statement [Abramsky 2010]. We mechanize a linear-algebra core.
@@ -890,9 +892,11 @@ Then GroverChannel<sub>n+m</sub>(C) satisfies `Realizes`(CountSpec<sub>m,a</sub>
 
 </div>
 
+**Where the approximate-QFT bound says something.** When a rotation is actually dropped (kmax < m), η<sub>aqft</sub> ≥ 8πm/2<sup>m</sup>, which is at least 2 for every m ≤ 6. Then δ > 1 and the bound is vacuous. The first informative case is m = 7, kmax = 6 (η<sub>aqft</sub> ≈ 1.37, δ ≈ 0.88). Every counting certificate uses the exact inverse QFT (kmax = none), and each records this limit among its hypotheses. So `ae_parametric_lemma_aqft` is proved for every m and kmax, but it is not exercised at the sizes reported here.
+
 **Parametric theorem and generated certificate.** Theorem 6.8 is the *parametric* result, uniform over networks and their counts. The generated certificate `grover_pred_037_count` (n = 8, m = 4, exact inverse QFT, MBU) concerns *one* network. Its statement "for every M equal to the network's count" is a formulation device, equivalent to its instance at M = 32 (`cert_count`: ε ≈ 0.168426, δ ≈ 0.189431). It adds no coverage. At m = 4 the radius ε exceeds a = 0.125, so this instance shows that the standard bound is formally bound to the circuit, not that the count is accurate at this precision (Section 6.6 needs m = 5). The case M = 0 is excluded (planned: R8). With no solution, G fixes |s⟩, the phase outcome is 0, and the estimate a = 0 is exact.
 
-**The specification departure.** The specification asked for amplitude *amplification* as its second pattern. We implemented estimation instead, because it exercises the coherent composition theorem with a real η, needs ε > 0 and δ > 0, and produces the count that search assumes. Estimation does not discharge the amplification pattern, which remains unimplemented.
+**The specification departure.** The specification asked for amplitude *amplification* as its second pattern. We implemented estimation instead, because it gives the coherent composition theorem a client with a real η (vacuous at the sizes here, as stated above), needs ε > 0 and δ > 0, and produces the count that search assumes. Estimation does not discharge the amplification pattern, which remains unimplemented.
 
 ### 6.4 Grade composition and the compositional certificate
 
@@ -1273,9 +1277,9 @@ The bound is therefore **optimistic** for untwirled hardware. Randomized compili
 |---|---|---|
 | hw_n2 | 3527/4000 = 0.882 | 0.801 |
 | hw_n3 | 2361/4000 = 0.590 | 0.229 |
-| wrapped MBU gadget | 3598/4000 = 0.900 | 0.875 |
+| wrapped MBU gadget | 3598/4000 = 0.900 | 0.857 |
 
-The wrapped gadget is the MBU gadget between a preparation and its inverse, its own artifact with δ′ = 0.1052, which is what the threshold uses; Table 6 gives the bare gadget's channel bound. The emulator's noise model is not of the (P-stoch) form, so these are *sanity checks* of the pipeline, not evidence for the premise, and the status word says so. Each manifest records the protocol: α, shots, seed, the success count, the margin formula and its value.
+The thresholds use δ′ of Section 8.4 (the Pauli reading), applied to the recorded runs without a re-run: 0.1793 for hw_n2, 0.7521 for hw_n3 and 0.1240 for the wrapped gadget. The run reports (`docs/hw_runs/`) predate that reading and use p = r (0.1500, 0.6484 and 0.1052), with thresholds 0.831, 0.332 and 0.875. Every run passes both. The wrapped gadget is the MBU gadget between a preparation and its inverse, its own artifact. It has no conditional certificate: its δ′ is `noiseBound` as computed by `cqr hw noise` and its Python mirror, not decided by the kernel. Table 6 gives the bare gadget's channel bound. The emulator's noise model is not of the (P-stoch) form, so these are *sanity checks* of the pipeline, not evidence for the premise, and the status word says so. Each manifest records the protocol: α, shots, seed, the success count, the margin formula and its value.
 
 ### 8.5 The bound-vacuity frontier
 
@@ -1446,6 +1450,7 @@ Our Track C is a translation validator in the sense of Pnueli et al. [1998], who
 - Two patterns.
 - Specifications are Boolean predicates; search has trivial input.
 - Counting excludes M = 0, so search after count assumes a satisfiable predicate.
+- The approximate-QFT counting bound is vacuous for m ≤ 6 and no certificate uses it, so the coherent composition theorem (Theorem 3.8) has no non-vacuous instance in this paper.
 - Amplitude amplification is not implemented.
 - The few-ancilla `ladder` variant is not certified.
 - Signature-match completeness is not semantic completeness.
@@ -1467,9 +1472,9 @@ Our Track C is a translation validator in the sense of Pnueli et al. [1998], who
 - **Internal consistency.** The evidence is kernel checking and agreement between the Lean and Python paths, not independent reproduction.
 - **Measurements.** The times and memory come from one run at one commit, on one machine with heterogeneous cores; no second machine has repeated them.
 - **The development process.** A second session of the same AI assistant reviewed the implementing session. That review is procedural and not an independent scientific audit; the kernel cannot tell whether a definition captures the intended physical concept. A human expert audit of `Realizes`, `AncRestore`, `channelDenote`, `diamondDist`, `CountSpec` and the premises is recommended before the claims are relied on; it has not been done.
-- **Reviews of this paper.** The paper was revised after five reviews, all generated by AI review tools: two before version 1.0 and three after it (`docs/REVIEW_RESPONSE_1.md`, `docs/REVIEW_RESPONSE_2.md`). They are not human peer review.
+- **Reviews of this paper.** The paper was revised after seven reviews, all generated by AI review tools: two before version 1.0, three after it and two after version 1.1 (`docs/REVIEW_RESPONSE_1.md`, `docs/REVIEW_RESPONSE_2.md`, `docs/REVIEW_RESPONSE_3.md`). They are not human peer review.
 - **Sources not peer-reviewed.** The specification report the project implements [Zambak 2026b] has not been peer-reviewed; its revisions v2 and v3 are in the repository. The earlier proposal [Zambak 2026a] is unpublished.
-- **The artifact.** The repository is public with its full history (<https://github.com/azizfzambak/cqrv>, tags `v1.0.0` and `v1.1.0`), so every commit cited in this paper can be inspected. No container image is provided; reproduction relies on the pinned toolchain and the steps in `docs/RELEASE.md`.
+- **The artifact.** The repository is public with its full history (<https://github.com/azizfzambak/cqrv>, tags `v1.0.0`, `v1.1.0` and `v1.2.0`), so every commit cited in this paper can be inspected. No container image is provided; reproduction relies on the pinned toolchain and the steps in `docs/RELEASE.md`.
 
 ## 12 Conclusion
 
@@ -1492,17 +1497,18 @@ Our Track C is a translation validator in the sense of Pnueli et al. [1998], who
 
 **AI assistance.** The software was implemented by an AI coding assistant (Claude Code, Anthropic), task by task, under written project rules (Appendix D). The task specifications and the reviews of each task were drafted by a second session of the assistant; through Stage 21 the author approved or amended them.
 
-**This article.** It was drafted with AI assistance and revised after five reviews generated by AI review tools (two before version 1.0, three after it); no human expert has reviewed it. It is the author's responsibility.
+**This article.** It was drafted with AI assistance and revised after seven reviews generated by AI review tools (two before version 1.0, three after it, two after version 1.1); no human expert has reviewed it. It is the author's responsibility.
 
 **What does not depend on the assistants.** Every theorem reported as proved is checked by the Lean kernel and audited for axioms.
 
 ## Data and code availability
 
-**The repository** contains the Lean sources, the generators, the Python harness and hardware tools, all committed certificates, check files, selection files and artifacts with their run reports, the decision log, the obligation ledger, and the local CI script (`scripts/ci_local.sh`); the CI logs themselves are not committed. It is public at <https://github.com/azizfzambak/cqrv> under the Apache License 2.0, with its full development history. This paper describes the code at commit `2f8200b`; the tags `v1.0.0` and `v1.1.0` add only documentation (the license, the citation file, the release notes and this paper). `docs/RELEASE.md` gives the reproduction steps: the pins, the two Python environments and every CI step with its command. No container image is provided.
+**The repository** contains the Lean sources, the generators, the Python harness and hardware tools, all committed certificates, check files, selection files and artifacts with their run reports, the decision log, the obligation ledger, and the local CI script (`scripts/ci_local.sh`); the CI logs themselves are not committed. It is public at <https://github.com/azizfzambak/cqrv> under the Apache License 2.0, with its full development history. This paper describes the code at commit `2f8200b`; the tags `v1.0.0`, `v1.1.0` and `v1.2.0` add only documentation (the license, the citation file, the release notes and this paper). `docs/RELEASE.md` gives the reproduction steps: the pins, the two Python environments and every CI step with its command. No container image is provided.
 
 **Versions of this paper.** All versions share the DOI 10.5281/zenodo.24302652, which resolves to the latest.
 - 1.0 (17 November 2026; doi:10.5281/zenodo.24302653).
-- 1.1 (November 2026): corrections after three AI-generated reviews (`docs/REVIEW_RESPONSE_2.md`): claims calibrated, related work corrected and extended, prose statements aligned with their Lean forms, factual errors fixed. The code and the certificates are unchanged.
+- 1.1 (17 November 2026; doi:10.5281/zenodo.24305310): corrections after three AI-generated reviews (`docs/REVIEW_RESPONSE_2.md`): claims calibrated, related work corrected and extended, prose statements aligned with their Lean forms, factual errors fixed. The code and the certificates are unchanged.
+- 1.2 (November 2026, this version): a threshold that version 1.1 had changed wrongly is restored (Section 8.4), the vacuity of the approximate-QFT bound at the sizes here is stated (Sections 3.4, 6.3 and 11), and the README is aligned with the paper, after two more AI-generated reviews (`docs/REVIEW_RESPONSE_3.md`). The code and the certificates are unchanged.
 
 **The pinned toolchain:**
 - Lean v4.35.0, Mathlib `56a0058`, Physlib `96a6bc5`;
@@ -1732,7 +1738,8 @@ lake env lean examples/certs/grover_pred_037_torino/PhysCert.lean</div>
 |---|---|---|
 | grades, `GradeExt`, ε, δ | `certificate.json` of each certificate (regenerated in CI) | generation stage; re-checked byte for byte in every CI run |
 | kernel times, wall times and peak memory of every Lean check file (Tables 5, 8; Section 9.2) | `kernel_check` field of each `certificate.json`; `docs/BENCHMARKS.md`; the state files of `scripts/bench_all.py` | one run at commit `2025ed2` (R11) |
-| noise bounds δ′, emulator counts | `manifest.json`, `docs/hw_runs/*.json` | Stages 25b, 27b, 27c |
+| noise bounds δ′ (Pauli reading) | the conditional certificates; for the wrapped gadget, `cqr hw noise` and `hw/noisebound.py` | Stages 27b, 27c |
+| emulator counts, bounds at p = r | `manifest.json`, `docs/hw_runs/*.json` | Stage 25b |
 | frontier | `docs/hw_frontier/frontier.json` | Stage 27c |
 | code size, commits | `wc`, `git log` at main `a2e1b6e` | Stage 30 |
 | R1, R2, R15 theorems and the `clbitMap` check | commits `6c66a87`, `040e967`, `8dfced6` | revision task A, CI 26 PASS |

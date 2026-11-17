@@ -5,7 +5,7 @@ Uncomputation, Validated Routing, and Conditional Noise Bounds*, Aziz F. Zambak,
 Preprint, published on Zenodo. It describes this repository up to Phase 3; the code it describes is
 commit `2f8200b`.
 
-- `Zambak_2026_CQRV.pdf`: the paper (48 pages).
+- `Zambak_2026_CQRV.pdf`: the paper (50 pages, version 1.2).
 - `Zambak_2026_CQRV.md`: its source (Markdown with HTML blocks for the title, theorems, tables and
   the inline SVG figure).
 - `fig1.png`: Figure 1 as an image, for the Word export.
