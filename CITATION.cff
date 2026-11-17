@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite the paper below."
 title: "CQRV: Certified Quantum Realization in Lean 4"
-version: 1.0.0
+version: 1.1.0
 date-released: 2026-11-17
 license: Apache-2.0
 repository-code: "https://github.com/azizfzambak/cqrv"
@@ -28,5 +28,5 @@ preferred-citation:
   month: 11
   publisher:
     name: Zenodo
-  doi: 10.5281/zenodo.24302653
-  url: "https://doi.org/10.5281/zenodo.24302653"
+  doi: 10.5281/zenodo.24302652
+  url: "https://doi.org/10.5281/zenodo.24302652"

@@ -22,17 +22,17 @@ We report a two-pattern prototype of CQR in Lean 4 on Mathlib and Physlib. The s
 For the running example, an 8-bit predicate with 32 solutions, the certificate gives δ = 7/128 at the measured grade (15, 134, 72, 7).
 
 **Restoration.** Around these certificates we mechanize a theory of restoration under measurement:
-- a general MBU theorem;
-- the boundary at which an MBU correction is Clifford, which happens exactly when the uncomputed function is quadratic over 𝔽<sub>2</sub>;
+- a general MBU theorem, which separates the computation of the uncomputed function from the implementation of its phase correction;
+- its boundary in our circuit language, where classically controlled gates are Clifford: a correction exists exactly when the uncomputed function is quadratic over 𝔽<sub>2</sub> (the classical characterization of Clifford diagonals, applied to MBU);
 - implications among the clean, conditionally clean and dirty ancilla regimes;
-- a proof for every n of the Khattar–Gidney two-ancilla multi-controlled Z;
-- a lower bound of 8n − 24 T gates within its schedule family.
+- a proof that a Khattar–Gidney two-ancilla multi-controlled Z is correct for every n, with its T-count checked for n = 4…12;
+- a counting lower bound of 8n − 24 T gates within its schedule family and cost model.
 
 **Routing and noise.**
 - *Routed circuits.* An untrusted transpiler (Qiskit) routes a circuit on a fake IBM backend and records a witness. Lean reconstructs the physical circuit from the witness, the kernel checks the reconstruction against the transpiler's output, and a soundness theorem transfers the certified realization to the routed circuit, on an ideal device with the target's gates and connectivity.
 - *Noise.* We prove a perturbation theorem whose stochastic premise is stated on the full register. Instantiated with calibration-derived numbers, it gives *conditional* certificates whose premises are named in every artifact. Within the tested Grover family, on two shipped calibration snapshots, the bound is non-vacuous only up to three data qubits, and for some of those instances it does not beat a classical baseline.
 
-**Scope.** The development has 39 114 lines of Lean library, no `sorry`, and only the standard axioms. The evidence is kernel checking and internal consistency (Lean against an independent statevector harness). No device was run. The repository is public, with its full history, under the Apache License 2.0.
+**Scope.** The development has 39 503 lines of Lean library, no `sorry`, and only the standard axioms. The evidence is kernel checking and internal consistency (Lean against an independent statevector harness). No device was run. The repository is public, with its full history, under the Apache License 2.0.
 
 </div>
 
@@ -50,7 +50,7 @@ For the running example, an 8-bit predicate with 32 solutions, the certificate g
 2. **Equivalence checking.** Deciding the equivalence of arbitrary circuits is QMA-hard [Janzing et al. 2005], so an unverified compiler's output cannot in general be checked after the fact.
 3. **Garbage.** Reversible embeddings produce garbage qubits [Bennett 1973; Landauer 1961], which must be returned to a known state or they destroy interference.
 
-Verified compilers prove each rewrite sound once [Amy et al. 2017; Hietala et al. 2021b; Leroy 2009]. Their correctness statements are about unitary semantics, not about the measurement-based uncomputation, terminal measurement and resource bounds that a realization of a classical specification involves.
+Verified compilers prove each rewrite sound once [Amy et al. 2017; Hietala et al. 2021b; Leroy 2009], and their correctness statements are mostly about unitary semantics. Some verified developments go further: a certified end-to-end implementation of Shor's algorithm in Coq proves a success-probability bound and a gate-count bound [Peng et al. 2023], and recent Lean 4 work binds correctness, success probability, restoration of borrowed qubits and resource bounds into one contract for AI-formalized algorithms [Zhang et al. 2026]. What this paper adds is a certifying compiler from classical specifications whose generated circuits carry measurement-based uncomputation inside the correctness statement, on density operators.
 
 **Certified quantum realization (CQR)** was proposed in a specification report [Zambak 2026b], distributed with the repository but not peer-reviewed, elaborating an earlier proposal [Zambak 2026a]. It replaces "compile anything" by four steps:
 1. decide whether the specification matches the precondition of a pattern in a finite library, inside a decidable matching fragment;
@@ -76,7 +76,7 @@ For P written in the input language, `cqr certify` produces a Lean file whose th
 
 <div class="eq">GroverChannel<sub>n</sub>(C) ⊨ RealizesExact(Search<sub>P</sub>, basis decoding, δ, g(C))  ∧  AncRestore(C, G<sup>r</sup>H<sup>⊗n</sup>),</div>
 
-Here δ = 1 − sin<sup>2</sup>((2r+1)θ) is an exact rational, and g(C) is the grade the kernel measures on C. The file is checked by the kernel and its axioms are audited.
+Here δ = 1 − sin<sup>2</sup>((2r+1)θ) is a real number. Since sin<sup>2</sup>θ = M/2<sup>n</sup> is rational, Theorem 6.2 evaluates it to an exact rational, which the certificate states as a rational literal in ℝ (7/128 for the running example). g(C) is the grade the kernel measures on C. The file is checked by the kernel and its axioms are audited.
 
 **What the certificate depends on.** The theorem has no hypothesis when n is at most a configurable limit (10 by default): the kernel decides the solution count M. Above the limit, M is a hypothesis. The step from the source text to the typed program is outside the kernel (parser, surface checker, and the printer of the typed-term literal). The step from the typed program to `net` is proved and re-checked in the file.
 
@@ -111,7 +111,7 @@ Here δ = 1 − sin<sup>2</sup>((2r+1)θ) is an exact rational, and g(C) is the 
 5. **Translation validation of an untrusted transpiler** (Section 7):
    - a witness-based reconstruction of the physical circuit;
    - a soundness theorem transferring realization and restoration to the routed circuit, for transpiler outputs in a stated fragment;
-   - a linear-design kernel check, measured at 2 541–4 170 gates;
+   - a kernel check designed to run in linear passes (a design, not a proved complexity bound), measured at 2 541–4 170 gates;
    - a physical grade with an exact timing model.
 6. **Conditional noise bounds** (Section 8):
    - a step semantics with the classical register;
@@ -126,6 +126,7 @@ Here δ = 1 − sin<sup>2</sup>((2r+1)θ) is an exact rational, and g(C) is the 
 - **Non-vacuity is not usefulness.** A non-vacuous conditional bound need not beat a classical baseline (Section 8.4).
 - **The emitters.** The QIR / OpenQASM emitters are translation-validated by re-parsing. For floating-point rotation angles this validates the structure and a numerical round trip, not exact equality with the IR rotation.
 - **Matching.** Matcher completeness is completeness of signature matching on a fragment, not semantic completeness over programs.
+- **The count.** Up to the count limit, the kernel decides M by evaluating the predicate on all 2<sup>n</sup> inputs, so at those sizes the search problem has already been solved classically: the certificate certifies the circuit, not a quantum advantage. Above the limit, M is a hypothesis.
 - **The artifact.** The evidence is kernel checking and internal consistency, not independent reproduction (Section 11).
 
 
@@ -196,7 +197,7 @@ Definitions and theorems are stated as in Lean (`CQRV/Realizability`). Names in 
 
 <div class="thm">
 
-**Definition 3.2 (Grade).** A grade g = (w, d, t, a) ∈ ℕ<sup>4</sup> records width, depth, T-count and peak ancillae. Sequential and parallel composition are g<sub>1</sub> ⊕ g<sub>2</sub> = (max w, d<sub>1</sub> + d<sub>2</sub>, t<sub>1</sub> + t<sub>2</sub>, max a) and g<sub>1</sub> ⊗ g<sub>2</sub> = (w<sub>1</sub> + w<sub>2</sub>, max d, t<sub>1</sub> + t<sub>2</sub>, a<sub>1</sub> + a<sub>2</sub>). Grades are ordered componentwise, and a budget b is fitted by g ≤ b.
+**Definition 3.2 (Grade).** A grade g = (w, d, t, a) ∈ ℕ<sup>4</sup> records width, depth, T-count and peak ancillae. Sequential and parallel composition are g<sub>1</sub> ⊕ g<sub>2</sub> = (max(w<sub>1</sub>, w<sub>2</sub>), d<sub>1</sub> + d<sub>2</sub>, t<sub>1</sub> + t<sub>2</sub>, max(a<sub>1</sub>, a<sub>2</sub>)) and g<sub>1</sub> ⊗ g<sub>2</sub> = (w<sub>1</sub> + w<sub>2</sub>, max(d<sub>1</sub>, d<sub>2</sub>), t<sub>1</sub> + t<sub>2</sub>, a<sub>1</sub> + a<sub>2</sub>). Grades are ordered componentwise, and a budget b is fitted by g ≤ b.
 
 </div>
 
@@ -234,7 +235,7 @@ At a measured interface, the output of Φ is decoded and re-encoded before Ψ ru
 
 **Theorem 3.4 (Measured composition; report Thm. 3.3a; `measured_composition`).** Let Y, Z be pseudo-metric spaces, Φ ⊩<sup>r</sup><sub>ε<sub>f</sub>,δ<sub>f</sub></sub> S<sub>f</sub> and Ψ ⊩<sup>s</sup><sub>ε<sub>g</sub>,δ<sub>g</sub></sub> S<sub>g</sub>. Assume:
 - (i) x ∈ dom S<sub>f</sub> and S<sub>f</sub><sup>ε<sub>f</sub></sup>(x, y) imply y ∈ dom S<sub>g</sub>;
-- (ii) for y ∈ dom S<sub>g</sub> and S<sub>g</sub>(y′, z′) there is z with S<sub>g</sub>(y, z) and d(z, z′) ≤ d(y, y′);
+- (ii) for y<sub>0</sub> ∈ dom S<sub>g</sub> and S<sub>g</sub>(y, z′) there is z<sub>0</sub> with S<sub>g</sub>(y<sub>0</sub>, z<sub>0</sub>) and d(z<sub>0</sub>, z′) ≤ d(y<sub>0</sub>, y);
 - (iii) 0 ≤ δ<sub>f</sub> and 0 ≤ δ<sub>g</sub> ≤ 1.
 
 Then the measured composite (ε<sub>f</sub> + ε<sub>g</sub>, δ<sub>f</sub> + δ<sub>g</sub>)-realizes S<sub>g</sub> ∘ S<sub>f</sub> within r ⊕ s.
@@ -298,11 +299,11 @@ Pre-composition needs an endomorphism because (Λ ⊗ id)ρ must again be a stat
 
 <div class="thm">
 
-**Theorem 3.8 (Coherent composition; report Thm. 3.3b; `coherent_composition_diamond`).** Let Φ<sub>1</sub>, Φ<sub>2</sub> : 𝒟(ℋ<sub>X</sub>) → 𝒟(ℋ<sub>D</sub>) and Ψ<sub>1</sub>, Ψ<sub>2</sub> : 𝒟(ℋ<sub>D</sub>) → 𝒟(ℋ<sub>E</sub>). Assume:
-- Ψ<sub>1</sub> ∘ Φ<sub>1</sub> (ε<sub>0</sub>, δ<sub>0</sub>)-realizes S under a POVM on ℋ<sub>E</sub>;
-- d<sub>⋄</sub>(Φ<sub>2</sub>, Φ<sub>1</sub>) ≤ η<sub>f</sub> and d<sub>⋄</sub>(Ψ<sub>2</sub>, Ψ<sub>1</sub>) ≤ η<sub>g</sub>.
+**Theorem 3.8 (Coherent composition; report Thm. 3.3b; `coherent_composition_diamond`).** Let Φ<sub>1</sub> : 𝒟(ℋ<sub>X</sub>) → 𝒟(ℋ<sub>D</sub>) and Ψ<sub>1</sub> : 𝒟(ℋ<sub>D</sub>) → 𝒟(ℋ<sub>E</sub>) be channels (the ideal ones, ungraded), and let Φ<sub>2</sub>, Ψ<sub>2</sub> be graded channels of the same types with Φ<sub>2</sub>.grade ≤ r and Ψ<sub>2</sub>.grade ≤ s. Let S = S<sub>g</sub> ∘ S<sub>f</sub>. Assume:
+- Ψ<sub>1</sub> ∘ Φ<sub>1</sub>, taken at grade 0, (ε<sub>0</sub>, δ<sub>0</sub>)-realizes S under a POVM on ℋ<sub>E</sub> within budget 0;
+- d<sub>⋄</sub>(Φ<sub>2</sub>.chan, Φ<sub>1</sub>) ≤ η<sub>f</sub> and d<sub>⋄</sub>(Ψ<sub>2</sub>.chan, Ψ<sub>1</sub>) ≤ η<sub>g</sub>.
 
-Then Ψ<sub>2</sub> ∘ Φ<sub>2</sub> (ε<sub>0</sub>, δ<sub>0</sub> + ½(η<sub>f</sub> + η<sub>g</sub>))-realizes S within the sum of the grades.
+Then Ψ<sub>2</sub> ∘ Φ<sub>2</sub>, at grade Φ<sub>2</sub>.grade ⊕ Ψ<sub>2</sub>.grade, (ε<sub>0</sub>, δ<sub>0</sub> + ½(η<sub>f</sub> + η<sub>g</sub>))-realizes S within r ⊕ s. The proof treats S as a whole; it does not use its decomposition.
 
 </div>
 
@@ -333,8 +334,8 @@ Every certificate kind rests on a stated set of components outside the kernel an
 |---|---|---|---|
 | Logical (search) | the theorem `cert`: realization ∧ restoration of the circuit literal; `emitted_ok` (synthesis re-run); grades; the count M (n ≤ limit); `front_end` (typed term ↔ network) | parser, surface checker (incl. call inlining), the printer of the typed-term literal; extraction and the matcher's run (the theorem restates the instance); the emitters (QIR / QASM validated by re-parse); the toolchain | ideal gates; exact initial \|0⟩; M is a hypothesis above the count limit |
 | Logical (counting) | as above, with the grade a certified compositional *upper bound* from per-block kernel-measured grades | as above | as above; M ≥ 1 |
-| Physical | the logical theorem; `emitted_eq`; the reconstruction of the routed circuit from the witness and its equality with the transpiler's output; coupling edges; the channel transfer; `PhysGrade` | Qiskit (transpiler and fake backends); the target file's content (bound by hash); the printer of `physical.qasm` | an ideal device with the target's gates and connectivity; (P-prep) exact all-\|0⟩ preparation; (P-ctrl) exact classical control and bookkeeping; the feed-forward latency L, used for timing only |
-| Conditional (noise) | the above, plus the noise theorem at the instance and the exact bound δ′ | as above; the calibration snapshot (bound by hash) | (P-cal), (P-stoch), (P-ro), (P-idle) of Section 8.3, in addition to (P-prep) and (P-ctrl) |
+| Physical | the logical theorem; `emitted_eq`; the reconstruction of the routed circuit from the witness and its equality with the transpiler's output; coupling edges; the channel transfer; `PhysGrade` | Qiskit (transpiler and fake backends); the target file's content (bound by hash); the printer of `physical.qasm`; the list of device qubits holding the data at the final layout (`dataPhys`, from the transpile tool; it enters `PhysGrade` and not the realization theorem) | an ideal device with the target's gates and connectivity; (P-prep) exact all-\|0⟩ preparation; (P-ctrl) exact classical control and bookkeeping; the feed-forward latency L, used for timing only |
+| Conditional (noise) | the above, plus the noise theorem at the instance and the exact bound δ′ | as above; the calibration snapshot (bound by hash); `dataPhys` also selects the readout rates r<sub>j</sub> in δ′ | (P-cal), (P-stoch), (P-ro), (P-idle) of Section 8.3, in addition to (P-prep) and (P-ctrl) |
 | Selection | admissibility and minimality of the choice among candidates whose grades the kernel computed | the candidates' artifacts, each linked by hash to its own check file | as for the candidates |
 
 
@@ -345,7 +346,7 @@ Every certificate kind rests on a stated set of components outside the kernel an
 <figure>
 <svg viewBox="0 0 760 175" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Cambria, serif" font-size="12">
 <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#333"/></marker></defs>
-<rect x="10" y="20" width="110" height="46" rx="6" fill="#eeeeee" stroke="#666"/><text x="65" y="40" text-anchor="middle">source text</text><text x="65" y="56" text-anchor="middle" font-size="10">parse, check, inline</text>
+<rect x="10" y="20" width="110" height="46" rx="6" fill="#eeeeee" stroke="#666"/><text x="65" y="38" text-anchor="middle">source text</text><text x="65" y="52" text-anchor="middle" font-size="10">parse, check, inline,</text><text x="65" y="63" text-anchor="middle" font-size="10">print typed term</text>
 <rect x="150" y="20" width="120" height="46" rx="6" fill="#dbe8f6" stroke="#36c"/><text x="210" y="40" text-anchor="middle">typed term → network</text><text x="210" y="56" text-anchor="middle" font-size="10">toNetwork (proved)</text>
 <rect x="300" y="20" width="120" height="46" rx="6" fill="#eeeeee" stroke="#666"/><text x="360" y="40" text-anchor="middle">extractor ℰ</text><text x="360" y="56" text-anchor="middle" font-size="10">ground signature</text>
 <rect x="450" y="20" width="130" height="46" rx="6" fill="#dbe8f6" stroke="#36c"/><text x="515" y="40" text-anchor="middle">signature matcher</text><text x="515" y="56" text-anchor="middle" font-size="10">sound; complete on fragment</text>
@@ -416,11 +417,11 @@ Every certificate kind rests on a stated set of components outside the kernel an
 **Networks and affine forms.** Synthesis starts from a Boolean network of input, constant, NOT, AND and XOR nodes. Each value is an affine form over 𝔽<sub>2</sub>: a sorted list of atoms (inputs and AND results) and a constant. NOT and XOR cost nothing at the node.
 
 **An AND of operands u, v:**
-- *exact identities* (1 ∧ v, 0 ∧ v, u ∧ u, u ∧ ¬u) emit nothing;
-- *otherwise `prepare`* gathers u onto its smallest atom p<sub>u</sub> by CNOTs. If p<sub>u</sub> occurs in v, with linear parts {p<sub>u</sub>} ∪ R<sub>u</sub> and {p<sub>u</sub>} ∪ R<sub>v</sub>, then after the gather v's linear part in the new qubit contents is {p<sub>u</sub>} ∪ (R<sub>u</sub> △ R<sub>v</sub>). Its pivot is taken from R<sub>u</sub> △ R<sub>v</sub>, and p<sub>u</sub> remains among the atoms gathered onto it;
+- *exact identities* (1 ∧ v, 0 ∧ v, u ∧ u, u ∧ ¬u, and their mirrors) emit nothing. They are decided on the affine forms, where AND results are opaque atoms: two operands with equal linear parts are equal or complementary;
+- *otherwise `prepare`* gathers u onto its smallest atom p<sub>u</sub> by CNOTs. If p<sub>u</sub> occurs in v, with linear parts {p<sub>u</sub>} ∪ R<sub>u</sub> and {p<sub>u</sub>} ∪ R<sub>v</sub>, then after the gather v's linear part in the new qubit contents is {p<sub>u</sub>} ∪ (R<sub>u</sub> △ R<sub>v</sub>). Its pivot is taken from R<sub>u</sub> △ R<sub>v</sub>, which is non-empty because the identities were excluded, and p<sub>u</sub> remains among the atoms gathered onto it. If p<sub>u</sub> does not occur in v, the gather touches only p<sub>u</sub>, and v is gathered onto its own smallest atom. Affine constants are realized by an X on the pivot after the gathers, and the preparation is undone in reverse;
 - a fresh ancilla receives u ∧ v by the temporary logical-AND, and the uncompute block replays the preparation around the MBU.
 
-**The oracle** is compute blocks, a phase flip (a Z on the gathered output), and uncompute blocks in reverse order. Its width is n + #AND, and t = 4·#AND.
+**The oracle** is compute blocks, a phase flip (a Z on the gathered output), and uncompute blocks in reverse order. Its width is n + #AND, and t = 4·#AND, where #AND counts the emitted ANDs (an identity emits none).
 
 **Bennett pebbling** [Bennett 1989; Meuli et al. 2019]. For AND chains it is available under an ancilla budget, by a 0–1 breadth-first search where placing a pebble (an AND, 4 T) costs 1 and removing one (an MBU) costs 0. Pebbled oracles are tested, not certified.
 
@@ -433,7 +434,7 @@ Every certificate kind rests on a stated set of components outside the kernel an
 - `ifBit j g` is g if c<sub>j</sub>, and I otherwise;
 - `alloc` and `free` denote I: restoration is proved, not assumed.
 
-The channel is Σ<sub>c</sub> K<sub>c</sub>ρK<sub>c</sub><sup>†</sup> (`channelDenote`). Completeness needs the bit discipline (each bit written once before it is read), which is part of `Circuit.WF`.
+The channel is Σ<sub>c</sub> K<sub>c</sub>ρK<sub>c</sub><sup>†</sup> (`channelDenote`). Completeness needs the bit discipline. `Circuit.WF` requires: every data index below the data count; distinct qubits for two-qubit gates, also under `ifBit`; every `measure` writing a fresh bit below the bit count; and every `ifBit` reading a bit already written and wrapping an IR Clifford gate (so `ifBit` does not nest and does not wrap a measurement). Since the bit count is the number of measurements, every bit is written exactly once, before it is read. Ancilla indices are not bounded by `Circuit.WF`: the ancilla count is defined as the largest index used plus one.
 
 **Resource accounting.** These are the exact rules of `CQRV/Circuit/IR.lean`:
 - **T-count.** `t` and `tdg` count 1. `p a k` counts 1 iff its angle is an odd multiple of π/4, that is 2<sup>k</sup> ∣ 8a and 2<sup>k</sup> ∤ 4a. `cp` counts 0. `ifBit` counts its gate.
@@ -514,6 +515,8 @@ It maps ρ ⊗ |0⟩⟨0| to CZ ρ CZ<sup>†</sup> ⊗ |0⟩⟨0| for every two
 
 </div>
 
+**What "general" means here.** The theorem is general in B and O: any compute block and any phase implementation. It is not general in f within this IR. Well-formedness requires every gate under `ifBit` to be an IR Clifford gate, so O is a Clifford circuit, and the hypotheses can be met only when f is quadratic (`mbu_wf_forces_quadratic`; Theorem 5.11).
+
 <div class="proof">
 
 *Proof idea.* It suffices to compute each branch on a basis input. B gives φ(x)|x⟩|e<sub>t</sub>(f(x))⟩. H on t and the projection onto outcome b give (1/√2)(−1)<sup>b·f(x)</sup>φ(x)|x⟩|e<sub>t</sub>(b)⟩.
@@ -532,7 +535,7 @@ Lemma 5.2 applies with the branch scalars 1/√2 and λ/√2.
 
 <div class="thm">
 
-**Theorem 5.6 (Report Lemma 6.3.2; `lemma_6_3_2_xor`).** If `synthesizeOracle N = ok C` and C is well formed, then `AncRestore`(C, O<sub>P<sub>N</sub></sub>), with P<sub>N</sub> the network's predicate. The same holds on every larger ancilla register.
+**Theorem 5.6 (Report Lemma 6.3.2; `lemma_6_3_2_xor`).** If `synthesizeOracle N = ok C` and C is well formed, then `AncRestore`(C, O<sub>P<sub>N</sub></sub>), with P<sub>N</sub> the network's predicate. The same holds on every larger ancilla register (`lemma_6_3_2_xor_of_le`).
 
 </div>
 
@@ -569,7 +572,7 @@ Lemma 5.2 concludes.
 
 **Definition 5.9.**
 - f is *quadratic* if f(x) = c + Σ a<sub>i</sub>x<sub>i</sub> + Σ b<sub>ij</sub>x<sub>i</sub>x<sub>j</sub> over 𝔽<sub>2</sub>.
-- A diagonal D is *Clifford-diagonal* if D X<sub>i</sub> D<sup>†</sup> = λ·X<sub>i</sub>Z<sup>b</sup> for every qubit i, for some unit λ and some b.
+- A diagonal D is *Clifford-diagonal* if D X<sub>i</sub> D<sup>†</sup> = λ·X<sub>i</sub>Z<sup>b</sup> for every qubit i, for some unit λ and some b ∈ {0,1}<sup>n</sup>, where Z<sup>b</sup> = ⊗<sub>j</sub> Z<sub>j</sub><sup>b<sub>j</sub></sup>.
 
 </div>
 
@@ -596,7 +599,7 @@ Lemma 5.2 concludes.
 
 **Consequence.** A degree-3 function cannot be uncomputed by MBU in this IR, because its correction would be a non-Clifford gate under classical control.
 
-**Note.** f is a free parameter here: the theorem characterizes the corrections that are admissible, not which f a given B computes. The bit j must be existential. With a fixed j ≥ 1 the statement is false, because the bit discipline requires every bit below the bit count to be written.
+**Note.** Theorem 5.11 is structural: it characterizes well-formedness together with `PhaseImpl`, for B any unitary prefix on the data qubits, and it mentions neither `ComputesInto` nor `AncRestore`. f is a free parameter here: the theorem characterizes the corrections that are admissible, not which f a given B computes. The semantic boundary is the combination with Theorem 5.5: when B computes f into t, MBU restoration is available in this IR exactly for quadratic f (`mbu_wf_forces_quadratic`, and `mbu_quadratic` for the positive direction). The bit j must be existential. With a fixed j ≥ 1 the statement is false, because the bit discipline requires every bit below the bit count to be written.
 
 ### 5.5 An algebra of restoration
 
@@ -664,20 +667,20 @@ Lemma 5.2 concludes.
 - **The end.** After the compute phase, the product of the unmarked qubits is x<sub>0</sub> ∧ ⋯ ∧ x<sub>n−1</sub>. A final CZ (or Z) acts on them, and the operations are undone in reverse order.
 
 **Schedule B** has three phases:
-1. Khattar and Gidney's doubling timesteps; timestep i applies 2<sup>i</sup> operations of the form (c − 1 − k, c + 2k + 1, c + 2k + 2);
+1. Khattar and Gidney's doubling timesteps. Timestep i starts from the marked indices P = {i, …, i + 2<sup>i</sup> − 1} and the unmarked Q = {i + 2<sup>i</sup>, …, i + 2<sup>i+1</sup>}. It has i + 1 sub-steps: each but the last applies |P|/2 operations (p<sub>|P|−1−j</sub>, q<sub>2j+1</sub>, q<sub>2j+2</sub>), returns their targets to Q, re-sorts Q and keeps the lower half of P; the last applies (p<sub>0</sub>, q<sub>0</sub>, q<sub>1</sub>). That is 2<sup>i</sup> operations in all;
 2. their greedy rule;
 3. the greedy rule over a second clean ancilla on the qubits left unmarked, a fresh array whose index 0 is the second ancilla.
 
-After k doubling timesteps the marks are exactly [k, k + 2<sup>k</sup>), a closed form proved in Lean. For n = 8:
+After k doubling timesteps the marks are exactly [k, k + 2<sup>k</sup>), provided i + 2<sup>i+1</sup> ≤ n for every i < k (the array has n + 1 entries); this closed form is proved in Lean (`doubling_spec`). For n = 8:
 - the first timestep (0, 1, 2) marks {1, 2};
 - the second, (2, 4, 5) then (1, 2, 3), marks {2, 3, 4, 5} = [2, 6);
 - two greedy steps follow, then one temporary-AND onto the second ancilla.
 
-That is two ANDs and four RTOF pairs: 2·4 + 4·8 = 40 T. For n ≤ 2 the construction uses no ancilla (a Z or a CZ), and the second phase is skipped when at most two unmarked qubits remain.
+That is two ANDs and four RTOF pairs: 2·4 + 4·8 = 40 T. For n ≤ 2 the construction uses no ancilla (a Z or a CZ), and the third phase (on the second ancilla) is skipped when at most two unmarked qubits remain.
 
 <div class="thm">
 
-**Lemma 5.15 (Pair cancellation; `rtofPhase_pair`).** RTOF = D·Toffoli with D = diag(1, 1, 1, 1, 1, −1, −i, i). For the diagonal entries ϕ of D and all bits x, y, z: ϕ(x, y, z ⊕ xy)·ϕ(x, y, z) = 1.
+**Lemma 5.15 (Pair cancellation; `rtofPhase_pair`).** RTOF = D·Toffoli with D = <span style="white-space:nowrap">diag(1, 1, 1, 1, 1, −1, −i, i)</span>. For the diagonal entries φ of D and all bits x, y, z: φ(x, y, z ⊕ xy)·φ(x, y, z) = 1.
 
 </div>
 
@@ -765,7 +768,7 @@ No well-formedness, bit-count or classical hypothesis remains.
 
 </div>
 
-**Scope.** Within this family and cost model, 40 T at n = 8 is optimal, and B attains it. The all-n form of the attainment is open. Candidate A's 8k − 12 = 8n − 20 is the one-ancilla value of the same counting.
+**Scope.** Within this family and cost model, 40 T at n = 8 is optimal, and B attains it. The all-n form of the attainment is open: Theorem 5.18 proves correctness and restoration for every n, while the cost is decided for n = 4…12 only. No depth bound is proved. Candidate A's 8k − 12 = 8n − 20 is the one-ancilla value of the same counting.
 
 
 ## 6 Certified patterns: Grover search and quantum counting
@@ -776,7 +779,7 @@ No well-formedness, bit-count or classical hypothesis remains.
 
 <div class="thm">
 
-**Theorem 6.1 (`grover_parametric_lemma_diff`, `_gen`).** Let:
+**Theorem 6.1 (`grover_parametric_lemma_diff`, `_gen`).** Let 1 ≤ M ≤ 2<sup>n</sup>, as packaged in `GroverParams`, and let:
 - the oracle be certified in either uncomputation mode;
 - D be a diffusion that respects the bit discipline and satisfies `AncRestore`(D, `diffU`) on every register at least as large as its own;
 - C = H<sup>⊗n</sup>·(oracle; D)<sup>r</sup>.
@@ -873,7 +876,7 @@ The IR's exact phase gates express the QFT: H on each qubit, followed by `cp` ro
 - the outcome inr () has the estimate a;
 - the type carries the pseudo-metric induced by ã.
 
-**The specification.** CountSpec<sub>m,a</sub> accepts only inr (), and its ε-relaxation is {y : |ã(y) − a| ≤ ε}. The decoding `countPOVM n m` is a POVM on the whole (n + m)-qubit data space: the basis measurement of the phase qubits tensored with the identity on the search qubits, with the zero operator on inr ().
+**The specification.** CountSpec<sub>m,a</sub> accepts only inr (), and its ε-relaxation is {o ∈ CountOut<sub>m</sub> : |ã(o) − a| ≤ ε}; on a physical outcome inl y this is |ã(y) − a| ≤ ε. The decoding `countPOVM n m` is a POVM on the whole (n + m)-qubit data space: the basis measurement of the phase qubits tensored with the identity on the search qubits, with the zero operator on inr ().
 
 <div class="thm">
 
@@ -883,11 +886,11 @@ The IR's exact phase gates express the QFT: H on each qubit, followed by `cp` ro
 - `countingCircuit N n m none shape mode = .ok C` (either shape, either mode);
 - g(C) ≤ g.
 
-Then GroverChannel<sub>n+m</sub>(C) satisfies `Realizes`(CountSpec<sub>m,a</sub>, `countPOVM`, ε(a, m), 1 − 8/π<sup>2</sup>, g), and `AncRestore`(C, U<sub>count</sub>). The AQFT form adds η<sub>aqft</sub>/2 to δ by Theorem 3.8 and Theorem 6.5.
+Then GroverChannel<sub>n+m</sub>(C) satisfies `Realizes`(CountSpec<sub>m,a</sub>, `countPOVM`, ε(a, m), 1 − 8/π<sup>2</sup>, g), and `AncRestore`(C, U<sub>count</sub>). With the approximate inverse QFT at any kmax, `ae_parametric_lemma_aqft` gives the same realization with δ = 1 − 8/π<sup>2</sup> + η<sub>aqft</sub>/2, η<sub>aqft</sub> = 4πm/2<sup>kmax</sup>, through Theorems 3.8 and 6.5. The factor m is conservative: for kmax ≥ m nothing is truncated, and the bound is then loose.
 
 </div>
 
-**Parametric theorem and generated certificate.** Theorem 6.8 is the *parametric* result, uniform over networks and their counts. The generated certificate `grover_pred_037_count` (n = 8, m = 4, exact inverse QFT, MBU) concerns *one* network. Its statement "for every M equal to the network's count" is a formulation device, equivalent to its instance at M = 32 (`cert_count`: ε ≈ 0.168426, δ ≈ 0.189431). It adds no coverage. The case M = 0 is excluded (planned: R8). With no solution, G fixes |s⟩, the phase outcome is 0, and the estimate a = 0 is exact.
+**Parametric theorem and generated certificate.** Theorem 6.8 is the *parametric* result, uniform over networks and their counts. The generated certificate `grover_pred_037_count` (n = 8, m = 4, exact inverse QFT, MBU) concerns *one* network. Its statement "for every M equal to the network's count" is a formulation device, equivalent to its instance at M = 32 (`cert_count`: ε ≈ 0.168426, δ ≈ 0.189431). It adds no coverage. At m = 4 the radius ε exceeds a = 0.125, so this instance shows that the standard bound is formally bound to the circuit, not that the count is accurate at this precision (Section 6.6 needs m = 5). The case M = 0 is excluded (planned: R8). With no solution, G fixes |s⟩, the phase outcome is 0, and the estimate a = 0 is exact.
 
 **The specification departure.** The specification asked for amplitude *amplification* as its second pattern. We implemented estimation instead, because it exercises the coherent composition theorem with a real η, needs ε > 0 and δ > 0, and produces the count that search assumes. Estimation does not discharge the amplification pattern, which remains unimplemented.
 
@@ -899,7 +902,7 @@ The counting circuit of the running example has 3 682 gates (MBU), above the fla
 
 <div class="thm">
 
-**Theorem 6.9 (`grade_append_le`, list and n-fold forms).** If C<sub>1</sub> and C<sub>2</sub> share the data register and C<sub>1</sub> frees every ancilla it allocates (`liveEnd C₁ = 0`), then g(C<sub>1</sub> ++ C<sub>2</sub>) ≤ g(C<sub>1</sub>) ⊕ g(C<sub>2</sub>). Width, T-count and peak ancillae hold with equality, and depth is a bound because the scheduler overlaps the boundary. The analogue holds for `GradeExt`.
+**Theorem 6.9 (`grade_append_le`, list and n-fold forms).** If C<sub>1</sub> and C<sub>2</sub> share the data register and C<sub>1</sub> frees every ancilla it allocates (liveEnd(C<sub>1</sub>) = 0), then g(C<sub>1</sub> ++ C<sub>2</sub>) ≤ g(C<sub>1</sub>) ⊕ g(C<sub>2</sub>). Width, T-count and peak ancillae hold with equality, and depth is a bound because the scheduler overlaps the boundary. The analogue holds for `GradeExt`.
 
 </div>
 
@@ -916,7 +919,7 @@ The counting circuit of the running example has 3 682 gates (MBU), above the fla
 | inverse QFT<sub>4</sub> | 10 | 1 | (12, 7, 0, 0) | (6, 0, 6, 0, 0) |
 | **composed** | **3 682** | | **(20, 1388, 660, 8)** | **(1161, ≤ 660, 6, 165, 330)** |
 
-**Reading the table.** The T-count 660 = 15 × 44 comes from the controlled iterates. The inverse QFT contributes no T and six *rotations*: its six controlled phases (angles π/2, π/4, π/8) are neither Clifford nor T-powers under the rules of Section 4.5. Their Clifford+T cost is not in t. The T-depth is stated only as a bound.
+**Reading the table.** The T-count 660 = 15 × 44 comes from the controlled iterates. The inverse QFT contributes no T and six *rotations*: its six controlled phases (angles π/2, π/4, π/8) are neither Clifford nor T-powers under the rules of Section 4.5. Their Clifford+T cost is not in t. The T-depth is stated only as a bound: under the as-soon-as-possible scheduler a sum of T-depths is not in general a bound for a concatenation, so the composition uses T-depth(C<sub>1</sub>) + T-count(C<sub>2</sub>) (`tDepth_append_le`), which gives 15 × 44 = 660 rather than 15 × 24. A controlled iterate has 44 T against the 36 of an uncontrolled one: the control adds one AND to the oracle (`withControl`) and one to the diffusion's MCZ, at 4 T each, which also gives its 11 measurements and 8 ancillae.
 
 ### 6.5 The library: uniform soundness, signature-match completeness, selection
 
@@ -964,6 +967,8 @@ The counting circuit of the running example has 3 682 gates (MBU), above the fla
 
 Then the measured composite realizes "search after count" with ε = ε<sub>count</sub> and δ = δ<sub>count</sub> + δ<sub>search</sub>, within g(C<sub>1</sub>) ⊕ g<sub>2</sub>.
 
+Formally, S<sub>f</sub> = CountSpec<sub>m,a</sub> on CountOut<sub>m</sub> with its pseudo-metric, and S<sub>g</sub> = `SearchAfterCount` relates an outcome y to a final z when |ã(y) − a| ≤ ε<sub>count</sub> and P(z). The final space Reg<sub>n</sub> carries the discrete metric, so with ε<sub>count</sub> < 1 the final output is an exact solution; ε<sub>count</sub> is the radius of the intermediate ball.
+
 </div>
 
 **Why m = 5.** The hypothesis C(y) = C<sub>0</sub> requires every outcome in the counting ε-ball to choose the same iteration count. For (n, M) = (8, 32) at m = 4, ε(1/8, 4) ≈ 0.168 exceeds a. The ball then contains y = 0 and y = 1 with r = 12 and r = 3, so the composite δ ≈ 1.04 is vacuous. At m = 5, ε ≈ 0.0746, the ball is y ∈ {3, 4, 28, 29}, all with r = 2. This is the decided lemma `domain_8_32_5`, which gives δ = (1 − 8/π<sup>2</sup>) + 7/128 ≈ 0.244.
@@ -972,6 +977,8 @@ Then the measured composite realizes "search after count" with ε = ε<sub>count
 - **First stage.** g<sub>1</sub> = (21, 2862, 1364, 8), a composed bound.
 - **Second stage.** g<sub>2</sub> must bound *every* branch: the largest r = 12 at y = 0 gives (15, 794, 432, 7).
 - **The composite.** g<sub>1</sub> ⊕ g<sub>2</sub> = (21, 3656, 1796, 8).
+
+**Simplifications.** The constant circuit on the ball and the worst-case branch grade g<sub>2</sub> are simplifications of the proof: a branch-wise argument would need only that every branch in the ball fail with probability at most δ<sub>search</sub>, and the grade of the branches that occur. Neither refinement is mechanized.
 
 **A logical bound.** The result does not count the measurement, the classical computation of r(y), the selection, the re-preparation or the latency (Section 3.3). No composite certificate is generated.
 
@@ -1005,7 +1012,7 @@ A global phase multiplies each branch's Kraus operator by a unit scalar (inside 
 
 </div>
 
-**An example.** H's table entry is rz(π/2) sx rz(π/2), whose physical matrix product is e<sup>−iπ/4</sup>H: a table phase of −1/8 of a turn. The IR expansion is S(HSH)S = e<sup>iπ/4</sup>H, and irPhase(H) = −1/8 + 2·1/8 = +1/8. The task text had stated the theorem with the table phase, which is false for H. The proof found the corrected form.
+**An example.** H's table entry is rz(π/2) sx rz(π/2), whose physical matrix product is e<sup>−iπ/4</sup>H: a table phase of −1/8 of a turn. The IR expansion is S(HSH)S = e<sup>iπ/4</sup>H, and irPhase(H) = −1/8 + 2·1/8 = +1/8: each rz(π/2) = rz(2π·1/2<sup>2</sup>) has (a, k) = (1, 2) and contributes a/2<sup>k+1</sup> = 1/8. The task text had stated the theorem with the table phase, which is false for H. The proof found the corrected form.
 
 <div class="thm">
 
@@ -1013,7 +1020,7 @@ A global phase multiplies each branch's Kraus operator by a unit scalar (inside 
 
 </div>
 
-**The ancilla count.** "Translation preserves the ancilla count" is false in general: ⟨1, [alloc (anc 3)]⟩ loses its only ancilla. The proved form assumes `ancCovered`, a decidable property that holds for every synthesized circuit.
+**The ancilla count.** "Translation preserves the ancilla count" is false in general: ⟨1, [alloc (anc 3)]⟩, a circuit with one data qubit, loses its only ancilla. The proved form assumes `ancCovered`, a decidable property that holds for every synthesized circuit.
 
 ### 7.3 Relabeling, SWAPs, embedding, reordering
 
@@ -1071,7 +1078,7 @@ Then the final layout is realized by σ<sub>f</sub> = irPerm(steps)·σ<sub>0</s
 
 **The proof** (97 lines; the file is 1 266 lines) has four steps:
 1. migrate every SWAP to the end, at top level and inside blocks; inside a block the condition bit is handled once;
-2. undo the reordering by Theorem 7.4, the independence being preserved by injectivity;
+2. undo the reordering by Theorem 7.4, the independence being preserved by the injectivity of the layouts;
 3. identify the placement (Theorem 7.3) and the translation (Theorem 7.2);
 4. cancel the unit scalars.
 
@@ -1166,7 +1173,7 @@ The literal-hash check caught a generator bug that dropped the conditions of con
 
 **The four committed selection files.**
 - **FakeWashington.** Only the coherent mode is admissible.
-- **FakeTorino.** The physical bound and the two-qubit count select few:log/MBU (262 two-qubit gates against 315 and 375). The depth selects tree/coherent (20.1 µs against 33.7 µs). With the budget "bound < 1", nothing is admissible.
+- **FakeTorino.** The physical bound and the two-qubit count select few:log/MBU (262 two-qubit gates against 315 for tree/MBU and 375 for tree/coherent). The depth selects tree/coherent (20.1 µs against 33.7 µs). With the budget "bound < 1", nothing is admissible.
 
 **A difference, reported.** The committed physical certificate is of the tree/MBU artifact, generated with an explicit mode.
 
@@ -1181,6 +1188,8 @@ The literal-hash check caught a generator bug that dropped the conditions of con
 - unitary gates act as gateU(g) ⊗ I;
 - `measure q -> j` has the Kraus operators P<sub>q=v</sub> ⊗ X<sub>j</sub><sup>v</sup> (v ∈ {0, 1});
 - `ifBit j g` is gateU(g) ⊗ |1⟩⟨1|<sub>j</sub> + I ⊗ |0⟩⟨0|<sub>j</sub>, in the factor order of X<sup>+</sup>.
+
+Here X<sub>j</sub><sup>v</sup> and |b⟩⟨b|<sub>j</sub> act on bit j of Reg<sub>m</sub> and as the identity on the other m − 1 bits.
 
 <div class="thm">
 
@@ -1210,7 +1219,7 @@ The literal-hash check caught a generator bug that dropped the conditions of con
 
 <div class="thm">
 
-**Theorem 8.4 (`noisy_realization`).** If the ideal composite Γ ∘ tr<sub>bits</sub> ∘ (Φ<sub>k</sub> ∘ ⋯ ∘ Φ<sub>1</sub>) ∘ prep realizes S with (ε, δ), and each noisy step satisfies d<sub>⋄</sub>(Ψ<sub>i</sub>, Φ<sub>i</sub>) ≤ η<sub>i</sub>, then the noisy composite realizes S with (ε, δ + ½Σ η<sub>i</sub>).
+**Theorem 8.4 (`noisy_realization`).** If the ideal composite Γ ∘ tr<sub>bits</sub> ∘ (Φ<sub>k</sub> ∘ ⋯ ∘ Φ<sub>1</sub>) ∘ prep realizes S with (ε, δ), and each noisy step satisfies d<sub>⋄</sub>(Ψ<sub>i</sub>, Φ<sub>i</sub>) ≤ η<sub>i</sub>, then the noisy composite realizes S with (ε, δ + ½Σ η<sub>i</sub>). The exact form is `noisy_realization`, the form with ε `noisy_realization_realizes` (Appendix A).
 
 </div>
 
@@ -1223,6 +1232,8 @@ The literal-hash check caught a generator bug that dropped the conditions of con
 Then for *every* choice of the arbitrary channels, the noisy physical channel satisfies `RealizesExact` with δ′ = δ + Σ<sub>g</sub> p<sub>g</sub> + Σ<sub>j</sub> r<sub>j</sub>.
 
 </div>
+
+**What the theorem does and does not bind.** It also assumes the witness hypotheses of Theorem 7.5. Its readout list is any list of steps: the theorem holds for every length. The certificate fixes the list to the readout rates of the qubits in `dataPhys` (`rs_eq`, decided against the calibration snapshot), but `dataPhys` itself, the device qubits of the data at the final layout, is a literal from the transpile tool that the kernel does not check against the witness's final layout (Table 1). A kernel check of that binding is planned.
 
 **Basis operations, not IR gates.** The premise attaches to a basis operation's composite, not to each IR gate, because sx expands to three IR steps (`steps_flatMap`, `stepsOf_physCircuit`).
 
@@ -1249,11 +1260,11 @@ The bound is therefore **optimistic** for untwirled hardware. Randomized compili
 
 | Certificate | Instance (target) | Ideal success | Certified 1 − δ′ | Classical (q+1)/N | Beats baseline? | Status |
 |---|---|---|---|---|---|---|
-| hw_n2_torino | n = 2, r = 1, tree/MBU (FakeTorino) | 1 | 0.821 | 0.500 | yes | L H P N S |
+| hw_n2_torino | n = 2, r = 1, tree/MBU, full map (FakeTorino) | 1 | 0.821 | 0.500 | yes | L H P N S |
 | fr_n2_tree_coherent_rb_washington | n = 2, r = 1, tree/coherent, pruned (FakeWashington) | 1 | 0.789 | 0.500 | yes | L H P N |
 | fr_n3_tree_coherent_rb_torino | n = 3, r = 2, tree/coherent, pruned (FakeTorino) | 121/128 | 0.404 | 0.375 | barely | L H P N |
-| hw_n3_torino | n = 3, r = 2, tree/MBU (FakeTorino) | 121/128 | 0.248 | 0.375 | **no** | L H P N S |
-| fr_n3_fewlog_mbu_torino | n = 3, r = 2, few:log/MBU (FakeTorino) | 121/128 | 0.222 | 0.375 | **no** | L H P N |
+| hw_n3_torino | n = 3, r = 2, tree/MBU, full map (FakeTorino) | 121/128 | 0.248 | 0.375 | **no** | L H P N S |
+| fr_n3_fewlog_mbu_torino | n = 3, r = 2, few:log/MBU, full map (FakeTorino) | 121/128 | 0.222 | 0.375 | **no** | L H P N |
 | mbu_gadget_torino | the MBU gadget, channel form: trace distance ≤ 0.0995 | — | — | — | — | H P N |
 
 **The emulator protocol.** Runs on Aer with the fake's own noise model used 4 000 shots and seed 25. Each was compared with the one-sided Hoeffding criterion p̂ ≥ 1 − δ′ − √(ln(1/α)/(2·shots)), with α = 0.05 (margin ≈ 0.0194):
@@ -1262,35 +1273,35 @@ The bound is therefore **optimistic** for untwirled hardware. Randomized compili
 |---|---|---|
 | hw_n2 | 3527/4000 = 0.882 | 0.801 |
 | hw_n3 | 2361/4000 = 0.590 | 0.229 |
-| wrapped MBU gadget | 0.900 | 0.857 |
+| wrapped MBU gadget | 3598/4000 = 0.900 | 0.875 |
 
-The emulator's noise model is not of the (P-stoch) form, so these are *sanity checks* of the pipeline, not evidence for the premise, and the status word says so. Each manifest records the protocol: α, shots, seed, the success count, the margin formula and its value.
+The wrapped gadget is the MBU gadget between a preparation and its inverse, its own artifact with δ′ = 0.1052, which is what the threshold uses; Table 6 gives the bare gadget's channel bound. The emulator's noise model is not of the (P-stoch) form, so these are *sanity checks* of the pipeline, not evidence for the premise, and the status word says so. Each manifest records the protocol: α, shots, seed, the success count, the margin formula and its value.
 
 ### 8.5 The bound-vacuity frontier
 
-**The family.** Grover on x<sub>0</sub> ∧ ⋯ ∧ x<sub>n−1</sub> with M = 1, for n = 2…7, at the tool's iteration counts (r = 1, 2, 3, 4, 6, 8), in the three modes on FakeTorino and the coherent mode on FakeWashington. Two routings were used:
+**The family.** Grover on x<sub>0</sub> ∧ ⋯ ∧ x<sub>n−1</sub> with M = 1, for n = 2…7, at the tool's iteration counts (r = 1, 2, 3, 4, 6, 8), in the three modes on FakeTorino and the coherent mode on FakeWashington. A series stops after two vacuous sizes, so n = 6 and 7 were never run: FakeTorino ran n = 2…5 and FakeWashington n = 2…4. Two routings were used:
 - (a) the full coupling map;
 - (b) the coupling map without edges of calibrated error ≥ 1/2. Its edges are edges of the target, so `edges_ok` is unchanged.
 
 <p class="caption"><b>Table 7.</b> The bound-vacuity frontier: within the tested family and routings, on the two shipped snapshots, the largest n with δ′ &lt; 1 (<code>docs/hw_frontier/FRONTIER.md</code>; 30 rows, Stage 27c).</p>
 
-| Target | Mode | (a) full map | (b) pruned map |
+| Target | Mode | (a) full map: n, δ′ | (b) pruned map: n, δ′ |
 |---|---|---|---|
-| FakeTorino | tree / MBU | n = 3, δ′ = 0.7521 | n = 3, 0.9590 |
+| FakeTorino | tree / MBU | n = 3, 0.7521 | n = 3, 0.9590 |
 | FakeTorino | tree / coherent | n = 3, 0.7415 | n = 3, 0.5962 |
 | FakeTorino | few:log / MBU | n = 3, 0.7776 | n = 3, 0.8345 |
 | FakeWashington | tree / coherent | n = 2, 0.2278 | n = 2, 0.2110 |
 
 **Scope of the frontier.** It is not a frontier of device feasibility. Shallower circuits, other predicates, fewer iterations or better calibrations could differ. Every tested FakeTorino series is vacuous from n = 4, and FakeWashington from n = 3. The running example's conditional bound is 2.90.
 
-**The idle diagnostic.** For each used qubit it computes idle time over T2 on the ASAP schedule. It is 0.05–0.38 at the frontier and above 1 at n = 5: there, a qubit idles longer than a coherence time while (P-idle) assumes it keeps its state.
+**The idle diagnostic.** For each used qubit it computes idle time over T2 on the ASAP schedule. It is 0.05–0.38 at the frontier. Beyond it, it first exceeds 1 at n = 5 in three FakeTorino series, at n = 4 in one (not monotonically), not up to n = 5 in the other two (both on the pruned map), and at n = 3 and 4 in the two FakeWashington series. Where it exceeds 1, a qubit idles longer than a coherence time while (P-idle) assumes it keeps its state.
 
 **The honest reading.** On these snapshots the conditional guarantee is meaningful only for two- and three-qubit instances. Even there it beats a classical baseline only in three of five cases (Table 6).
 
 
 ## 9 Evaluation
 
-**Provenance.** All numbers are produced by the repository's tools on one workstation: Intel Core i9-13900H (20 logical CPUs, performance and efficiency cores), 16 GB RAM, Windows 11, `LEAN_NUM_THREADS=4`, Lean 4.35.0 with the pinned Mathlib and Physlib. Every kernel time, wall time and peak memory in Tables 5 and 8 and in Section 9.2 comes from **one run at one commit**, `2025ed2` (revision R11; `docs/BENCHMARKS.md`). The run covered all 40 committed Lean check files, one Lean process at a time. Before each file it recorded the free memory and a load sample: the CPU was at most 7.4 % busy and no other Lean process ran. Logical certificates are the median of 5 runs after one warm-up; the other files the median of 3. The runs of each file agree within 9 % (within 6 % for every file above 1 s). Earlier stages had seen kernel times vary by up to a factor of three on a loaded machine. Table 3, the flat-form ceiling (Section 6.3) and the CI durations are separate experiments and name their stage.
+**Provenance.** All numbers are produced by the repository's tools on one workstation: Intel Core i9-13900H (20 logical CPUs, performance and efficiency cores), 16 GB RAM, Windows 11, `LEAN_NUM_THREADS=4`, Lean 4.35.0 with the pinned Mathlib and Physlib. Every kernel time, wall time and peak memory in Tables 5 and 8 and in Section 9.2 comes from **one run at one commit**, `2025ed2` (revision R11; `docs/BENCHMARKS.md`). The run covered all 40 committed Lean check files, one Lean process at a time. Before each file it recorded the free memory and a load sample: the CPU was at most 7.4 % busy and no other Lean process ran. Logical certificates are the median of 5 runs after one warm-up; the other files the median of 3. The runs of each file agree within 9 % (within 6 % for every file above 1 s). Earlier stages had seen kernel times vary by up to a factor of three on a loaded machine. Table 3, the flat-form ceiling (Section 6.4) and the CI durations are separate experiments and name their stage.
 
 ### 9.1 Logical certificates
 
@@ -1361,9 +1372,9 @@ The *featured* physical certificate is of a 2 541-gate circuit; the *largest* re
 | `sorry` | 0 |
 | Development | 171 commits over 27 days |
 
-Sizes are at the Stage 30 commit `a2e1b6e`. The first revision task after the reviews (R1, R2, R15) added 241 net lines to the library.
+Sizes are at the Stage 30 commit `a2e1b6e`. At the commit this paper describes, `2f8200b`, after the revision tasks, the library has 39 503 lines in the same 111 modules.
 
-**The local CI** has 26 steps (4 not applicable locally) and runs in about 35 minutes. It includes:
+**The local CI** has 30 steps, 4 of them not applicable locally (pass mark 26 PASS, 0 FAIL, 4 n/a), and runs in about 35 minutes. It includes:
 - a warning-free build and a blocking axiom audit;
 - a full re-certification of every example, byte for byte;
 - the harness;
@@ -1384,7 +1395,7 @@ The largest step takes 675–1 040 s depending on machine load. The CI has not r
 
 ## 10 Related work
 
-<p class="caption"><b>Table 9.</b> Feature comparison, as we read the cited papers. "Restoration" means a machine-checked ancilla-restoration statement; "MBU" means measurement-based uncomputation inside the verified semantics.</p>
+<p class="caption"><b>Table 9.</b> Feature comparison, as we read the cited papers. "Restoration" means a machine-checked ancilla-restoration statement; "MBU" means measurement-based uncomputation inside the verified semantics. The table records what each system proves about its outputs or its verified programs, not what its logic could express: a general program logic such as CoqQ has measurement on density operators and could state MBU.</p>
 
 | System | Proof assistant / method | Verifies | Non-unitary MBU | Restoration | Terminal measurement in the spec | Resource grade | Routing validation | Noise |
 |---|---|---|---|---|---|---|---|---|
@@ -1393,17 +1404,19 @@ The largest step takes 675–1 040 s depending on machine load. The CI has not r
 | SQIR / VOQC [Hietala et al. 2021a, b] | Coq | programs; optimizer passes; mapping | no | — | programs, yes | no | mapping for unitary circuits | no |
 | QWIRE / ReQWIRE [Paykin et al. 2017; Rand et al. 2019] | Coq | circuits; ancilla correctness | no | yes | — | no | no | no |
 | Qbricks [Chareton et al. 2021] | Why3 | parametric programs (Grover, QPE) | no | — | yes | some | no | no |
-| CoqQ [Zhou et al. 2023] | Coq | programs (quantum logic) | — | — | yes | no | no | no |
+| Certified Shor [Peng et al. 2023] | Coq (SQIR, RCIR) | one end-to-end algorithm | no | — | yes (success probability) | gate-count bound | — | — |
+| CoqQ [Zhou et al. 2023] | Coq | programs (quantum logic; measurement, density operators) | not built in | — | yes | no | no | no |
+| Lean-QuantumAlg [Zhang et al. 2026] | Lean 4 | AI-formalized algorithms against reviewed contracts | — | borrowed qubits, yes | yes (success probability) | yes | — | — |
 | CertiQ / Giallar [Shi et al. 2019; Tao et al. 2022] | SMT, push-button | Qiskit passes, once | no | — | — | no | passes verified | no |
 | QCEC [Burgholzer and Wille 2021; Burgholzer et al. 2020] | decision diagrams, ZX (unverified tool) | equivalence of compiled circuits | dynamic circuits | — | — | no | post hoc, unitary | no |
 | Ancilla safety [Li et al. 2026] | algorithmic verification and repair | clean/dirty ancilla safety | — | yes (checked, not mechanized) | — | no | no | no |
 | **This work** | Lean 4 kernel | per-request certificates; two patterns | **yes** | **yes**, on density operators | **yes** (decoding POVM) | **yes** (measured, or bound) | **witness check, kernel** | **conditional, named premises** |
 
-**Verified compilation and programs.** Quantum Hoare logic has been mechanized in Isabelle/HOL [Liu et al. 2019], and the systems of Table 9 verify programs or compilers in Coq, F⋆ and Why3. VQO is the closest system for oracles. It proves an oracle compiler correct from source to circuit for every input size. Its semantics is unitary, so MBU lies outside it, and it has no resource grade or matching layer. Our front end is proved from typed term to network, with the parser a declared boundary.
+**Verified compilation and programs.** Quantum Hoare logic has been mechanized in Isabelle/HOL [Liu et al. 2019], and the systems of Table 9 verify programs or compilers in Coq, F⋆ and Why3. VQO is the closest system for oracles. It proves an oracle compiler correct from source to circuit for every input size. Its semantics is unitary, so MBU lies outside it, and it has no resource grade or matching layer. Our front end is proved from typed term to network, with the parser a declared boundary. The certified implementation of Shor's algorithm [Peng et al. 2023] proves success-probability and gate-count bounds for one algorithm in SQIR. Lean-QuantumAlg [Zhang et al. 2026] is the closest in its contract: Lean 4 statements that bind correctness, success probability, restoration of borrowed qubits and resource bounds for algorithms formalized by AI agents. Shirobokov et al. [2026] report AI agents that synthesize quantum programs whose correctness and cost are checked in Lean. Neither builds a certifying compiler from classical specifications with MBU inside the semantics.
 
 **Phase estimation.** QPE has been mechanized for abstract unitaries: in Qbricks, and in SQIR as the core of order finding [Chareton et al. 2021; Hietala et al. 2021a]. Our Theorem 6.7 is the two-eigenphase bound for the *synthesized* Grover iterate. It decodes sin<sup>2</sup>(πy/2<sup>m</sup>) under a pseudo-metric realization, inside a circuit that restores its ancillae under MBU, and composes with the AQFT bound.
 
-**Uncomputation.** Silq and Unqomp [Bichsel et al. 2020; Paradis et al. 2021] make uncomputation safe or automatic at the language level. Li et al. [2026] verify and repair clean- and dirty-ancilla safety algorithmically at scale. Our Section 5 is a mechanized semantic account specific to MBU: the general theorem, its Clifford boundary in a circuit language, the regimes as predicates on joint states, and a proof of the Khattar–Gidney construction for every n.
+**Uncomputation.** Silq and Unqomp [Bichsel et al. 2020; Paradis et al. 2021] make uncomputation safe or automatic at the language level. Li et al. [2026] verify and repair clean- and dirty-ancilla safety algorithmically at scale. Luongo et al. [2025] state a general MBU lemma, whose correction applies the computing circuit once by phase kickback, and use it for modular arithmetic; in our IR a classically controlled correction must be Clifford (Theorem 5.11). Our Section 5 is a mechanized semantic account specific to MBU: the general theorem, its Clifford boundary in a circuit language, the regimes as predicates on joint states, and a proof of the Khattar–Gidney construction for every n.
 
 **Validating Qiskit's output.**
 - *Once-and-for-all verification.* CertiQ and Giallar verify passes of the Qiskit compiler once.
@@ -1412,7 +1425,7 @@ The largest step takes 675–1 040 s depending on machine load. The CI has not r
 
 Our Track C is a translation validator in the sense of Pnueli et al. [1998], whose checker runs in a proof-assistant kernel. It covers dynamic circuits with mid-circuit measurement and conditioned blocks, the basis translation, and coupling edges. It also transfers the realization and restoration statements, not only equivalence, to the routed circuit. Its scope is the transformation fragment of Section 7.5.
 
-**Noise.** Diamond-norm perturbation bounds are standard [Aharonov et al. 1998; Watrous 2018]. What is specific here is that the bound is a kernel-checked theorem about a certified physical circuit, with its premises as hypotheses. Their weakness relative to real noise is discussed in Section 8.3.
+**Noise.** Diamond-norm perturbation bounds are standard [Aharonov et al. 1998; Watrous 2018]. Gleipnir [Tao et al. 2021] computes tighter, state-dependent diamond-norm bounds with tensor networks and a logic that composes them, for programs of 10 to 100 qubits under a per-gate noise model; it is an analysis tool, not a kernel-checked proof. What is specific here is that the bound is a kernel-checked theorem about a certified physical circuit, with its premises as hypotheses. It is much looser, and its weakness relative to real noise is discussed in Section 8.3.
 
 **Stage 29.** A quantitative comparison with SQIR / VOQC on the same circuits (proof size, effort, checking time) was planned and not carried out: it needs the Coq toolchain, which was not installed without the author's approval. No figure from those systems is used here.
 
@@ -1424,6 +1437,7 @@ Our Track C is a translation validator in the sense of Pnueli et al. [1998], who
 - extraction and the matcher's run;
 - the emitters, including QIR's floating-point angles;
 - Qiskit, the target files and the calibration snapshots, each bound by hash;
+- the device qubits of the data at the final layout (`dataPhys`), which select the readout terms of δ′ and enter `PhysGrade`;
 - the Lean toolchain.
 
 **Model premises.** The physical statement assumes an ideal device with the target's gates and connectivity, exact preparation (P-prep) and exact classical control (P-ctrl). The conditional statement adds (P-cal), (P-stoch), (P-ro) and (P-idle). (P-stoch) is not derivable from calibration numbers and is optimistic for coherent errors, and (P-idle) is contradicted by the idle diagnostic at moderate sizes.
@@ -1452,38 +1466,43 @@ Our Track C is a translation validator in the sense of Pnueli et al. [1998], who
 **Threats to validity of the evidence.**
 - **Internal consistency.** The evidence is kernel checking and agreement between the Lean and Python paths, not independent reproduction.
 - **Measurements.** The times and memory come from one run at one commit, on one machine with heterogeneous cores; no second machine has repeated them.
-- **The development process.** A second session of the same AI assistant reviewed the implementing session. That review is procedural and not an independent scientific audit; the kernel cannot tell whether a definition captures the intended physical concept. A human expert audit of `Realizes`, `AncRestore`, `channelDenote` and the premises is recommended before the claims are relied on (R14).
+- **The development process.** A second session of the same AI assistant reviewed the implementing session. That review is procedural and not an independent scientific audit; the kernel cannot tell whether a definition captures the intended physical concept. A human expert audit of `Realizes`, `AncRestore`, `channelDenote`, `diamondDist`, `CountSpec` and the premises is recommended before the claims are relied on; it has not been done.
+- **Reviews of this paper.** The paper was revised after five reviews, all generated by AI review tools: two before version 1.0 and three after it (`docs/REVIEW_RESPONSE_1.md`, `docs/REVIEW_RESPONSE_2.md`). They are not human peer review.
 - **Sources not peer-reviewed.** The specification report the project implements [Zambak 2026b] has not been peer-reviewed; its revisions v2 and v3 are in the repository. The earlier proposal [Zambak 2026a] is unpublished.
-- **The artifact.** The repository is public with its full history (<https://github.com/azizfzambak/cqrv>, tag `v1.0.0`), so every commit cited in this paper can be inspected. No container image is provided; reproduction relies on the pinned toolchain and the steps in `docs/RELEASE.md`.
+- **The artifact.** The repository is public with its full history (<https://github.com/azizfzambak/cqrv>, tags `v1.0.0` and `v1.1.0`), so every commit cited in this paper can be inspected. No container image is provided; reproduction relies on the pinned toolchain and the steps in `docs/RELEASE.md`.
 
 ## 12 Conclusion
 
 **The prototype.** We built a two-pattern prototype of certified quantum realization in Lean 4. For Boolean predicates, its logical certificates state realization (with exact δ for search and an (ε, δ) estimate for counting) together with ancilla restoration on density operators, so measurement-based uncomputation is inside the correctness statement. Each certificate's assumptions are enumerated (Table 1): the parser, surface checker, typed-term printer and emitters as declared boundaries, the solution count as a hypothesis above a limit, and a measured grade for flat certificates or a certified compositional bound for counting.
 
 **The theory around it.**
-- a general MBU theorem, and the Clifford/quadratic boundary of its corrections in the circuit language;
+- a general MBU theorem, and the Clifford/quadratic boundary of its corrections in the circuit language, which restricts it to quadratic functions there;
 - implications among the ancilla regimes;
-- the Khattar–Gidney two-ancilla MCZ for every n;
-- the 8n − 24 lower bound within its family;
+- correctness of a Khattar–Gidney two-ancilla MCZ for every n;
+- the 8n − 24 counting lower bound within its family and cost model;
 - the QFT and AQFT bounds and the phase-estimation bound for the Grover iterate.
 
 **Routed circuits.** The certificate can follow a circuit through an untrusted transpiler. A witness-based reconstruction, checked by the kernel for circuits of up to 4 170 gates, transfers the realization to the routed circuit on an ideal device with the target's gates and connectivity, for transpiler outputs in a stated fragment.
 
 **Noise.** Noise enters as named premises of a proved perturbation theorem. On two shipped calibration snapshots, within the tested family, the resulting bound is non-vacuous only up to three data qubits, and beats a classical baseline in three of five such instances. We report this as the current reach of guarantees of this kind, not as a property of the method's soundness.
 
-**What the process showed.** The implementation recorded sixteen discrepancies with its guiding specification, nine of them substantive, and corrected its own task texts eight times, each by a measurement or a counterexample (Appendix C). The lesson we draw is the one the reviews of this paper reinforced: the difficulty is less in proving theorems about circuits than in making every claim say exactly what the theorem says.
+**What the process showed.** The implementation recorded sixteen discrepancies with its guiding specification, nine of them substantive, and corrected its own task texts eight times, each by a measurement or a counterexample (Appendix C). The lesson we draw is the one the reviews of this paper, all generated by AI tools, reinforced: the difficulty is less in proving theorems about circuits than in making every claim say exactly what the theorem says.
 
 ## Acknowledgements and disclosure of AI assistance
 
 **AI assistance.** The software was implemented by an AI coding assistant (Claude Code, Anthropic), task by task, under written project rules (Appendix D). The task specifications and the reviews of each task were drafted by a second session of the assistant; through Stage 21 the author approved or amended them.
 
-**This article.** It was drafted with AI assistance and revised after two external reviews, and it is the author's responsibility.
+**This article.** It was drafted with AI assistance and revised after five reviews generated by AI review tools (two before version 1.0, three after it); no human expert has reviewed it. It is the author's responsibility.
 
 **What does not depend on the assistants.** Every theorem reported as proved is checked by the Lean kernel and audited for axioms.
 
 ## Data and code availability
 
-**The repository** contains the Lean sources, the generators, the Python harness and hardware tools, all committed certificates, check files, selection files and artifacts with their run reports, the decision log, the obligation ledger, and CI logs. It is public at <https://github.com/azizfzambak/cqrv> under the Apache License 2.0, with its full development history. This paper describes the code at commit `2f8200b`; the tag `v1.0.0` adds only documentation (the license, the citation file, the release notes and this paper). `docs/RELEASE.md` gives the reproduction steps: the pins, the two Python environments and every CI step with its command. No container image is provided.
+**The repository** contains the Lean sources, the generators, the Python harness and hardware tools, all committed certificates, check files, selection files and artifacts with their run reports, the decision log, the obligation ledger, and the local CI script (`scripts/ci_local.sh`); the CI logs themselves are not committed. It is public at <https://github.com/azizfzambak/cqrv> under the Apache License 2.0, with its full development history. This paper describes the code at commit `2f8200b`; the tags `v1.0.0` and `v1.1.0` add only documentation (the license, the citation file, the release notes and this paper). `docs/RELEASE.md` gives the reproduction steps: the pins, the two Python environments and every CI step with its command. No container image is provided.
+
+**Versions of this paper.** All versions share the DOI 10.5281/zenodo.24302652, which resolves to the latest.
+- 1.0 (17 November 2026; doi:10.5281/zenodo.24302653).
+- 1.1 (November 2026): corrections after three AI-generated reviews (`docs/REVIEW_RESPONSE_2.md`): claims calibrated, related work corrected and extended, prose statements aligned with their Lean forms, factual errors fixed. The code and the certificates are unchanged.
 
 **The pinned toolchain:**
 - Lean v4.35.0, Mathlib `56a0058`, Physlib `96a6bc5`;
@@ -1530,8 +1549,9 @@ Our Track C is a translation validator in the sense of Pnueli et al. [1998], who
 - [Leroy 2009] Xavier Leroy. Formal verification of a realistic compiler. *Commun. ACM* 52(7):107–115, 2009.
 - [Li et al. 2019] Gushu Li, Yufei Ding, Yuan Xie. Tackling the qubit mapping problem for NISQ-era quantum devices. In *ASPLOS 2019*, pp. 1001–1014.
 - [Li et al. 2022] Liyi Li, Finn Voichick, Kesha Hietala, Yuxiang Peng, Xiaodi Wu, Michael Hicks. Verified compilation of quantum oracles. *Proc. ACM Program. Lang.* 6(OOPSLA2):146:1–146:27, 2022. arXiv:2112.06700.
-- [Li et al. 2026] Jiqi Li, Jingyi Mei, Wang Fang, Ji Guan. Formal verification of quantum ancilla safety. arXiv:2608.13099, 2026.
+- [Li et al. 2026] Jiqi Li, Jingyi Mei, Wang Fang, Ji Guan. Formal verification of quantum ancilla safety. In *CAV 2026*, Part III, LNCS 16684, pp. 326–348. Springer, 2026. arXiv:2608.13099.
 - [Liu et al. 2019] Junyi Liu, Bohua Zhan, Shuling Wang, Shenggang Ying, Tao Liu, Yangjia Li, Mingsheng Ying, Naijun Zhan. Formal verification of quantum algorithms using quantum Hoare logic. In *CAV 2019*, LNCS 11562, pp. 187–207.
+- [Luongo et al. 2025] Alessandro Luongo, Antonio Michele Miti, Varun Narasimhachar, Adithya Sireesh. Measurement-based uncomputation of quantum circuits for modular arithmetic. In *62nd ACM/IEEE Design Automation Conference (DAC)*, pp. 1–7, 2025. arXiv:2407.20167.
 - [Magesan et al. 2011] Easwar Magesan, Jay M. Gambetta, Joseph Emerson. Scalable and robust randomized benchmarking of quantum processes. *Physical Review Letters* 106:180504, 2011.
 - [Maslov 2016] Dmitri Maslov. Advantages of using relative-phase Toffoli gates with an application to multiple control Toffoli optimization. *Physical Review A* 93:022311, 2016.
 - [mathlib 2020] The mathlib Community. The Lean mathematical library. In *CPP 2020*, pp. 367–381.
@@ -1543,6 +1563,7 @@ Our Track C is a translation validator in the sense of Pnueli et al. [1998], who
 - [NIST 2015] National Institute of Standards and Technology. SHA-3 standard: Permutation-based hash and extendable-output functions. FIPS 202, 2015.
 - [Paradis et al. 2021] Anouk Paradis, Benjamin Bichsel, Samuel Steffen, Martin Vechev. Unqomp: Synthesizing uncomputation in quantum circuits. In *PLDI 2021*, pp. 222–236.
 - [Paykin et al. 2017] Jennifer Paykin, Robert Rand, Steve Zdancewic. QWIRE: A core language for quantum circuits. In *POPL 2017*, pp. 846–858.
+- [Peng et al. 2023] Yuxiang Peng, Kesha Hietala, Runzhou Tao, Liyi Li, Robert Rand, Michael Hicks, Xiaodi Wu. A formally certified end-to-end implementation of Shor's factorization algorithm. *Proc. Natl. Acad. Sci. USA* 120(21):e2218775120, 2023.
 - [Physlib 2026] Physlib contributors. Physlib: physics and quantum information in Lean 4. https://github.com/leanprover-community/physlib, 2026. Commit 96a6bc5.
 - [Plotkin 1970] Gordon D. Plotkin. A note on inductive generalization. In *Machine Intelligence 5*, pp. 153–163. Edinburgh University Press, 1970.
 - [Pnueli et al. 1998] Amir Pnueli, Michael Siegel, Eli Singerman. Translation validation. In *TACAS 1998*, LNCS 1384, pp. 151–166.
@@ -1550,12 +1571,15 @@ Our Track C is a translation validator in the sense of Pnueli et al. [1998], who
 - [Rand et al. 2019] Robert Rand, Jennifer Paykin, Dong-Ho Lee, Steve Zdancewic. ReQWIRE: Reasoning about reversible quantum circuits. In *QPL 2018*, EPTCS 287, pp. 299–312, 2019.
 - [Reynolds 1970] John C. Reynolds. Transformational systems and the algebraic structure of atomic formulas. In *Machine Intelligence 5*, pp. 135–151. Edinburgh University Press, 1970.
 - [Shi et al. 2019] Yunong Shi, Xupeng Li, Runzhou Tao, Ali Javadi-Abhari, Andrew W. Cross, Frederic T. Chong, Ronghui Gu. CertiQ: A mostly-automated verification of a realistic quantum compiler. arXiv:1908.08963, 2019.
+- [Shirobokov et al. 2026] Sergey Shirobokov, Ben Jaderberg, Katerina Hristova, et al. (25 authors). Discovering formally verified quantum programs with AI. arXiv:2611.09822 (v3), 2026.
+- [Tao et al. 2021] Runzhou Tao, Yunong Shi, Jianan Yao, John Hui, Frederic T. Chong, Ronghui Gu. Gleipnir: toward practical error analysis for quantum programs. In *PLDI 2021*, pp. 48–64. ACM, 2021.
 - [Tao et al. 2022] Runzhou Tao, Yunong Shi, Jianan Yao, Xupeng Li, Ali Javadi-Abhari, Andrew W. Cross, Frederic T. Chong, Ronghui Gu. Giallar: Push-button verification for the Qiskit quantum compiler. In *PLDI 2022*, pp. 641–656.
 - [Wallman and Emerson 2016] Joel J. Wallman, Joseph Emerson. Noise tailoring for scalable quantum computation via randomized compiling. *Physical Review A* 94:052325, 2016.
 - [Watrous 2018] John Watrous. *The Theory of Quantum Information*. Cambridge University Press, 2018.
 - [Wille et al. 2008] Robert Wille, Daniel Große, Lisa Teuber, Gerhard W. Dueck, Rolf Drechsler. RevLib: An online resource for reversible functions and reversible circuits. In *ISMVL 2008*, pp. 220–225.
 - [Zambak 2026a] Aziz F. Zambak. Certified quantum realization of classical specifications (Revision 3). Research proposal, unpublished technical report, 2026. Available from the author.
 - [Zambak 2026b] Aziz F. Zambak. Applying certified quantum realization: A practical implementation guide. Technical report, June 2026. Revision v2 (June 27, 2026); revision v3 with errata appendix, October 2026. Both revisions are in the CQRV repository (`docs/cqrv_report_revised_v2.docx`, `docs/cqrv_report_revised_v3.docx`).
+- [Zhang et al. 2026] Lei Zhang, Mingrui Jing, Yusheng Zhao, Jiahong Liu, Xin Wang. Lean-QuantumAlg: a framework for AI agents to produce quantum algorithms that humans can trust. arXiv:2610.30216, 2026.
 - [Zhou et al. 2023] Li Zhou, Gilles Barthe, Pierre-Yves Strub, Junyi Liu, Mingsheng Ying. CoqQ: Foundational verification of quantum programs. *Proc. ACM Program. Lang.* 7(POPL):833–865, 2023.
 
 </div>
@@ -1629,6 +1653,11 @@ theorem ae_parametric_lemma (gp : GroverData) (hm : 1 ≤ m) (hN : N.WF) (hn : N
     Realizes (CountSpec m (gp.M / 2 ^ gp.n)) (countPOVM gp.n m (gp.M / 2 ^ gp.n))
         (groverChannel (gp.n + m) C) (ae_eps (gp.M / 2 ^ gp.n) m) ae_delta g ∧
       AncRestore (gp.n + m) C.nAnc C (U_count gp.P m none)
+theorem ae_parametric_lemma_aqft (gp : GroverData) (hm : 1 ≤ m) (hN : N.WF) (hn : N.nInputs = gp.n)
+    (h1 : N.outputs.length = 1) (hP : N.pred gp.n = gp.P) (kmax : ℕ)
+    (hC : countingCircuit N gp.n m (some kmax) shape mode = .ok C) (g : Grade) (hg : Synthesis.grade C ≤ g) :
+    Realizes (CountSpec m (gp.M / 2 ^ gp.n)) (countPOVM gp.n m (gp.M / 2 ^ gp.n))
+        (groverChannel (gp.n + m) C) (ae_eps (gp.M / 2 ^ gp.n) m) (ae_delta + eta_aqft m kmax / 2) g
 theorem aqft_diamond_le (m kmax : ℕ) :
     diamondDist (channelDenote m 0 (qftCircuit m)) (channelDenote m 0 (aqftCircuit m kmax)) ≤ eta_aqft m kmax</div>
 
@@ -1662,13 +1691,16 @@ theorem diamondDist_mix_le (p : Prob) (Φ Φ' : CPTPMap A B) : diamondDist (mix 
 theorem noisy_realization (hideal : RealizesExact S dec ⟨Γ ∘ₘ traceRight ∘ₘ steps (L.map (·.1)) ∘ₘ prep, g⟩ δ r)
     (hL : ∀ t ∈ L, diamondDist t.2.1 t.1 ≤ t.2.2) :
     RealizesExact S dec ⟨Γ ∘ₘ traceRight ∘ₘ steps (L.map (·.2.1)) ∘ₘ prep, g⟩ (δ + (L.map (·.2.2)).sum / 2) r
+theorem noisy_realization_realizes [PseudoMetricSpace Y] (hideal : Realizes S dec ⟨Γ ∘ₘ traceRight ∘ₘ steps (L.map (·.1)) ∘ₘ prep, g⟩ ε δ r)
+    (hL : ∀ t ∈ L, diamondDist t.2.1 t.1 ≤ t.2.2) :
+    Realizes S dec ⟨Γ ∘ₘ traceRight ∘ₘ steps (L.map (·.2.1)) ∘ₘ prep, g⟩ ε (δ + (L.map (·.2.2)).sum / 2) r
 theorem phys_noisy_stochastic (hC : C.WF) (hG : applyWitness b C w N = .ok G) (hWF : (physCircuit N G).WF)
     (hM : (physCircuit N G).nBits = C.nBits) (σ₀ : Equiv.Perm (Fin N)) (h₀ : w.initial = layOf N (n + a) σ₀)
     (h : RealizesExact S dec (groverChannel n C) δ r)
     (T : List (BasisGate × Prob × CPTPMap X⁺ X⁺)) (hT : T.map (·.1) = G) (R : List (Prob × CPTPMap X⁺ X⁺)) :
     ∃ σf, w.final = layOf N (n + a) σf ∧
       RealizesExact S dec ⟨unembed bb σf ∘ₘ traceRight ∘ₘ steps (stochasticSteps N m T R) ∘ₘ physPrep N m (embed bb σ₀ ρ₀), g_phys⟩
-        (δ + Σ_{t ∈ T} p_t + Σ_{r ∈ R} r) g_phys          -- X⁺ = XReg N 0 m, m = (physCircuit N G).nBits,
+        (δ + (T.map (·.2.1)).sum + (R.map (·.1)).sum) g_phys   -- X⁺ = XReg N 0 m: N physical qubits, 0 ancillae, m bits, m = (physCircuit N G).nBits,
                                     -- ρ₀ = ancZero n ⊗ᴹ ancZero a, g_phys = grade (physCircuit N G)</div>
 
 ## Appendix B — Reproduction and provenance
@@ -1681,7 +1713,7 @@ theorem phys_noisy_stochastic (hC : C.WF) (hG : applyWitness b C w N = .ok G) (h
 The commands below rebuild the library, run the local CI and regenerate representative files. The generated files must be byte-identical to the committed ones.
 
 <div class="code">lake build
-LEAN_NUM_THREADS=4 scripts/ci_local.sh                     # 26 steps; about 35 minutes
+LEAN_NUM_THREADS=4 scripts/ci_local.sh                     # 30 steps (26 PASS, 4 n/a); about 35 minutes
 lake exe cqr certify examples/grover_pred_037.cqr --report
 lake exe cqr certify examples/grover_pred_037.cqr --shape few:log
 lake exe cqr certify examples/grover_pred_037.cqr --problem count --precision 4

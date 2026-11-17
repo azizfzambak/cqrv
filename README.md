@@ -1,6 +1,6 @@
 # CQRV — Certified Quantum Realization
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24302653.svg)](https://doi.org/10.5281/zenodo.24302653)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24302652.svg)](https://doi.org/10.5281/zenodo.24302652)
 
 A certifying compiler from a small classical specification language to quantum circuits, with Lean 4
 certificates. It implements the technical report *Applying Certified Quantum Realization: A Practical
@@ -19,10 +19,12 @@ project, with every number's source, is `docs/M5_REPORT.md`; reproduction and th
 `docs/RELEASE.md`; the earlier milestone reports are `docs/M2_REPORT.md` and `docs/M3_REPORT.md`
 (frozen). The stage-by-stage history is `docs/PROJECT_STATUS.md` and `docs/DECISIONS.md`.
 
-**Release v1.0.0 (November 2026).** Everything up to Phase 3 is described in one paper,
+**Release v1.1.0 (November 2026).** Everything up to Phase 3 is described in one paper,
 `paper/Zambak_2026_CQRV.pdf` (source `paper/Zambak_2026_CQRV.md`, build `paper/tools/build.ps1`),
-published as a preprint on Zenodo (https://doi.org/10.5281/zenodo.24302653). The code the paper describes is commit `2f8200b`; the tag `v1.0.0`
-adds only documentation (license, citation file, release notes, the paper).
+published as a preprint on Zenodo (https://doi.org/10.5281/zenodo.24302652, all versions). The code the paper describes is
+commit `2f8200b`; the tags `v1.0.0` and `v1.1.0` add only documentation (license, citation file, release
+notes, the paper). Version 1.1 corrects the paper after three AI-generated reviews
+(`docs/REVIEW_RESPONSE_2.md`); the code and the certificates are unchanged.
 
 ## The three tracks
 
@@ -31,9 +33,10 @@ estimation with an exact or approximate inverse QFT), each a parametric lemma in
 `cqr certify` specializes the lemma to a request and the kernel decides the instance facts — the front
 end's translation, the synthesizer's output, the solution count, the exact δ, the grade. The matcher
 is proved sound and complete for its fragment (Miller patterns with uniform arity), and selection
-under a resource budget is certified. Six logical certificates for the worked predicates
-(`examples/certs/grover_pred_037*`, `simple_alu_x0_1`) plus five for the hardware instances
-(`hw_n2`, `hw_n3`, `fr_*`); kernel times 0.3–25 s each.
+under a resource budget is certified. Fourteen logical certificates: six for the worked predicates
+(`examples/certs/grover_pred_037*`, `simple_alu_x0_1`), three arithmetic benchmarks (`addchk3`,
+`wt8_3`, `wt8_3_count`) and five for the hardware instances (`hw_n2`, `hw_n3`, `fr_*`); kernel times
+0.27–106 s each at commit `2025ed2` (`docs/BENCHMARKS.md`).
 
 **Track B — restoration under measurement.** The mathematics of measurement-based uncomputation
 (MBU): any phase-exact compute block, measured in the X basis and corrected by a phase implementation
@@ -93,6 +96,6 @@ qiskit-ibm-runtime 0.52.1, offline fake backends only; `hw/README.md`). Setting 
 Copyright 2026 Aziz F. Zambak. Licensed under the Apache License, Version 2.0 (`LICENSE`). To cite the
 work, use `CITATION.cff` (the paper and this repository): Zambak, A. F. (2026). *Certified Quantum
 Realization in Lean 4: A Two-Pattern Prototype with Measurement-Based Uncomputation, Validated Routing,
-and Conditional Noise Bounds* (Version 1.0). Zenodo. https://doi.org/10.5281/zenodo.24302653. The specification report the project
+and Conditional Noise Bounds*. Zenodo. https://doi.org/10.5281/zenodo.24302652. The specification report the project
 implements is included in its revisions v2 and v3 (`docs/cqrv_report_revised_v2.docx`,
 `docs/cqrv_report_revised_v3.docx`).
