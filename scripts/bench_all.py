@@ -34,7 +34,9 @@ Usage (project root, after `lake build`; the reviewer's own terminal, not the ha
   .venv/Scripts/python.exe scripts/bench_all.py --only hw_n2,mbu_gadget__fake_torino
   .venv/Scripts/python.exe scripts/bench_all.py --list         # the plan, status, estimate
   .venv/Scripts/python.exe scripts/bench_all.py --summary      # table + .lake/bench/summary.json
-Results: .lake/bench/<kind>--<name>.json (one per item), session.json, summary.json.
+  .venv/Scripts/python.exe scripts/bench_all.py --report       # docs/BENCHMARKS.md from the state files (D2)
+Results: .lake/bench/<kind>--<name>.json (one per item), session.json, summary.json; the logical
+certificates take the figures through `cqr certify --kernel-check-from <state file>` (D1.5).
 """
 import argparse
 import ctypes
@@ -346,11 +348,90 @@ def listing(args, plan):
     print(f"{len(plan)} items; estimated {est / 60:.0f} min from the earlier wall times (30 s per run assumed where none)")
 
 
+KIND_TITLE = {"logical": "Logical certificates (`examples/certs/*/Cert.lean`; 1 warm-up + 5 runs, the median of 5)",
+              "hw_check": "Hardware check files (`examples/hw_checks/*/Check.lean`; 3 runs, the median of 3)",
+              "physcert": "Physical certificates (`examples/certs/*/PhysCert.lean`; 3 runs, the median of 3)",
+              "noisecert": "Conditional (noise) certificate (`NoiseCert.lean`; 3 runs, the median of 3)",
+              "select": "Selection files (`examples/hw_select/*/Select.lean`; 3 runs, the median of 3)"}
+
+
+def instance_of(it):
+    cj = json.load(open(os.path.join(ROOT, os.path.dirname(it["file"]), "certificate.json"), encoding="utf-8"))
+    i = cj["instance"]
+    return f"n = {i['n']}, m = {i['m']}, M = {i['M']}" if "m" in i else f"n = {i['n']}, M = {i['M']}, r = {i['r']}"
+
+
+def report(args):
+    """docs/BENCHMARKS.md from the state files: the session header, the load, one table per kind;
+    no hand-edited number (R11 D2, docs/tasks/REVD_TASK.md)."""
+    sess = load(os.path.join(BENCH, "session.json"))
+    rows = [(it, load(state_path(it))) for it in items()]
+    done = [r for _, r in rows if r]
+    cpu = [r["load"]["cpu_busy_pct"] for r in done if r["load"].get("cpu_busy_pct") is not None]
+    free = [r["free_mb_start"] for r in done if r["free_mb_start"]]
+    ll = [r["load"].get("lean_lake_processes") or 0 for r in done]
+    flags = [f"{r['id']}: {f}" for r in done for f in r.get("flags") or []]
+    f1 = lambda x: "" if x is None else f"{x:.3g}" if x < 10 else f"{x:.1f}"
+    L = ["# Benchmarks — every measurement at one commit (revision R11)\n",
+         "REVIEW_RESPONSE_1 §4 R11; docs/tasks/REVD_TASK.md; report §9.5.1, §9.5.3. Both reviews asked for one "
+         "measurement of everything at one commit, with the machine, the enabled checks and the load recorded, in "
+         "place of the timing tables mixed from Stages 21a3, 21a4, 21m, 26c1b, 27b and 27c. Written by "
+         "`scripts/bench_all.py --report` from its state files (`.lake/bench/`, not committed); no hand-edited number.\n",
+         f"**Commit** `{sess['commit']}`. **Machine** {sess['machine']}; {sess['os']}; `LEAN_NUM_THREADS={sess['lean_threads']}`. "
+         f"**Toolchain** {sess['toolchain']} (`{sess['lean_version']}`). **Run** started {sess['started']}, in a terminal outside the "
+         f"agent harness; tracked files modified at the run: {', '.join(sess['tracked_modified']) or 'none'}; guards "
+         f"{sess['timeout_s']:g} s and {sess['mem_mb']} MB per run, none hit.\n",
+         f"**Method.** {sess['method']}. The wall is that of `lean` itself, run directly — the earlier figures of "
+         "`reference_configuration.kernel_check` and of the 2026-11-16 table in `examples/hw_checks/README.md` were walls of "
+         "`lake env lean`, 1–2 s more (the lake start); the kernel time is the same quantity in both. Peak = the peak working "
+         "set of the Lean process (the maximum over the runs of an item).\n",
+         f"**Load.** {len(done)} of {len(rows)} items done; CPU busy at the start of an item {min(cpu):g}–{max(cpu):g} %; free physical "
+         f"memory {min(free)}–{max(free)} MB; other lean / lake processes running: {max(ll)}; flags: "
+         + (", ".join(flags) if flags else "none (no run over the guards; no median off its earlier figure by more than a factor "
+                                            f"of {sess['ratio_guard']:g}).") + "\n",
+         "The logical certificates carry these figures in `reference_configuration.kernel_check` (`cqr certify --kernel-check-from`, "
+         "with `commit`); the hardware files cite a certificate modulo `hashes.library` and `reference_configuration`, so the "
+         "measurement moved none of them (DECISIONS.md 2026-11-17, R11 D1.5 and D2).\n"]
+    for kind in KIND_TITLE:
+        L.append(f"## {KIND_TITLE[kind]}\n")
+        if kind == "logical":
+            L += ["| certificate | instance | kernel s | the 5 kernel samples (s) | wall s | peak MB | before: kernel s (`--bench`, `lake env lean`) | ratio |",
+                  "|---|---|---|---|---|---|---|---|"]
+        elif kind == "hw_check":
+            L += ["| file | wall s | peak MB | kernel s | 2026-11-16 table: wall s (`lake env lean`) / peak MB | ratio (wall) |", "|---|---|---|---|---|---|"]
+        else:
+            L += ["| file | wall s | peak MB | kernel s |", "|---|---|---|---|"]
+        for it, r in rows:
+            if it["kind"] != kind:
+                continue
+            if not r:
+                L.append(f"| `{it['file']}` | not measured |")
+                continue
+            s, e = r["summary"], r.get("earlier") or {}
+            if kind == "logical":
+                samples = " ".join(f1(x["kernel_s"]) for x in r["runs"] if not x["warmup"] and x["outcome"] == "ok")
+                L.append(f"| `{it['name']}` | {instance_of(it)} | {f1(s['kernel_s'])} | {samples} | {f1(s['wall_s'])} | {s['peak_mb_max']} | "
+                         f"{f1(e.get('kernel_s'))} | {s.get('ratio_kernel_s', '')} |")
+            elif kind == "hw_check":
+                L.append(f"| `{it['name']}` | {f1(s['wall_s'])} | {s['peak_mb_max']} | {f1(s['kernel_s'])} | "
+                         f"{f1(e.get('wall_s'))} / {e.get('peak_mb', '')} | {s.get('ratio_wall_s', '')} |")
+            else:
+                L.append(f"| `{it['file']}` | {f1(s['wall_s'])} | {s['peak_mb_max']} | {f1(s['kernel_s'])} |")
+        L.append("")
+    L.append("The comparator `cmp4` (REVC_TASK, R12) is not an item: no certificate, its kernel peak is above 8 GB "
+             "(docs/M5_REPORT.md §1.2, DECISIONS.md 2026-11-17).")
+    out = os.path.join(ROOT, "docs", "BENCHMARKS.md")
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(L) + "\n")
+    print(f"wrote {out}: {len(done)} items")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--only", help="comma-separated substrings of item ids (kind--name)")
     ap.add_argument("--list", action="store_true", help="print the plan and stop")
     ap.add_argument("--summary", action="store_true", help="print the table, write summary.json and stop")
+    ap.add_argument("--report", action="store_true", help="write docs/BENCHMARKS.md from the state files and stop")
     ap.add_argument("--redo", action="store_true", help="measure the selected items again")
     ap.add_argument("--fresh", action="store_true", help="move .lake/bench aside and start over")
     ap.add_argument("--timeout", type=float, default=900.0, help="seconds per run (900)")
@@ -366,6 +447,8 @@ def main():
         return listing(args, plan)
     if args.summary:
         return summary(args)
+    if args.report:
+        return report(args)
     sess = session(args)
     print(f"commit {sess['commit'][:7]}{' (tracked files modified!)' if sess['tracked_modified'] else ''}; "
           f"{sess['machine']}; LEAN_NUM_THREADS={sess['lean_threads']}; {sess['toolchain']}; "

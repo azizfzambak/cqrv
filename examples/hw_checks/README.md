@@ -33,30 +33,33 @@ trusted link `emitted_eq` for the certified instances. Nothing here is "verified
 physical circuit is validated against the logical one on the target's coupling map; the emulator
 runs of `docs/hw_runs/` are reported, not certified.
 
-## The kernel on the fifteen files (reference machine, 2026-11-16)
+## The kernel on the fifteen files (reference machine, commit `2025ed2`, 2026-11-17)
 
-Wall time of `lake env lean` on the whole file (about 10 s of it is loading the proofs and
-elaborating the literals); peak working set of the Lean process. All within the budget of 10 min
-and 8 GB per file; the step takes about 5 min in total. The `fr_*` rows are the frontier artifacts
-of Stage 27c (`scripts/frontier.py`; `_rb` = routing (b), the edges of error ≥ 1/2 removed).
+Wall time of `lean` run directly on the whole file (about 9 s of it is loading the proofs and
+elaborating the literals) and peak working set of the Lean process: the R11 measurement of
+`scripts/bench_all.py` at `2025ed2` (median of 3; `docs/BENCHMARKS.md` has every measurement, the
+load and the method). The table of 2026-11-16 quoted the wall of `lake env lean`, 1–2 s more (the
+lake start); the kernel's own time is the same. All within the budget of 10 min and 8 GB per
+file; the CI step takes about 5 min in total. The `fr_*` rows are the frontier artifacts of Stage
+27c (`scripts/frontier.py`; `_rb` = routing (b), the edges of error ≥ 1/2 removed).
 
-| artifact | used qubits | logical gates | order entries | blocks | physical gates | seconds | peak GB |
+| artifact | used qubits | logical gates | order entries | blocks | physical gates | wall s | peak GB |
 |---|---|---|---|---|---|---|---|
-| mbu_gadget__fake_torino | 3 | 18 | 60 | 2 | 102 | 11 | 1.8 |
-| mbu_gadget_wrapped__fake_torino | 3 | 23 | 80 | 2 | 142 | 11 | 1.9 |
-| hw_n2_tree_mbu__fake_torino | 3 | 50 | 142 | 4 | 226 | 12 | 1.9 |
-| hw_n3_tree_mbu__fake_torino | 5 | 183 | 540 | 16 | 848 | 15 | 2.3 |
-| fr_n2_tree_coherent_rb__fake_washington | 3 | 68 | 92 | 0 | 92 | 11 | 1.9 |
-| fr_n3_tree_coherent_rb__fake_torino | 5 | 255 | 909 | 0 | 909 | 15 | 2.4 |
-| fr_n3_fewlog_mbu__fake_torino | 5 | 145 | 418 | 12 | 730 | 14 | 2.2 |
-| grover_pred_037_tree_mbu__fake_torino | 16 | 418 | 1 253 | 36 | 2 541 | 31 | 4.0 |
-| grover_pred_037_tree_coherent__fake_torino | 15 | 580 | 2 117 | 0 | 3 177 | 31 | 4.1 |
-| grover_pred_037_tree_coherent__fake_washington | 15 | 580 | 805 | 0 | 879 | 19 | 2.7 |
-| grover_pred_037_fewlog_mbu__fake_torino | 10 | 388 | 1 184 | 16 | 2 232 | 22 | 3.1 |
-| simple_alu_x0_1_tree_mbu__fake_torino | 16 | 369 | 1 260 | 30 | 3 528 | 31 | 4.0 |
-| simple_alu_x0_1_tree_coherent__fake_torino | 16 | 504 | 2 010 | 0 | 4 170 | 31 | 3.9 |
-| simple_alu_x0_1_tree_coherent__fake_washington | 17 | 504 | 731 | 0 | 933 | 18 | 2.6 |
-| simple_alu_x0_1_fewlog_mbu__fake_torino | 16 | 352 | 1 222 | 24 | 3 290 | 28 | 3.7 |
+| mbu_gadget__fake_torino | 3 | 18 | 60 | 2 | 102 | 9.5 | 1.8 |
+| mbu_gadget_wrapped__fake_torino | 3 | 23 | 80 | 2 | 142 | 9.8 | 1.8 |
+| hw_n2_tree_mbu__fake_torino | 3 | 50 | 142 | 4 | 226 | 10.3 | 1.9 |
+| hw_n3_tree_mbu__fake_torino | 5 | 183 | 540 | 16 | 848 | 13.8 | 2.3 |
+| fr_n2_tree_coherent_rb__fake_washington | 3 | 68 | 92 | 0 | 92 | 9.5 | 1.8 |
+| fr_n3_tree_coherent_rb__fake_torino | 5 | 255 | 909 | 0 | 909 | 14.3 | 2.3 |
+| fr_n3_fewlog_mbu__fake_torino | 5 | 145 | 418 | 12 | 730 | 12.5 | 2.1 |
+| grover_pred_037_tree_mbu__fake_torino | 16 | 418 | 1 253 | 36 | 2 541 | 29.3 | 4.0 |
+| grover_pred_037_tree_coherent__fake_torino | 15 | 580 | 2 117 | 0 | 3 177 | 29.6 | 4.0 |
+| grover_pred_037_tree_coherent__fake_washington | 15 | 580 | 805 | 0 | 879 | 17.6 | 2.7 |
+| grover_pred_037_fewlog_mbu__fake_torino | 10 | 388 | 1 184 | 16 | 2 232 | 21.1 | 3.0 |
+| simple_alu_x0_1_tree_mbu__fake_torino | 16 | 369 | 1 260 | 30 | 3 528 | 29.8 | 3.9 |
+| simple_alu_x0_1_tree_coherent__fake_torino | 16 | 504 | 2 010 | 0 | 4 170 | 29.1 | 3.8 |
+| simple_alu_x0_1_tree_coherent__fake_washington | 17 | 504 | 731 | 0 | 933 | 17.0 | 2.6 |
+| simple_alu_x0_1_fewlog_mbu__fake_torino | 16 | 352 | 1 222 | 24 | 3 290 | 26.8 | 3.6 |
 
 Regenerate after a change of the artifacts or of the generator with
 `for d in hw/artifacts/*/; do .lake/build/bin/cqr hw check --artifact $d --target hw/targets/<target>.json; done`

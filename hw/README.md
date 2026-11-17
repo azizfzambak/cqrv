@@ -94,7 +94,9 @@ certificate; the emulator's noise is not of the premises' form (section 7).
 reconstruction of the physical circuit from the logical one and the witness (`recon`, by `rfl`), its
 well-formedness, the coupling edges (`edges_ok`), and the channel theorem at the instance
 (`phys_channel`, `phys_zero`), with the standard three axioms. `scripts/check_hw_checks.sh` is the CI
-step; `examples/hw_checks/README.md` has the theorems and the kernel times of all fifteen files.
+step; `examples/hw_checks/README.md` has the theorems and the kernel times of all fifteen files, and
+`docs/BENCHMARKS.md` (R11) every measurement — the physical and conditional certificates' and the
+selection files' included — at one commit (`2025ed2`), `lean` run directly, median of 3.
 
 ## 6. The physical grade and the physical certificates
 

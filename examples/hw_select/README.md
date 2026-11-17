@@ -55,3 +55,16 @@ candidate is admissible — the honest answer, not an error (`tests/diff/hw_sele
 
 Nothing here is "verified on hardware": the bound is a sum of calibrated rates, reported, not
 certified (Stage 27 is the noise theorem); the depth is a timing model at an assumed latency.
+
+## The kernel on the four files (reference machine, commit `2025ed2`, 2026-11-17)
+
+The R11 measurement of `scripts/bench_all.py` at `2025ed2` (`lean` run directly, median of 3; peak =
+the peak working set of the Lean process; `docs/BENCHMARKS.md` has every measurement and the method).
+The CI step 29 figures quoted before (`lake env lean`) were 1–2 s more.
+
+| file | wall s | peak MB | kernel s |
+|---|---|---|---|
+| `grover_pred_037__fake_torino/Select.lean` | 21.8 | 2664 | 15.4 |
+| `grover_pred_037__fake_washington/Select.lean` | 7.5 | 1447 | 1.96 |
+| `simple_alu_x0_1__fake_torino/Select.lean` | 30.8 | 3256 | 24 |
+| `simple_alu_x0_1__fake_washington/Select.lean` | 8.8 | 1590 | 2.49 |

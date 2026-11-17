@@ -15,7 +15,7 @@ Report §8.5.2 (Table 8.5.2 shape), Stage 9b decision 4: every resource is a mea
 | 4. QPLP Instant. | QPLP Grover + σ, r = 2, uncompute = mbu | Concrete circuit H^⊗9 · (U_s U_P)^2 (`emitted` in Cert.lean) | kernel-checked | grade (w, d, t, a) = (17, 226, 104, 8) (measured); δ = 7/128 exact; ext: 2Q 262, T-depth 55, rot 0, meas 26, ff 52 (measured) |
 | 5. Oracle Synthesis | Boolean network (27 nodes, 5 AND) | U_P + proof (Lemma 6.3.2, lemma_6_3_2_xor_of_le) | kernel-checked | oracle (w, d, t, a) = (14, 61, 20, 5); 5 AND nodes vs ĉ∧ = 5 |
 | 6. Ancilla Restore | Oracle U_P and diffusion MCZ | Restored circuit (AncRestore conjunct of `cert`) | kernel-checked | T after the first measurement: oracle 0, diffusion 0; 26 MBU measurements, 52 classically controlled gates; a = 8 |
-| 7. Certificate Gen | Proof + grade | examples/certs/addchk3/Cert.lean, certificate.json (theorem CQRV.Cert.addchk3.cert) | kernel-checked | kernel 45.40 s, wall 56.10 s (single run); axioms: propext, Classical.choice, Quot.sound |
+| 7. Certificate Gen | Proof + grade | examples/certs/addchk3/Cert.lean, certificate.json (theorem CQRV.Cert.addchk3.cert) | kernel-checked | kernel 44.80 s, wall 54.38 s (median of 5 after 1 warm-up (scripts/bench_all.py, lean direct)); axioms: propext, Classical.choice, Quot.sound |
 | 8. QIR Export | Internal circuit (`emitted`) | QIR text (addchk3.qir), OpenQASM 3 (addchk3.qasm) | declared trust boundary | G = 640 noisy operations (553 unitary, 26 mid-circuit measurements, 52 classically controlled, 9 terminal measurements) |
 
 What each status covers:
