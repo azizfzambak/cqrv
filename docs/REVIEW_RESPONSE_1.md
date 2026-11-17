@@ -63,7 +63,7 @@ copy-edit.
 | 19 | RB numbers do not derive (P-stoch); coherent errors scale as √r (B19, A-weakness 2) | A | Emphasized: the result is a *conditional perturbation theorem parameterized by calibration-derived numbers*. For coherent errors the diamond distance can be of order √r, so the bound is optimistic unless the noise is twirled. Randomized compiling is named as the way to approach the premise |
 | 20 | the emulator statistical protocol is incomplete; `emulator_validated` too strong (B20, A4) | A + P (R3) | The protocol is reported: α = 0.05, 4 000 shots, seed 25, one-sided Hoeffding margin √(ln(1/α)/(2·shots)) ≈ 0.0194, the success counts, and the comparison p̂ ≥ 1 − δ′ − margin. The status is renamed `emulator_sanity_checked` (R3) |
 | 21 | artifact not accessible (B21) | P (R13, author) | Public repository, DOI, container: the author's publication decision. The proof hash should bind the CQRV source revision (R5) |
-| 22 | measurements from different stages not comparable (B22) | A + P (R11) | Every performance table now names its stage and the checks enabled. Table 2 (the few:log timings) is labelled as measured at Stage 13a′, before the front-end block and the kernel-decided count were added. R11 re-measures all certificates at one commit |
+| 22 | measurements from different stages not comparable (B22) | A + P (R11) | Every performance table now names its stage and the checks enabled. Table 2 (the few:log timings) is labelled as measured at Stage 13a′, before the front-end block and the kernel-decided count were added. R11 measured every Lean check file at one commit (2025ed2; `docs/BENCHMARKS.md`), done 2026-11-17 |
 | 23 | evidence is internal consistency; few benchmarks; no formal asymptotics (B23, A-weakness 1, A4.3) | A + P (R12) | Stated in the threats-to-validity section. "Linear" is described as the check's design (indexing by wire), measured to scale, not proved. R12 adds combinational benchmarks in the conditional / compositional regime |
 | 24 | AI review is not independent validation (B24) | A + P (R14, author) | Said explicitly. A human expert audit of the main definitions is recommended (R14) |
 
@@ -147,7 +147,10 @@ These tasks change code or committed files. R13, R14 and R16 are the author's.
 `REVB_TASK.md`; commits f648115, d51a975, ba15d9c; accepted 2026-11-17, CI 26 PASS / 4 n/a). R12:
 done (task C, `REVC_TASK.md`; commit ec06b84; accepted 2026-11-17, CI 26 PASS / 4 n/a): `addchk3`,
 `wt8_3`, `wt8_3_count` certified; the comparator `cmp4` is harness evidence only (kernel peak above
-8 GB). R11: task D (`REVD_TASK.md`). R6–R9 not scheduled.
+8 GB). R11: done (task D, `REVD_TASK.md`; commits e509fef, 2025ed2, b27dd45; accepted 2026-11-17, CI 26
+PASS / 4 n/a): all 40 Lean check files measured in one run at 2025ed2 (`scripts/bench_all.py`,
+`docs/BENCHMARKS.md`), the logical certificates' `kernel_check` recorded with that commit. R6–R9 not
+scheduled.
 
 | Task | Content | Size | Changes committed files? |
 |---|---|---|---|
