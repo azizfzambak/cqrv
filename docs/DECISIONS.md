@@ -1541,3 +1541,9 @@ Why: R13 and R16 of REVIEW_RESPONSE_1: the paper's claims become checkable again
 Rejected: rewriting the history (every cited hash would break); a snapshot without history; arXiv (the author chose Zenodo); a container without a build test.
 Report §: 9.5.1, 9.5.3; REVIEW_RESPONSE_1 §4 (R13, R14, R16).
 
+## 2026-11-17 — Release v1.0.0 published (author)
+Decision: the author published the repository on GitHub (https://github.com/azizfzambak/cqrv, public, release `v1.0.0` on 34fc87b with the paper PDF attached) and the paper on Zenodo (preprint, CC BY 4.0, version 1.0, doi:10.5281/zenodo.24302653; concept doi:10.5281/zenodo.24302652; the uploaded PDF is `paper/Zambak_2026_CQRV.pdf` of the tag, md5 72f9f18774f007b29554fe4b2426571d). GitHub Actions is disabled for the repository: the two runs the pushes triggered (`.github/workflows/ci.yml`, never run remotely) were cancelled and deleted; the workflow file stays as the record of the remote CI design, and CI stays local (`scripts/ci_local.sh`, decision of 2026-10-28).
+Why: R13 and R16 of REVIEW_RESPONSE_1 closed; a remote run of an untested workflow on a public repository would show an unrelated failure.
+Rejected: removing the workflow file (a commit after the tag for no gain); arXiv (the author chose Zenodo).
+Report §: 9.5.1, 9.5.3.
+

@@ -1,5 +1,7 @@
 # CQRV — Certified Quantum Realization
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24302653.svg)](https://doi.org/10.5281/zenodo.24302653)
+
 A certifying compiler from a small classical specification language to quantum circuits, with Lean 4
 certificates. It implements the technical report *Applying Certified Quantum Realization: A Practical
 Implementation Guide* (`docs/cqrv_report_revised_v3.docx` with its errata; the report is the
@@ -19,7 +21,7 @@ project, with every number's source, is `docs/M5_REPORT.md`; reproduction and th
 
 **Release v1.0.0 (November 2026).** Everything up to Phase 3 is described in one paper,
 `paper/Zambak_2026_CQRV.pdf` (source `paper/Zambak_2026_CQRV.md`, build `paper/tools/build.ps1`),
-published as a preprint on Zenodo. The code the paper describes is commit `2f8200b`; the tag `v1.0.0`
+published as a preprint on Zenodo (https://doi.org/10.5281/zenodo.24302653). The code the paper describes is commit `2f8200b`; the tag `v1.0.0`
 adds only documentation (license, citation file, release notes, the paper).
 
 ## The three tracks
@@ -89,6 +91,8 @@ qiskit-ibm-runtime 0.52.1, offline fake backends only; `hw/README.md`). Setting 
 ## License and citation
 
 Copyright 2026 Aziz F. Zambak. Licensed under the Apache License, Version 2.0 (`LICENSE`). To cite the
-work, use `CITATION.cff` (the paper and this repository). The specification report the project
+work, use `CITATION.cff` (the paper and this repository): Zambak, A. F. (2026). *Certified Quantum
+Realization in Lean 4: A Two-Pattern Prototype with Measurement-Based Uncomputation, Validated Routing,
+and Conditional Noise Bounds* (Version 1.0). Zenodo. https://doi.org/10.5281/zenodo.24302653. The specification report the project
 implements is included in its revisions v2 and v3 (`docs/cqrv_report_revised_v2.docx`,
 `docs/cqrv_report_revised_v3.docx`).
