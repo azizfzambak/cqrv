@@ -90,6 +90,9 @@ Report §9.1 (Phase I), CLAUDE.md layout `Apps/cqr/`. Stage 3 implements `check`
   (exit 0) only if the kernel check and the audit pass; otherwise `certificate with tracked
   obligations: <list>` (exit 3). Kernel-check failure: message, exit 1, no JSON. `--bench k`:
   `k + 1` kernel checks, the median of the last `k` is recorded (scripts/bench_kernel.sh).
+  `--kernel-check-from <state.json>` (R11 D1.5): one kernel check here, and the recorded
+  `kernel_check` is the driver's (`scripts/bench_all.py` state file: medians, runs, the measured
+  commit; `timingFromBench`); not with `--bench`.
   Stage 16b: `Cert.lean` states the front end at the instance (`prog`, the typed-term literal;
   `prog_scoped`; `net_ok : toNetwork prog = .ok net`; `front_end` from `toNetwork_pred`, all
   kernel-checked) and `trust_boundary.front_end` says so (schema 1.8.0, `uncompute` explicit);
@@ -131,6 +134,7 @@ def usage : String :=
     "  check <file> --truth-table\n" ++
     "  certify <file> [--solutions M] [--iterations r] [--out dir] [--bench k] [--report]\n" ++
     "          [--profile name|path] [--shape tree|few:log] [--count-limit k] [--uncompute mbu|coherent]\n" ++
+    "          [--kernel-check-from .lake/bench/logical--<name>.json]   (every certify form; not with --bench)\n" ++
     "  certify <file> --problem count --precision m [--out dir] [--bench k] [--report]\n" ++
     "          [--count-limit k] [--uncompute mbu|coherent]\n" ++
     "  certify <file> --budget w,d,t,a --prefer width|depth|t|anc [--solutions M] [--iterations r]\n" ++
@@ -566,6 +570,44 @@ def median (xs : List Nat) : Nat :=
   let s := xs.mergeSort
   s.getD ((s.length - 1) / 2) 0
 
+/-- R11 D1.5 (REVIEW_RESPONSE_1 §4 R11; docs/tasks/REVD_TASK.md) — remove `--kernel-check-from
+<state.json>` from the certify flags (any position, at most once). -/
+def kernelCheckFromFlag : List String → Option (Option String × List String)
+  | [] => some (none, [])
+  | "--kernel-check-from" :: p :: rest => do
+    let (prev, rest) ← kernelCheckFromFlag rest
+    if prev.isSome then none else return (some p, rest)
+  | f :: rest => do
+    let (k, rest) ← kernelCheckFromFlag rest
+    return (k, f :: rest)
+
+/-- R11 D1.5 — the kernel-check figures of a `scripts/bench_all.py` state file
+(`.lake/bench/logical--<name>.json`: `kind` `logical`, `status` `done`, `summary.kernel_s` and
+`summary.wall_s` the medians in seconds, `summary.n` the measured runs, `commit`) as the
+`KernelTiming` written to `reference_configuration.kernel_check`: one measurement of every
+certificate at one commit (REVD_TASK). Its `wall_ms` is the driver's wall of `lean` run directly,
+not of `lake env lean` (DECISIONS.md 2026-11-17). Seconds are converted to milliseconds exactly
+from the JSON number (rounded half up). -/
+def timingFromBench (path : String) : IO (Except String KernelTiming) := do
+  let text ← IO.FS.readFile path
+  pure <| (do
+    let j : Lean.Json ← Lean.Json.parse text
+    let kind ← j.getObjValAs? String "kind"
+    let status ← j.getObjValAs? String "status"
+    unless kind == "logical" && status == "done" do
+      throw s!"{path}: kind `{kind}`, status `{status}` (a done logical item is needed)"
+    let s : Lean.Json ← j.getObjVal? "summary"
+    let ms (k : String) : Except String Nat := do
+      let v : Lean.Json ← s.getObjVal? k
+      let n : Lean.JsonNumber ← v.getNum?
+      let e := n.exponent
+      return (n.mantissa.toNat * 1000 + 10 ^ e / 2) / 10 ^ e
+    let n ← s.getObjValAs? Nat "n"
+    let commit ← j.getObjValAs? String "commit"
+    return { wallMs := ← ms "wall_s", kernelMs := some (← ms "kernel_s"), runs := n,
+             statistic := s!"median of {n} after 1 warm-up (scripts/bench_all.py, lean direct)",
+             commit := some commit } : Except String KernelTiming)
+
 /-- Report §9.5.1 — the tracked obligations of a failed audit: every offending axiom by its
 name, `sorryAx` first. Since Stage 9a the generator writes no `sorry` (Lemma 6.3.2 holds for XOR
 networks), so a `sorryAx` is never explained by a generator obligation. -/
@@ -588,7 +630,7 @@ def certifyGrover (path src : String) (tp : TypedProgram) (entryPos : Pos) (sig 
     (subst : String) (sides : List String) (gi : GroverInstance) (solutions : Option Nat)
     (out : Option String) (bench : Option Nat) (report : Bool) (profile : Option String)
     (diff : CertDiffusion) (countLimit : Nat) (mode : UncomputeMode)
-    (sel : Option SelectionInfo) : IO UInt32 := do
+    (sel : Option SelectionInfo) (kcFrom : Option String := none) : IO UInt32 := do
     let some M := gi.M
       | IO.eprintln "cqr certify: the certificate needs the solution count M (--solutions M)"
         return 2
@@ -656,6 +698,13 @@ def certifyGrover (path src : String) (tp : TypedProgram) (entryPos : Pos) (sig 
         statistic := match bench with
           | some k => s!"median of {k} (first run excluded)"
           | none => "single run" }
+    -- R11 D1.5: with --kernel-check-from, the driver's figures replace this run's (one check here)
+    let timing ← match kcFrom with
+      | some p =>
+        match ← timingFromBench p with
+        | .ok t => pure t
+        | .error e => IO.eprintln s!"cqr certify: --kernel-check-from: {e}"; return 1
+      | none => pure timing
     let bad := (match last.result with | .pass => [] | .fail b => b) ++
       (if sel.isSome then (match auditAxioms extraAxioms with | .pass => [] | .fail b => b) else [])
     let (status, obligations) :=
@@ -742,7 +791,7 @@ the proved `trust_boundary.front_end`; the Stage 9b validation is no longer run.
 def runCertify (path : String) (solutions iters : Option Nat) (out : Option String)
     (bench : Option Nat) (report : Bool) (profile : Option String)
     (diff : CertDiffusion := .tree) (countLimit : Nat := defaultCountLimit)
-    (mode : UncomputeMode := .mbu) : IO UInt32 := do
+    (mode : UncomputeMode := .mbu) (kcFrom : Option String := none) : IO UInt32 := do
   let src ← IO.FS.readFile path
   match ← frontEnd path, ← signature path solutions with
   | .error d, _ | _, .error d => IO.println d.toJson.compress; return 1
@@ -765,7 +814,7 @@ def runCertify (path : String) (solutions iters : Option Nat) (out : Option Stri
       | .error (.diagnostic d) => IO.println d.toJson.compress; return 1
       | .error (.usage msg) => IO.eprintln s!"cqr certify: {msg}"; return 2
     certifyGrover path src tp entryPos sig subst sides gi solutions out bench report profile diff
-      countLimit mode none
+      countLimit mode none kcFrom
 
 /-- `cqr certify <file> --budget w,d,t,a --prefer width|depth|t|anc [--solutions M] [--iterations r]
 [--count-limit k] [--profile name|path] [--bench k] [--report] [--out dir]` — PHASE2_SPEC.md §A.6
@@ -778,7 +827,7 @@ nothing written. Otherwise the ordinary certificate path of the chosen candidate
 block (`certifyGrover`); the default directory is `certs/<name>_sel`. -/
 def runCertifySelect (path : String) (budget : Grade) (pref : Pref) (solutions iters : Option Nat)
     (out : Option String) (bench : Option Nat) (report : Bool) (profile : Option String)
-    (countLimit : Nat) : IO UInt32 := do
+    (countLimit : Nat) (kcFrom : Option String := none) : IO UInt32 := do
   let src ← IO.FS.readFile path
   match ← frontEnd path, ← signature path solutions with
   | .error d, _ | _, .error d => IO.println d.toJson.compress; return 1
@@ -819,7 +868,7 @@ def runCertifySelect (path : String) (budget : Grade) (pref : Pref) (solutions i
     | some ((c, gi), _) =>
       let info : SelectionInfo := { budget, pref, results, chosen := c }
       certifyGrover path src tp entryPos sig subst sides gi solutions out bench report profile
-        c.shape countLimit c.mode (some info)
+        c.shape countLimit c.mode (some info) kcFrom
 
 /-- Stage 21a4 — remove `--budget w,d,t,a` and `--prefer p` from the certify flags (any position);
 `none` on a repeated flag. The remaining flags keep their order, so a flag list without them is
@@ -855,7 +904,8 @@ and M = 0 is refused before anything is written (diagnostic `no_solutions`, exit
 `not_decided` and ε is the maximum over a, π/2^m + π²/4^m (5′). `--bench k`: `k + 1` kernel checks,
 the median of the last `k`, as `cqr certify`. The default directory is `certs/<name>_count`. -/
 def runCertifyCount (path : String) (m : Nat) (out : Option String) (bench : Option Nat)
-    (report : Bool) (countLimit : Nat) (mode : UncomputeMode) : IO UInt32 := do
+    (report : Bool) (countLimit : Nat) (mode : UncomputeMode) (kcFrom : Option String := none) :
+    IO UInt32 := do
   let src ← IO.FS.readFile path
   match ← frontEnd path, ← signature path none with
   | .error d, _ | _, .error d => IO.println d.toJson.compress; return 1
@@ -918,6 +968,13 @@ def runCertifyCount (path : String) (m : Nat) (out : Option String) (bench : Opt
         statistic := match bench with
           | some k => s!"median of {k} (first run excluded)"
           | none => "single run" }
+    -- R11 D1.5: with --kernel-check-from, the driver's figures replace this run's (one check here)
+    let timing ← match kcFrom with
+      | some p =>
+        match ← timingFromBench p with
+        | .ok t => pure t
+        | .error e => IO.eprintln s!"cqr certify: --kernel-check-from: {e}"; return 1
+      | none => pure timing
     let bad := (match last.result with | .pass => [] | .fail b => b) ++
       (if q.M.isSome then (match auditAxioms axsCount with | .pass => [] | .fail b => b) else [])
     let obligations := obligationsOf bad
@@ -1588,6 +1645,10 @@ def main (args : List String) : IO UInt32 := do
       | none => IO.eprint usage; return 2
     | none => IO.eprint usage; return 2
   | "certify" :: file :: flags =>
+    -- R11 D1.5: `--kernel-check-from <state.json>` (any position) takes the driver's figures
+    let some (kcFrom, flags) := kernelCheckFromFlag flags | IO.eprint usage; return 2
+    if kcFrom.isSome && flags.contains "--bench" then
+      IO.eprintln "cqr certify: --kernel-check-from and --bench exclude each other"; return 2
     -- Stage 21a4 (PHASE2_SPEC.md §A.6 (8)): `--budget` / `--prefer` (both or neither); a flag
     -- list without them is parsed exactly as before
     match selectionFlags flags with
@@ -1600,7 +1661,7 @@ def main (args : List String) : IO UInt32 := do
           IO.eprint usage; return 2
         match certifyFlags flags with
         | some (m, r, o, b, p, h, c) =>
-          runCertifySelect file budget pref m r o b p h (c.getD defaultCountLimit)
+          runCertifySelect file budget pref m r o b p h (c.getD defaultCountLimit) kcFrom
         | none => IO.eprint usage; return 2
       | _, _ => IO.eprint usage; return 2
     | some (some _, none, _) | some (none, some _, _) => IO.eprint usage; return 2
@@ -1616,7 +1677,7 @@ def main (args : List String) : IO UInt32 := do
         | some (mode, flags) =>
           match certifyFlags flags with
           | some (none, none, o, b, p, none, c) =>
-            runCertifyCount file m o b p (c.getD defaultCountLimit) mode
+            runCertifyCount file m o b p (c.getD defaultCountLimit) mode kcFrom
           | some _ =>
             IO.eprintln "cqr certify: --problem count does not take --solutions, --iterations or \
               --profile (PHASE2_SPEC §A.5 amendment (5))"
@@ -1642,7 +1703,7 @@ def main (args : List String) : IO UInt32 := do
                 "the few-ancilla MCZ is MBU-only (Stage 15): --shape few:log does not take \
                 --uncompute coherent").toJson.compress
               return 1
-            runCertify file m r o b p h dif (c.getD defaultCountLimit) mode
+            runCertify file m r o b p h dif (c.getD defaultCountLimit) mode kcFrom
           | none, _ =>
             IO.eprintln s!"cqr certify: --shape {shapeName sh} has no certificate path \
               (certified: tree, few:log)"

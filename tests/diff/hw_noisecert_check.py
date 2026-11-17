@@ -7,8 +7,9 @@ For each of examples/certs/hw_n2_torino, hw_n3_torino (with a logical certificat
 mbu_gadget_torino (the channel form):
   * `manifest.json` (schema 1.2.0 since R5): the artifact hashes, the target snapshot and file hashes,
     `hashes.library` = the current tree's (`libhash.library_hash`) and, with a logical certificate,
-    `certificate.json`'s bytes modulo `hashes.library` (`certificate_json_mod_library` and
-    `logical_certificate.certificate_json_sha3_mod_library`); the status words contain
+    `certificate.json`'s bytes modulo `hashes.library` and `reference_configuration`
+    (`certificate_json_mod_library` and `logical_certificate.certificate_json_sha3_mod_library`;
+    R5, R11 D1.5); the status words contain
     `noise_conditional`; the four premises P-cal, P-stoch, P-ro, P-idle are present with the meaning
     sentence;
   * `noise.noise_bound`, `clamped`, `noise_vacuous` and `physical_bound_p_eq_r` equal `hw/noisebound.py`'s;

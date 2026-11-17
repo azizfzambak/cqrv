@@ -6,8 +6,8 @@
 For the certificate directory:
   * `manifest.json` (schema 1.2.0 since R5): the hashes it records are those of the artifact's canonical
     `logical.json`, `witness.json`, `physical.json`, of the logical certificate's `certificate.json`
-    **modulo `hashes.library`** (`certificate_json_mod_library`, also `logical_certificate.
-    certificate_json_sha3_mod_library`; R5), of the target's snapshot and of the target file's bytes,
+    **modulo `hashes.library` and `reference_configuration`** (`certificate_json_mod_library`, also
+    `logical_certificate.certificate_json_sha3_mod_library`; R5, R11 D1.5), of the target's snapshot and of the target file's bytes,
     and `hashes.library` is the current tree's (`libhash.library_hash`); the status words are among the
     four of P3 and `emulator_sanity_checked` (R3) is present iff the artifact's run report passed;
     `model_premises` names `ideal_device`, `P-prep`, `P-ctrl` (R4);

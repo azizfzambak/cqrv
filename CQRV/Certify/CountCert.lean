@@ -538,9 +538,7 @@ def CountCertificate.toJson (c : CountCertificate) : Json :=
        ("logical_cpus", match c.config.logicalCpus with | some k => Lean.toJson k | none => Json.null),
        ("clock", optStr c.config.clock), ("lean_threads", optStr c.config.leanThreads),
        ("kernel_check", match c.config.kernelCheck with
-         | some k => Json.mkObj [("wall_ms", k.wallMs),
-             ("kernel_ms", match k.kernelMs with | some ms => Lean.toJson ms | none => Json.null),
-             ("runs", k.runs), ("statistic", str k.statistic)]
+         | some k => k.toJson
          | none => Json.null)]),
      ("theorem", optStr c.theoremName),
      ("axioms", Json.arr (c.axioms.map str).toArray),

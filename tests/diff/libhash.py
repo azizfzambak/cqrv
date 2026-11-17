@@ -6,7 +6,7 @@ and the freshness check of the committed certificates and manifests.
 `library_hash(root)` mirrors `CQRV.Certify.libraryHash` over `CQRV.Certify.Audit.libraryFiles`: SHA3-256 of
 `path ‖ 0x00 ‖ hex(SHA3-256(content)) ‖ 0x0A` for every `.lean` file under `CQRV/` and `Apps/` plus
 `lakefile.lean`, `lean-toolchain`, `lake-manifest.json`, sorted by path (UTF-8 byte order, `/` separators,
-relative to the project root), the content as bytes. `mod_library(text)` is `Certify.certJsonModLibrary`:
+relative to the project root), the content as bytes. `mod_library(text)` is `Certify.certJsonModLibrary` (`hashes.library` and `reference_configuration` null):
 the certificate.json bytes with the value of `hashes.library` replaced by `null` — the form the hardware
 files hash (`certificate_json_sha3_mod_library`).
 
@@ -53,10 +53,42 @@ def library_hash(root=ROOT):
     return sha3(pre)
 
 
+def null_obj_val(text, key):
+    """`"<key>":{...}` (first occurrence; braces matched, string literals and their escapes skipped)
+    replaced by `"<key>":null` — `Certify.jsonNullObjVal`; unchanged when absent."""
+    head = b'"' + key + b'":{'
+    i = text.find(head)
+    if i < 0:
+        return text
+    j, depth, in_str, esc = i + len(head), 0, False, False
+    while j < len(text):
+        c = text[j:j + 1]
+        if in_str:
+            if esc:
+                esc = False
+            elif c == b"\\":
+                esc = True
+            elif c == b'"':
+                in_str = False
+        elif c == b'"':
+            in_str = True
+        elif c == b"{":
+            depth += 1
+        elif c == b"}":
+            if depth == 0:
+                return text[:i] + b'"' + key + b'":null' + text[j + 1:]
+            depth -= 1
+        j += 1
+    return text
+
+
 def mod_library(text):
-    """certificate.json bytes with `hashes.library` set to null (exactly one occurrence replaced)."""
+    """certificate.json bytes with `hashes.library` set to null (exactly one occurrence replaced) and,
+    since R11 D1.5, the object `reference_configuration` (toolchain, machine, timing) set to null:
+    `Certify.certJsonModLibrary`, the form the hardware files hash (`certificate_json_sha3_mod_library`,
+    key name kept)."""
     out, k = RE_LIBRARY.subn(b'"library":null', text)
-    return out if k == 1 else text
+    return null_obj_val(out if k == 1 else text, b"reference_configuration")
 
 
 def main():

@@ -110,9 +110,10 @@ certificate re-derived, the trusted link `emitted_eq : emitted = C`, the reconst
 channel theorem, **`phys_realizes`** — the realization transferred to the physical circuit from
 all-|0⟩ — and the grade at each latency), `physical.qasm` (parsed back to the artifact's gate list by
 `tests/diff/hw_physcert_check.py`) and `manifest.json` (schema 1.2.0 since R5: the hashes — the logical
-certificate.json cited **modulo `hashes.library`** as `certificate_json_mod_library` /
-`certificate_json_sha3_mod_library` (its bytes with the library hash set to null, so that a library change
-moves only the `library` fields), and `hashes.library`, the SHA3-256 of the CQRV sources the files were
+certificate.json cited **modulo `hashes.library` and `reference_configuration`** as `certificate_json_mod_library` /
+`certificate_json_sha3_mod_library` (its bytes with the library hash and the object `reference_configuration`
+— toolchain, machine and timing fields — set to null, so that a library change moves only the `library`
+fields and a re-measurement (R11, `scripts/bench_all.py`) moves no hardware file; the key name is R5's), and `hashes.library`, the SHA3-256 of the CQRV sources the files were
 generated against (`CQRV.Certify.libraryHash`; `tests/diff/libhash.py` warns when a recorded hash is not the
 tree's and blocks with `--release`) —, the grades, the
 status words `logical_certified`, `hardware_compatible`, `physical_translation_validated`,

@@ -191,6 +191,10 @@ def main():
 
     certified = mutated(audited)
     validator.validate(certified)
+    # R11 D1.5: kernel_check.commit (the measured commit, `cqr certify --kernel-check-from`) is optional, 40 hex
+    validator.validate(mutated(lambda c: (audited(c), c["reference_configuration"]["kernel_check"].update(
+        commit="0123456789abcdef" * 2 + "01234567",
+        statistic="median of 5 after 1 warm-up (scripts/bench_all.py, lean direct)"))))
     # Stage 14a: an audited envelope whose solution count the kernel decided
     validator.validate(mutated(lambda c: (audited(c), c["solution_count"].update(
         status="kernel_decided"), c.update(hypotheses=c["hypotheses"][1:]))))
@@ -206,6 +210,8 @@ def main():
     print("ok:   filled-in 'certified' and 'certificate with tracked obligations' envelopes "
           "validate; the Stage 8b front_end wording (n > 16) validates under 1.6.0")
     bad.update({
+        "kernel_check commit not a commit":
+            mutated(lambda c: (audited(c), c["reference_configuration"]["kernel_check"].update(commit="abc"))),
         "certified with an obligation":
             mutated(lambda c: (audited(c), c.update(obligations=["lemma_6_3_2_xor"]))),
         "certified with sorryAx":

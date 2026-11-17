@@ -67,7 +67,7 @@
   {"verification": "kernel-checked",
    "stage": "7. Certificate Gen",
    "resources":
-   "kernel 106.00 s, wall 116.25 s (single run); axioms: propext, Classical.choice, Quot.sound",
+   "kernel 106.00 s, wall 116.62 s (single run); axioms: propext, Classical.choice, Quot.sound",
    "output":
    "examples/certs/wt8_3_count/Cert.lean, certificate.json (theorems CQRV.Cert.wt8_3_count.cert, CQRV.Cert.wt8_3_count.cert_count)",
    "note":

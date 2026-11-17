@@ -57,7 +57,7 @@
   {"verification": "kernel-checked",
    "stage": "7. Certificate Gen",
    "resources":
-   "kernel 38.50 s, wall 49.29 s (single run); axioms: propext, Classical.choice, Quot.sound",
+   "kernel 39.80 s, wall 50.73 s (single run); axioms: propext, Classical.choice, Quot.sound",
    "output":
    "examples/certs/wt8_3/Cert.lean, certificate.json (theorem CQRV.Cert.wt8_3.cert)",
    "note": "lake env lean exit 0; #print axioms audited; status: certified",

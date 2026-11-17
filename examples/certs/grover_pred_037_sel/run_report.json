@@ -56,7 +56,7 @@
   {"verification": "kernel-checked",
    "stage": "7. Certificate Gen",
    "resources":
-   "kernel 23.70 s, wall 34.44 s (single run); axioms: propext, Classical.choice, Quot.sound",
+   "kernel 23.50 s, wall 34.13 s (single run); axioms: propext, Classical.choice, Quot.sound",
    "output":
    "examples/certs/grover_pred_037_sel/Cert.lean, certificate.json (theorem CQRV.Cert.grover_pred_037.cert)",
    "note": "lake env lean exit 0; #print axioms audited; status: certified",

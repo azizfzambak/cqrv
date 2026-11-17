@@ -54,7 +54,8 @@ reviewer decisions 2 and 3).
   was checked against; `null` only in the unaudited sample) and `hardware_perturbation.status`
   (`hardwarePerturbationStatus`: the old `δ_hw ≤ δ + G·p̄` figure is an illustrative estimate, not a
   theorem); every certificate — the selection one (1.11.0 before) and the counting one included —
-  says "1.12.0". `certJsonModLibrary` is the form the hardware files hash.
+  says "1.12.0". `certJsonModLibrary` (modulo `hashes.library` and `reference_configuration`) is the
+form the hardware files hash.
 -/
 
 @[expose] public section
@@ -136,21 +137,48 @@ def libraryHash (files : List (String × ByteArray)) : String :=
     ByteArray.empty
   SHA3.sha3_256Hex pre
 
-/-- R5, the reviewer's correction of REVB_TASK R5.3 (DECISIONS.md 2026-11-16) — a certificate's JSON
-text with the value of `hashes.library` replaced by `null`: **the form the hardware files hash**
-(`certificate_json_sha3_mod_library` of the physical and conditional manifests and of the
-`PhysCert.lean` headers), so that a library change moves only the `library` fields and a change of
-the certificate's content still propagates. `cqr certify` writes the key once, as
-`"library":"<64 hex>"`; a text without it (an older schema, or `null` already) is returned unchanged. -/
-def certJsonModLibrary (text : String) : String :=
-  match text.splitOn "\"library\":\"" with
-  | [a, b] =>
-    let hs := b.toList.take 64
-    if hs.length == 64 && hs.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) &&
-        (b.toList.drop 64).head? == some '"' then
-      a ++ "\"library\":null" ++ String.ofList (b.toList.drop 65)
-    else text
+/-- A JSON text with the object value of the first `"<key>":{…}` replaced by `null`: the braces are
+matched over the compact text, string literals (with their escapes) skipped; unchanged when the
+key is absent or its value is not an object. -/
+def jsonNullObjVal (text key : String) : String :=
+  match text.splitOn ("\"" ++ key ++ "\":{") with
+  | a :: b :: rest =>
+    let rec skip : List Char → Nat → Bool → Bool → Option (List Char)
+      | [], _, _, _ => none
+      | c :: cs, depth, inStr, esc =>
+        if inStr then
+          if esc then skip cs depth true false
+          else if c == '\\' then skip cs depth true true
+          else if c == '"' then skip cs depth false false
+          else skip cs depth true false
+        else if c == '"' then skip cs depth true false
+        else if c == '{' then skip cs (depth + 1) false false
+        else if c == '}' then (if depth == 0 then some cs else skip cs (depth - 1) false false)
+        else skip cs depth false false
+    let tail := ("\"" ++ key ++ "\":{").intercalate (b :: rest)
+    match skip tail.toList 0 false false with
+    | some cs => a ++ "\"" ++ key ++ "\":null" ++ String.ofList cs
+    | none => text
   | _ => text
+
+/-- R5, the reviewer's correction of REVB_TASK R5.3 (DECISIONS.md 2026-11-16); R11 D1.5 (DECISIONS.md
+2026-11-17) — a certificate's JSON text with the value of `hashes.library` **and the object
+`reference_configuration`** (toolchain, machine and timing fields) replaced by `null`: **the form
+the hardware files hash** (`certificate_json_sha3_mod_library` of the physical and conditional
+manifests and of the `PhysCert.lean` headers; the key name kept from R5), so that a library change
+or a re-measurement moves only those fields and a change of the certificate's content still
+propagates. `cqr certify` writes `"library":"<64 hex>"` once and `reference_configuration` once;
+a text without them (an older schema, or `null` already) is returned unchanged. -/
+def certJsonModLibrary (text : String) : String :=
+  let t := match text.splitOn "\"library\":\"" with
+    | [a, b] =>
+      let hs := b.toList.take 64
+      if hs.length == 64 && hs.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) &&
+          (b.toList.drop 64).head? == some '"' then
+        a ++ "\"library\":null" ++ String.ofList (b.toList.drop 65)
+      else text
+    | _ => text
+  jsonNullObjVal t "reference_configuration"
 
 /-! ## The record (decision 3) -/
 
@@ -176,7 +204,18 @@ structure KernelTiming where
   kernelMs : Option Nat
   runs : Nat
   statistic : String
+  /-- R11 D1.5 (docs/tasks/REVD_TASK.md): the commit the figures were measured at, when they come
+  from the driver `scripts/bench_all.py` (`cqr certify --kernel-check-from`); JSON key `commit`,
+  written only when present. -/
+  commit : Option String := none
   deriving Repr, Inhabited
+
+/-- The JSON of a `KernelTiming` (`reference_configuration.kernel_check`); `commit` only when set. -/
+def KernelTiming.toJson (k : KernelTiming) : Json :=
+  Json.mkObj ([("wall_ms", Lean.toJson k.wallMs),
+    ("kernel_ms", match k.kernelMs with | some m => Lean.toJson m | none => Json.null),
+    ("runs", Lean.toJson k.runs), ("statistic", Json.str k.statistic)] ++
+    (match k.commit with | some c => [("commit", Json.str c)] | none => []))
 
 /-- Report §9.5.1 — the reference configuration: toolchain, dependency revisions, and (Stage 8b)
 the machine — CPU model, logical CPUs, clock, `LEAN_NUM_THREADS` — and the measured kernel-check
@@ -381,9 +420,7 @@ def Certificate.toJson (c : Certificate) : Json :=
        ("logical_cpus", match c.config.logicalCpus with | some k => k | none => Json.null),
        ("clock", optStr c.config.clock), ("lean_threads", optStr c.config.leanThreads),
        ("kernel_check", match c.config.kernelCheck with
-         | some k => Json.mkObj [("wall_ms", k.wallMs),
-             ("kernel_ms", match k.kernelMs with | some m => m | none => Json.null),
-             ("runs", k.runs), ("statistic", str k.statistic)]
+         | some k => k.toJson
          | none => Json.null)]),
      ("theorem", optStr c.theoremName),
      ("axioms", Json.arr (c.axioms.map str).toArray),
