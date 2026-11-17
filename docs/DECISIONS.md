@@ -1559,3 +1559,15 @@ Decision (the author's, given in chat on 2026-11-17: "evet, v1.2'yi hazırla"): 
 Why: item 1 is a factual error that version 1.1 introduced, item 2 a calibration gap of the same kind version 1.1 fixed elsewhere; both should be corrected before the e-mails point readers to the paper. A new version keeps the md5 of version 1.1's Zenodo file equal to the PDF at tag `v1.1.0`.
 Rejected: replacing the file of Zenodo version 1.1 (allowed within 30 days, but it breaks the match with tag `v1.1.0`); keeping 0.875 and relabelling the other rows to `p = r` (the certificates and Table 6 use the Pauli reading).
 Report §: 9.5.1; REVIEW_RESPONSE_3.
+
+## 2026-11-17 — Paper version 1.2 published (author)
+Decision (the author's, given in chat on 2026-11-17: "onaylıyorum, v1.2'yi yayınla"): `main` fast-forwarded to b6bb452 and tagged `v1.2.0` (annotated, tag object 0bdb522), pushed to GitHub (main = b6bb452, raw PDF identical to the local file, no Actions run); Zenodo version 1.2 published by the author as a new version of the record (doi:10.5281/zenodo.24309582; the file Zambak_2026_CQRV_v1.2.pdf, md5 ac53c8f074d1ad29de75083fe7dfa4d8, equals `paper/Zambak_2026_CQRV.pdf` at the tag; the all-versions DOI 10.5281/zenodo.24302652 resolves to it; versions 1.0 and 1.1 and their files unchanged). Version 1.2's DOI was not known when its commit was made, so it is recorded here, in `docs/RELEASE.md` §3, the README and PROJECT_STATUS, in a documentation-only commit after the tag; the paper and its PDF are not changed, so the Zenodo file stays identical to the tagged PDF.
+Why: the repository is the durable record of what was published and where.
+Rejected: changing the paper's list of versions to carry its own DOI (that would change the PDF after publication and break the md5 match with Zenodo).
+Report §: 9.5.1, 9.5.3.
+
+## 2026-11-17 — Development moves to a second machine (author)
+Decision (the author's, 2026-11-17): the work continues on a second Windows 11 machine (128 GB RAM, 2× Xeon Silver 4116, the repository on an external SSD), so that Phase 3 can run without interruption. The repository is carried as a git bundle with every branch and tag, plus the untracked and git-ignored data; it is checked out with `core.autocrlf=false` so that files match byte for byte. The first task there is a clean build and the full local CI from scratch; its result is recorded here as the second-machine reproduction. After that, commits are made only on the second machine; the first machine's copy is frozen at the transfer commit.
+Why: the development laptop's 16 GB limits kernel checks (a 4-bit comparator needs 8.6–8.8 GB) and it cannot run unattended; a clean setup on another machine also answers the reviews' point that no second machine has repeated the build and the measurements.
+Rejected: a cloud session (not tried; CI stays on a machine under the author's control, and the kernel checks need 8–10 GB for hours); keeping both machines as working copies (divergent histories).
+Report §: 9.5.1 (CI stays local, now on the second machine).

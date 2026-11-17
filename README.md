@@ -21,7 +21,8 @@ project, with every number's source, is `docs/M5_REPORT.md`; reproduction and th
 
 **Release v1.2.0 (November 2026).** Everything up to Phase 3 is described in one paper,
 `paper/Zambak_2026_CQRV.pdf` (source `paper/Zambak_2026_CQRV.md`, build `paper/tools/build.ps1`),
-published as a preprint on Zenodo (https://doi.org/10.5281/zenodo.24302652, all versions). The code the paper describes is
+published as a preprint on Zenodo (https://doi.org/10.5281/zenodo.24302652, all versions; version 1.2:
+https://doi.org/10.5281/zenodo.24309582). The code the paper describes is
 commit `2f8200b`; the tags `v1.0.0`, `v1.1.0` and `v1.2.0` add only documentation (license, citation
 file, release notes, the paper). Version 1.1 corrects the paper after three AI-generated reviews
 (`docs/REVIEW_RESPONSE_2.md`), and version 1.2 after two more (`docs/REVIEW_RESPONSE_3.md`); the code
