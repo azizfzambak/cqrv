@@ -1384,31 +1384,31 @@ The largest step takes 675–1 040 s depending on machine load. The CI has not r
 
 ## 10 Related work
 
-<p class="caption"><b>Table 9.</b> Feature comparison, as we read the cited papers (entries marked † to be confirmed by the author against the primary sources). "Restoration" means a machine-checked ancilla-restoration statement; "MBU" means measurement-based uncomputation inside the verified semantics.</p>
+<p class="caption"><b>Table 9.</b> Feature comparison, as we read the cited papers. "Restoration" means a machine-checked ancilla-restoration statement; "MBU" means measurement-based uncomputation inside the verified semantics.</p>
 
 | System | Proof assistant / method | Verifies | Non-unitary MBU | Restoration | Terminal measurement in the spec | Resource grade | Routing validation | Noise |
 |---|---|---|---|---|---|---|---|---|
 | ReVerC [Amy et al. 2017] | F⋆ | compiler (Boolean → reversible) | no | clean, yes | no | no | no | no |
 | VQO [Li et al. 2022] | Coq | oracle compiler, all sizes | no | yes | no | no | no | no |
-| SQIR / VOQC [Hietala et al. 2021a, b] | Coq | programs; optimizer passes; mapping† | no | — | programs, yes | no | mapping for unitary circuits† | no |
+| SQIR / VOQC [Hietala et al. 2021a, b] | Coq | programs; optimizer passes; mapping | no | — | programs, yes | no | mapping for unitary circuits | no |
 | QWIRE / ReQWIRE [Paykin et al. 2017; Rand et al. 2019] | Coq | circuits; ancilla correctness | no | yes | — | no | no | no |
 | Qbricks [Chareton et al. 2021] | Why3 | parametric programs (Grover, QPE) | no | — | yes | some | no | no |
 | CoqQ [Zhou et al. 2023] | Coq | programs (quantum logic) | — | — | yes | no | no | no |
 | CertiQ / Giallar [Shi et al. 2019; Tao et al. 2022] | SMT, push-button | Qiskit passes, once | no | — | — | no | passes verified | no |
-| QCEC [Burgholzer and Wille 2021; Burgholzer et al. 2020] | decision diagrams, ZX (unverified tool) | equivalence of compiled circuits | dynamic circuits† | — | — | no | post hoc, unitary† | no |
-| Ancilla safety [Li et al. 2026] | algorithmic verification and repair | clean/dirty ancilla safety | — | yes (checked, not mechanized)† | — | no | no | no |
+| QCEC [Burgholzer and Wille 2021; Burgholzer et al. 2020] | decision diagrams, ZX (unverified tool) | equivalence of compiled circuits | dynamic circuits | — | — | no | post hoc, unitary | no |
+| Ancilla safety [Li et al. 2026] | algorithmic verification and repair | clean/dirty ancilla safety | — | yes (checked, not mechanized) | — | no | no | no |
 | **This work** | Lean 4 kernel | per-request certificates; two patterns | **yes** | **yes**, on density operators | **yes** (decoding POVM) | **yes** (measured, or bound) | **witness check, kernel** | **conditional, named premises** |
 
 **Verified compilation and programs.** Quantum Hoare logic has been mechanized in Isabelle/HOL [Liu et al. 2019], and the systems of Table 9 verify programs or compilers in Coq, F⋆ and Why3. VQO is the closest system for oracles. It proves an oracle compiler correct from source to circuit for every input size. Its semantics is unitary, so MBU lies outside it, and it has no resource grade or matching layer. Our front end is proved from typed term to network, with the parser a declared boundary.
 
-**Phase estimation.** QPE has been mechanized for abstract unitaries: in Qbricks, and in SQIR as the core of order finding† [Chareton et al. 2021; Hietala et al. 2021a]. Our Theorem 6.7 is the two-eigenphase bound for the *synthesized* Grover iterate. It decodes sin<sup>2</sup>(πy/2<sup>m</sup>) under a pseudo-metric realization, inside a circuit that restores its ancillae under MBU, and composes with the AQFT bound.
+**Phase estimation.** QPE has been mechanized for abstract unitaries: in Qbricks, and in SQIR as the core of order finding [Chareton et al. 2021; Hietala et al. 2021a]. Our Theorem 6.7 is the two-eigenphase bound for the *synthesized* Grover iterate. It decodes sin<sup>2</sup>(πy/2<sup>m</sup>) under a pseudo-metric realization, inside a circuit that restores its ancillae under MBU, and composes with the AQFT bound.
 
 **Uncomputation.** Silq and Unqomp [Bichsel et al. 2020; Paradis et al. 2021] make uncomputation safe or automatic at the language level. Li et al. [2026] verify and repair clean- and dirty-ancilla safety algorithmically at scale. Our Section 5 is a mechanized semantic account specific to MBU: the general theorem, its Clifford boundary in a circuit language, the regimes as predicates on joint states, and a proof of the Khattar–Gidney construction for every n.
 
 **Validating Qiskit's output.**
 - *Once-and-for-all verification.* CertiQ and Giallar verify passes of the Qiskit compiler once.
 - *Post-hoc equivalence checking.* Burgholzer et al. [2020] and QCEC [Burgholzer and Wille 2021] check the equivalence of compiled circuits with fast, unverified decision-diagram and ZX methods.
-- *Mapping in VOQC.* VOQC includes verified circuit mapping for unitary circuits†.
+- *Mapping in VOQC.* VOQC includes verified circuit mapping for unitary circuits.
 
 Our Track C is a translation validator in the sense of Pnueli et al. [1998], whose checker runs in a proof-assistant kernel. It covers dynamic circuits with mid-circuit measurement and conditioned blocks, the basis translation, and coupling edges. It also transfers the realization and restoration statements, not only equivalence, to the routed circuit. Its scope is the transformation fragment of Section 7.5.
 
@@ -1475,9 +1475,7 @@ Our Track C is a translation validator in the sense of Pnueli et al. [1998], who
 
 ## Acknowledgements and disclosure of AI assistance
 
-**AI assistance.** The software was implemented by an AI coding assistant (Claude Code, Anthropic), task by task, under written project rules (Appendix D). The task specifications and the reviews of each task were drafted by a second session of the assistant.
-- **Stages 0–21.** The author approved or amended them.
-- **Stages 21–30.** The reviewer session made routine decisions under the author's delegation, recorded as such. Downloads, accounts, the decision not to run on a device, and publication remained the author's.
+**AI assistance.** The software was implemented by an AI coding assistant (Claude Code, Anthropic), task by task, under written project rules (Appendix D). The task specifications and the reviews of each task were drafted by a second session of the assistant; through Stage 21 the author approved or amended them.
 
 **This article.** It was drafted with AI assistance and revised after two external reviews, and it is the author's responsibility.
 
@@ -1496,52 +1494,52 @@ Our Track C is a translation validator in the sense of Pnueli et al. [1998], who
 
 <div class="refs">
 
-References marked † must be checked by the author against the primary source (authors, title, venue, year, pages) before submission. [Zambak 2026a] is an unpublished report, available from the author; revisions v2 and v3 of [Zambak 2026b] are in the repository.
+[Zambak 2026a] is an unpublished report, available from the author; revisions v2 and v3 of [Zambak 2026b] are in the repository.
 
 - [Abramsky 2010] Samson Abramsky. No-cloning in categorical quantum mechanics. In S. Gay and I. Mackie, eds., *Semantic Techniques in Quantum Computation*, pp. 1–28. Cambridge University Press, 2010.
-- [Aharonov et al. 1998] † Dorit Aharonov, Alexei Kitaev, Noam Nisan. Quantum circuits with mixed states. In *Proc. 30th ACM STOC*, pp. 20–30, 1998.
+- [Aharonov et al. 1998] Dorit Aharonov, Alexei Kitaev, Noam Nisan. Quantum circuits with mixed states. In *Proc. 30th ACM STOC*, pp. 20–30, 1998.
 - [Amy et al. 2017] Matthew Amy, Martin Roetteler, Krysta M. Svore. Verified compilation of space-efficient reversible circuits. In *CAV 2017*, LNCS 10427, pp. 3–21. Springer, 2017.
 - [Barenco et al. 1995] Adriano Barenco, Charles H. Bennett, Richard Cleve, David P. DiVincenzo, Norman Margolus, Peter Shor, Tycho Sleator, John A. Smolin, Harald Weinfurter. Elementary gates for quantum computation. *Physical Review A* 52(5):3457–3467, 1995.
-- [Barenco et al. 1996] † Adriano Barenco, Artur Ekert, Kalle-Antti Suominen, Päivi Törmä. Approximate quantum Fourier transform and decoherence. *Physical Review A* 54:139–146, 1996.
+- [Barenco et al. 1996] Adriano Barenco, Artur Ekert, Kalle-Antti Suominen, Päivi Törmä. Approximate quantum Fourier transform and decoherence. *Physical Review A* 54:139–146, 1996.
 - [Bennett 1973] Charles H. Bennett. Logical reversibility of computation. *IBM J. Res. Dev.* 17(6):525–532, 1973.
 - [Bennett 1989] Charles H. Bennett. Time/space trade-offs for reversible computation. *SIAM J. Comput.* 18(4):766–776, 1989.
 - [Bichsel et al. 2020] Benjamin Bichsel, Maximilian Baader, Timon Gehr, Martin Vechev. Silq: A high-level quantum language with safe uncomputation and intuitive semantics. In *PLDI 2020*, pp. 286–300.
 - [Boyar et al. 2000] Joan Boyar, René Peralta, Denis Pochuev. On the multiplicative complexity of Boolean functions over the basis (∧, ⊕, 1). *Theoretical Computer Science* 235(1):43–57, 2000.
 - [Boyer et al. 1998] Michel Boyer, Gilles Brassard, Peter Høyer, Alain Tapp. Tight bounds on quantum searching. *Fortschritte der Physik* 46(4–5):493–505, 1998.
-- [Brassard et al. 2002] † Gilles Brassard, Peter Høyer, Michele Mosca, Alain Tapp. Quantum amplitude amplification and estimation. In *Quantum Computation and Information*, Contemporary Mathematics 305, pp. 53–74. AMS, 2002.
-- [Burgholzer and Wille 2021] † Lukas Burgholzer, Robert Wille. Advanced equivalence checking for quantum circuits. *IEEE Trans. Comput.-Aided Des. Integr. Circuits Syst.* 40(9):1810–1824, 2021.
+- [Brassard et al. 2002] Gilles Brassard, Peter Høyer, Michele Mosca, Alain Tapp. Quantum amplitude amplification and estimation. In *Quantum Computation and Information*, Contemporary Mathematics 305, pp. 53–74. AMS, 2002.
+- [Burgholzer and Wille 2021] Lukas Burgholzer, Robert Wille. Advanced equivalence checking for quantum circuits. *IEEE Trans. Comput.-Aided Des. Integr. Circuits Syst.* 40(9):1810–1824, 2021.
 - [Burgholzer et al. 2020] Lukas Burgholzer, Rudy Raymond, Robert Wille. Verifying results of the IBM Qiskit quantum circuit compilation flow. In *IEEE Int. Conf. on Quantum Computing and Engineering (QCE)*, 2020. arXiv:2009.02376.
 - [Chareton et al. 2021] Christophe Chareton, Sébastien Bardin, François Bobot, Valentin Perrelle, Benoît Valiron. An automated deductive verification framework for circuit-building quantum programs. In *ESOP 2021*, LNCS 12648, pp. 148–177. Springer, 2021.
-- [Cleve et al. 1998] † Richard Cleve, Artur Ekert, Chiara Macchiavello, Michele Mosca. Quantum algorithms revisited. *Proc. R. Soc. Lond. A* 454:339–354, 1998.
-- [Coppersmith 1994] † Don Coppersmith. An approximate Fourier transform useful in quantum factoring. IBM Research Report RC 19642, 1994; arXiv:quant-ph/0201067.
+- [Cleve et al. 1998] Richard Cleve, Artur Ekert, Chiara Macchiavello, Michele Mosca. Quantum algorithms revisited. *Proc. R. Soc. Lond. A* 454:339–354, 1998.
+- [Coppersmith 1994] Don Coppersmith. An approximate Fourier transform useful in quantum factoring. IBM Research Report RC 19642, 1994; arXiv:quant-ph/0201067.
 - [Cross et al. 2022] Andrew Cross, Ali Javadi-Abhari, Thomas Alexander, Niel de Beaudrap, Lev S. Bishop, Steven Heidel, Colm A. Ryan, Prashant Sivarajah, John Smolin, Jay M. Gambetta, Blake R. Johnson. OpenQASM 3: A broader and deeper quantum assembly language. *ACM Trans. Quantum Comput.* 3(3):12:1–12:50, 2022.
 - [de Moura and Ullrich 2021] Leonardo de Moura, Sebastian Ullrich. The Lean 4 theorem prover and programming language. In *CADE 28*, LNCS 12699, pp. 625–635. Springer, 2021.
-- [Dehaene and De Moor 2003] † Jeroen Dehaene, Bart De Moor. Clifford group, stabilizer states, and linear and quadratic operations over GF(2). *Physical Review A* 68:042318, 2003.
+- [Dehaene and De Moor 2003] Jeroen Dehaene, Bart De Moor. Clifford group, stabilizer states, and linear and quadratic operations over GF(2). *Physical Review A* 68:042318, 2003.
 - [Gidney 2018] Craig Gidney. Halving the cost of quantum addition. *Quantum* 2:74, 2018.
-- [Gottesman 1998] † Daniel Gottesman. The Heisenberg representation of quantum computers. arXiv:quant-ph/9807006, 1998.
+- [Gottesman 1998] Daniel Gottesman. The Heisenberg representation of quantum computers. arXiv:quant-ph/9807006, 1998.
 - [Grover 1996] Lov K. Grover. A fast quantum mechanical algorithm for database search. In *Proc. 28th ACM STOC*, pp. 212–219, 1996.
 - [Hietala et al. 2021a] Kesha Hietala, Robert Rand, Shih-Han Hung, Liyi Li, Michael Hicks. Proving quantum programs correct. In *ITP 2021*, LIPIcs 193, pp. 21:1–21:19.
 - [Hietala et al. 2021b] Kesha Hietala, Robert Rand, Shih-Han Hung, Xiaodi Wu, Michael Hicks. A verified optimizer for quantum circuits. *Proc. ACM Program. Lang.* 5(POPL):37:1–37:29, 2021.
-- [Horodecki et al. 1999] † Michał Horodecki, Paweł Horodecki, Ryszard Horodecki. General teleportation channel, singlet fraction, and quasidistillation. *Physical Review A* 60:1888–1898, 1999.
+- [Horodecki et al. 1999] Michał Horodecki, Paweł Horodecki, Ryszard Horodecki. General teleportation channel, singlet fraction, and quasidistillation. *Physical Review A* 60:1888–1898, 1999.
 - [Janzing et al. 2005] Dominik Janzing, Pawel Wocjan, Thomas Beth. "Non-identity check" is QMA-complete. *Int. J. Quantum Inf.* 3(3):463–473, 2005.
-- [Javadi-Abhari et al. 2024] † Ali Javadi-Abhari et al. Quantum computing with Qiskit. arXiv:2405.08810, 2024.
+- [Javadi-Abhari et al. 2024] Ali Javadi-Abhari et al. Quantum computing with Qiskit. arXiv:2405.08810, 2024.
 - [Khattar and Gidney 2025] Tanuj Khattar, Craig Gidney. Rise of conditionally clean ancillae for efficient quantum circuit constructions. *Quantum* 9:1752, 2025. arXiv:2407.17966.
-- [Kitaev 1995] † A. Yu. Kitaev. Quantum measurements and the Abelian stabilizer problem. arXiv:quant-ph/9511026, 1995.
+- [Kitaev 1995] A. Yu. Kitaev. Quantum measurements and the Abelian stabilizer problem. arXiv:quant-ph/9511026, 1995.
 - [Kitaev 1997] A. Yu. Kitaev. Quantum computations: algorithms and error correction. *Russian Math. Surveys* 52(6):1191–1249, 1997.
 - [Landauer 1961] Rolf Landauer. Irreversibility and heat generation in the computing process. *IBM J. Res. Dev.* 5(3):183–191, 1961.
 - [Leroy 2009] Xavier Leroy. Formal verification of a realistic compiler. *Commun. ACM* 52(7):107–115, 2009.
-- [Li et al. 2019] † Gushu Li, Yufei Ding, Yuan Xie. Tackling the qubit mapping problem for NISQ-era quantum devices. In *ASPLOS 2019*, pp. 1001–1014.
-- [Li et al. 2022] † Liyi Li, Finn Voichick, Kesha Hietala, Yuxiang Peng, Xiaodi Wu, Michael Hicks. Verified compilation of quantum oracles. *Proc. ACM Program. Lang.* 6(OOPSLA2):146:1–146:27, 2022. arXiv:2112.06700.
+- [Li et al. 2019] Gushu Li, Yufei Ding, Yuan Xie. Tackling the qubit mapping problem for NISQ-era quantum devices. In *ASPLOS 2019*, pp. 1001–1014.
+- [Li et al. 2022] Liyi Li, Finn Voichick, Kesha Hietala, Yuxiang Peng, Xiaodi Wu, Michael Hicks. Verified compilation of quantum oracles. *Proc. ACM Program. Lang.* 6(OOPSLA2):146:1–146:27, 2022. arXiv:2112.06700.
 - [Li et al. 2026] Jiqi Li, Jingyi Mei, Wang Fang, Ji Guan. Formal verification of quantum ancilla safety. arXiv:2608.13099, 2026.
 - [Liu et al. 2019] Junyi Liu, Bohua Zhan, Shuling Wang, Shenggang Ying, Tao Liu, Yangjia Li, Mingsheng Ying, Naijun Zhan. Formal verification of quantum algorithms using quantum Hoare logic. In *CAV 2019*, LNCS 11562, pp. 187–207.
-- [Magesan et al. 2011] † Easwar Magesan, Jay M. Gambetta, Joseph Emerson. Scalable and robust randomized benchmarking of quantum processes. *Physical Review Letters* 106:180504, 2011.
+- [Magesan et al. 2011] Easwar Magesan, Jay M. Gambetta, Joseph Emerson. Scalable and robust randomized benchmarking of quantum processes. *Physical Review Letters* 106:180504, 2011.
 - [Maslov 2016] Dmitri Maslov. Advantages of using relative-phase Toffoli gates with an application to multiple control Toffoli optimization. *Physical Review A* 93:022311, 2016.
 - [mathlib 2020] The mathlib Community. The Lean mathematical library. In *CPP 2020*, pp. 367–381.
 - [Meuli et al. 2019] Giulia Meuli, Mathias Soeken, Martin Roetteler, Nikolaj Bjørner, Giovanni De Micheli. Reversible pebbling game for quantum memory management. In *DATE 2019*, pp. 288–291.
 - [Miller 1991] Dale Miller. A logic programming language with lambda-abstraction, function variables, and simple unification. *J. Logic Comput.* 1(4):497–536, 1991.
 - [Necula 1997] George C. Necula. Proof-carrying code. In *POPL 1997*, pp. 106–119.
 - [Nie et al. 2024] Junhong Nie, Wei Zi, Xiaoming Sun. Quantum circuit for multi-qubit Toffoli gate with optimal resource. arXiv:2402.05053, 2024.
-- [Nielsen 2002] † Michael A. Nielsen. A simple formula for the average gate fidelity of a quantum dynamical operation. *Physics Letters A* 303:249–252, 2002.
+- [Nielsen 2002] Michael A. Nielsen. A simple formula for the average gate fidelity of a quantum dynamical operation. *Physics Letters A* 303:249–252, 2002.
 - [NIST 2015] National Institute of Standards and Technology. SHA-3 standard: Permutation-based hash and extendable-output functions. FIPS 202, 2015.
 - [Paradis et al. 2021] Anouk Paradis, Benjamin Bichsel, Samuel Steffen, Martin Vechev. Unqomp: Synthesizing uncomputation in quantum circuits. In *PLDI 2021*, pp. 222–236.
 - [Paykin et al. 2017] Jennifer Paykin, Robert Rand, Steve Zdancewic. QWIRE: A core language for quantum circuits. In *POPL 2017*, pp. 846–858.
@@ -1553,7 +1551,7 @@ References marked † must be checked by the author against the primary source (
 - [Reynolds 1970] John C. Reynolds. Transformational systems and the algebraic structure of atomic formulas. In *Machine Intelligence 5*, pp. 135–151. Edinburgh University Press, 1970.
 - [Shi et al. 2019] Yunong Shi, Xupeng Li, Runzhou Tao, Ali Javadi-Abhari, Andrew W. Cross, Frederic T. Chong, Ronghui Gu. CertiQ: A mostly-automated verification of a realistic quantum compiler. arXiv:1908.08963, 2019.
 - [Tao et al. 2022] Runzhou Tao, Yunong Shi, Jianan Yao, Xupeng Li, Ali Javadi-Abhari, Andrew W. Cross, Frederic T. Chong, Ronghui Gu. Giallar: Push-button verification for the Qiskit quantum compiler. In *PLDI 2022*, pp. 641–656.
-- [Wallman and Emerson 2016] † Joel J. Wallman, Joseph Emerson. Noise tailoring for scalable quantum computation via randomized compiling. *Physical Review A* 94:052325, 2016.
+- [Wallman and Emerson 2016] Joel J. Wallman, Joseph Emerson. Noise tailoring for scalable quantum computation via randomized compiling. *Physical Review A* 94:052325, 2016.
 - [Watrous 2018] John Watrous. *The Theory of Quantum Information*. Cambridge University Press, 2018.
 - [Wille et al. 2008] Robert Wille, Daniel Große, Lisa Teuber, Gerhard W. Dueck, Rolf Drechsler. RevLib: An online resource for reversible functions and reversible circuits. In *ISMVL 2008*, pp. 220–225.
 - [Zambak 2026a] Aziz F. Zambak. Certified quantum realization of classical specifications (Revision 3). Research proposal, unpublished technical report, 2026. Available from the author.
