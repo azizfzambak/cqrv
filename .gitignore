@@ -14,3 +14,6 @@ Thumbs.db
 /bench/forms/out/
 /bench/counting/
 .venv-hw/
+
+# paper build output (paper/tools/build.ps1)
+/paper/out/

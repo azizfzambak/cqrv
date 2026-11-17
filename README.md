@@ -17,6 +17,11 @@ project, with every number's source, is `docs/M5_REPORT.md`; reproduction and th
 `docs/RELEASE.md`; the earlier milestone reports are `docs/M2_REPORT.md` and `docs/M3_REPORT.md`
 (frozen). The stage-by-stage history is `docs/PROJECT_STATUS.md` and `docs/DECISIONS.md`.
 
+**Release v1.0.0 (November 2026).** Everything up to Phase 3 is described in one paper,
+`paper/Zambak_2026_CQRV.pdf` (source `paper/Zambak_2026_CQRV.md`, build `paper/tools/build.ps1`),
+published as a preprint on Zenodo. The code the paper describes is commit `2f8200b`; the tag `v1.0.0`
+adds only documentation (license, citation file, release notes, the paper).
+
 ## The three tracks
 
 **Track A — the certifying compiler.** Two patterns, Grover search and quantum counting (amplitude
@@ -80,3 +85,10 @@ qiskit-ibm-runtime 0.52.1, offline fake backends only; `hw/README.md`). Setting 
 - `CLAUDE.md` — the layout of the Lean packages and the rules of the project; `docs/SORRIES.md` — the
   tracked proof obligations (none open); `docs/PHASE2_SPEC.md`, `docs/PHASE2_ROADMAP.md` — the Phase 2
   specification and roadmap.
+
+## License and citation
+
+Copyright 2026 Aziz F. Zambak. Licensed under the Apache License, Version 2.0 (`LICENSE`). To cite the
+work, use `CITATION.cff` (the paper and this repository). The specification report the project
+implements is included in its revisions v2 and v3 (`docs/cqrv_report_revised_v2.docx`,
+`docs/cqrv_report_revised_v3.docx`).

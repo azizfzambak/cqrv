@@ -142,7 +142,7 @@ are replaced by the trust table and one fixed sentence.
 
 These tasks change code or committed files. R13, R14 and R16 are the author's.
 
-**Status (2026-11-16).** R1, R2, R15: done (revision task A, `docs/tasks/REVA_TASK.md`; commits
+**Status (2026-11-17).** R1, R2, R15: done (revision task A, `docs/tasks/REVA_TASK.md`; commits
 6c66a87, 040e967, 8dfced6; accepted, CI 26 PASS / 4 n/a). R3, R4, R5, R10: done (revision task B,
 `REVB_TASK.md`; commits f648115, d51a975, ba15d9c; accepted 2026-11-17, CI 26 PASS / 4 n/a). R12:
 done (task C, `REVC_TASK.md`; commit ec06b84; accepted 2026-11-17, CI 26 PASS / 4 n/a): `addchk3`,
@@ -150,7 +150,10 @@ done (task C, `REVC_TASK.md`; commit ec06b84; accepted 2026-11-17, CI 26 PASS / 
 8 GB). R11: done (task D, `REVD_TASK.md`; commits e509fef, 2025ed2, b27dd45; accepted 2026-11-17, CI 26
 PASS / 4 n/a): all 40 Lean check files measured in one run at 2025ed2 (`scripts/bench_all.py`,
 `docs/BENCHMARKS.md`), the logical certificates' `kernel_check` recorded with that commit. R6–R9 not
-scheduled.
+scheduled. R13, R16: closed by the release v1.0.0 (author's decisions, 2026-11-17): the repository with its
+full history under Apache-2.0, tag `v1.0.0`; the paper a Zenodo preprint; the specification report v2 and v3
+in the repository, the proposal available from the author; no container image. R14: not done, by the
+author's decision; the paper states it as a threat to validity.
 
 | Task | Content | Size | Changes committed files? |
 |---|---|---|---|

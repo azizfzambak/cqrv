@@ -172,8 +172,12 @@ conditional on the four premises. The frontier (`docs/hw_frontier/FRONTIER.md`) 
 conditional bound is below 1 on the two fakes: up to n = 3 ANDs on FakeTorino, n = 2 on
 FakeWashington.
 
-## 3. Status of the release (30d is the author's)
+## 3. Status of the release (v1.0.0, 2026-11-17)
 
-Nothing is published or pushed as of this document: the public repository, the archive with a DOI and
-the preprint are the author's steps (PHASE2_SPEC §D.3, 30d), each needing explicit approval. Stage 28
-(device runs) is not run, by the author's decision of 2026-11-16 (PHASE2_SPEC §D.1). Stage 29 is not run (`docs/STAGE29_NOTE.md`).
+By the author's decisions of 2026-11-17 (`docs/DECISIONS.md`), the repository is published with its full
+history under the Apache License 2.0 ([GITHUB-URL], tag `v1.0.0`), and the unified paper (`paper/`) is
+published as a preprint on Zenodo. The code the paper describes is commit `2f8200b`; the tag adds only
+documentation, so no `.lean` file and no certificate changed. No container image is provided: reproduction
+uses the pins and the steps of §1. The human expert audit of the main definitions (REVIEW_RESPONSE_1, R14)
+was not done, by the author's decision. Stage 28 (device runs) is not run, by the author's decision of
+2026-11-16 (PHASE2_SPEC §D.1). Stage 29 is not run (`docs/STAGE29_NOTE.md`).
