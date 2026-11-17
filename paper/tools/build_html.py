@@ -52,6 +52,7 @@ figcaption { font-size: 9pt; text-align: left; margin-top: 4pt; }
 .appendix h2 { page-break-before: always; break-before: page; }
 .appendix h2 ~ h2 { page-break-before: auto; break-before: auto; }
 sup, sub { font-size: 72%; line-height: 0; }
+a { color: #1f4e8c; text-decoration: none; }
 """
 
 html = f"""<!doctype html>

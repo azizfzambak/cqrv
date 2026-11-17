@@ -175,7 +175,7 @@ FakeWashington.
 ## 3. Status of the release (v1.0.0, 2026-11-17)
 
 By the author's decisions of 2026-11-17 (`docs/DECISIONS.md`), the repository is published with its full
-history under the Apache License 2.0 ([GITHUB-URL], tag `v1.0.0`), and the unified paper (`paper/`) is
+history under the Apache License 2.0 (`https://github.com/azizfzambak/cqrv`, tag `v1.0.0`), and the unified paper (`paper/`) is
 published as a preprint on Zenodo. The code the paper describes is commit `2f8200b`; the tag adds only
 documentation, so no `.lean` file and no certificate changed. No container image is provided: reproduction
 uses the pins and the steps of §1. The human expert audit of the main definitions (REVIEW_RESPONSE_1, R14)

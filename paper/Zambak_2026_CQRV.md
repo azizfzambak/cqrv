@@ -1454,7 +1454,7 @@ Our Track C is a translation validator in the sense of Pnueli et al. [1998], who
 - **Measurements.** The times and memory come from one run at one commit, on one machine with heterogeneous cores; no second machine has repeated them.
 - **The development process.** A second session of the same AI assistant reviewed the implementing session. That review is procedural and not an independent scientific audit; the kernel cannot tell whether a definition captures the intended physical concept. A human expert audit of `Realizes`, `AncRestore`, `channelDenote` and the premises is recommended before the claims are relied on (R14).
 - **Sources not peer-reviewed.** The specification report the project implements [Zambak 2026b] has not been peer-reviewed; its revisions v2 and v3 are in the repository. The earlier proposal [Zambak 2026a] is unpublished.
-- **The artifact.** The repository is public with its full history ([GITHUB-URL], tag `v1.0.0`), so every commit cited in this paper can be inspected. No container image is provided; reproduction relies on the pinned toolchain and the steps in `docs/RELEASE.md`.
+- **The artifact.** The repository is public with its full history (<https://github.com/azizfzambak/cqrv>, tag `v1.0.0`), so every commit cited in this paper can be inspected. No container image is provided; reproduction relies on the pinned toolchain and the steps in `docs/RELEASE.md`.
 
 ## 12 Conclusion
 
@@ -1483,7 +1483,7 @@ Our Track C is a translation validator in the sense of Pnueli et al. [1998], who
 
 ## Data and code availability
 
-**The repository** contains the Lean sources, the generators, the Python harness and hardware tools, all committed certificates, check files, selection files and artifacts with their run reports, the decision log, the obligation ledger, and CI logs. It is public at [GITHUB-URL] under the Apache License 2.0, with its full development history. This paper describes the code at commit `2f8200b`; the tag `v1.0.0` adds only documentation (the license, the citation file, the release notes and this paper). `docs/RELEASE.md` gives the reproduction steps: the pins, the two Python environments and every CI step with its command. No container image is provided.
+**The repository** contains the Lean sources, the generators, the Python harness and hardware tools, all committed certificates, check files, selection files and artifacts with their run reports, the decision log, the obligation ledger, and CI logs. It is public at <https://github.com/azizfzambak/cqrv> under the Apache License 2.0, with its full development history. This paper describes the code at commit `2f8200b`; the tag `v1.0.0` adds only documentation (the license, the citation file, the release notes and this paper). `docs/RELEASE.md` gives the reproduction steps: the pins, the two Python environments and every CI step with its command. No container image is provided.
 
 **The pinned toolchain:**
 - Lean v4.35.0, Mathlib `56a0058`, Physlib `96a6bc5`;
